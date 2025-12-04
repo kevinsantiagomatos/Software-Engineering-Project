@@ -96,6 +96,8 @@
         { id: "comptroller_registry", label: "Comptroller Contractor Registry" },
         { id: "policy_ack", label: "Policy Acknowledgement (signed)" },
       ];
+      const statusByType = {};
+      const lockedStatuses = new Set(["pending_review"]);
       const identityBadge = document.getElementById("identityBadge");
       const identityFields = document.getElementById("identityFields");
       const badgeName = document.getElementById("badgeName");
@@ -114,13 +116,21 @@
       }
 
       function renderZones() {
+        function statusLabel(type) {
+          const status = statusByType[type];
+          if (!status || status === "missing") return "";
+          const text = status.replace("_", " ");
+          const color = status === "approved" ? "#16a34a" : status === "rejected" ? "#b91c1c" : "#92400e";
+          return `<div style="margin-top:6px; font-size:0.9rem; color:${color}; font-weight:600;">${text}</div>`;
+        }
         zones.innerHTML = docTypes
           .map(
             (d) => `
             <label style="display:block; border:1px dashed #cbd5e1; border-radius:12px; padding:12px 12px 8px 12px; background:#fdfefe;">
               <div style="font-weight:600; color:#0f172a;">${d.label}</div>
               <div style="font-size:0.9rem; color:#4b5563;">Drag & drop or browse</div>
-              <input type="file" name="${d.id}" data-type="${d.id}" accept=".pdf,.docx,.jpg,.jpeg,.png" style="margin-top:8px;" />
+              <input type="file" name="${d.id}" data-type="${d.id}" accept=".pdf,.docx,.jpg,.jpeg,.png" style="margin-top:8px;" ${lockedStatuses.has(statusByType[d.id]) ? "disabled" : ""} />
+              ${lockedStatuses.has(statusByType[d.id]) ? '<div style="margin-top:6px; color:#92400e; font-size:0.9rem;">Pending validation. Please wait for review.</div>' : statusLabel(d.id)}
             </label>
           `
           )
@@ -194,8 +204,12 @@
             reqList.innerHTML = "";
             return;
           }
+          items.forEach((item) => {
+            statusByType[item.id] = item.status;
+          });
+          renderZones();
           reqList.innerHTML = items
-            .map(item => `<li><strong>${item.label}</strong> — <span style="text-transform:capitalize;">${item.status}</span></li>`)
+            .map(item => `<li><strong>${item.label}</strong> - <span style="text-transform:capitalize;">${item.status}</span></li>`)
             .join("");
         } catch (_) {
           /* ignore */
@@ -221,6 +235,12 @@
           return;
         }
 
+        const lockedType = toUpload.find((item) => lockedStatuses.has(statusByType[item.type]));
+        if (lockedType) {
+          show(err, "You already submitted this document. Please wait until it is reviewed.");
+          return;
+        }
+
         const results = [];
         for (const item of toUpload) {
           const fd = new FormData();
@@ -237,17 +257,20 @@
           const data = await res.json().catch(() => ({}));
           results.push(...(data.documents || []));
         }
-        try {
-          const res = await fetch("/documents/upload", {
-            method: "POST",
-            body: fd
-          });
+
+        results.forEach((doc) => {
+          const key = doc.doc_type || doc.id;
+          if (key) {
+            statusByType[key] = doc.status || "pending_review";
+          }
+        });
+        renderZones();
 
         show(ok, "Files uploaded. Pending HR/Compliance review. You can track status on the dashboard. ");
         ok.insertAdjacentHTML("beforeend", '<a class="forgot-link" href="/doc_submitted.html" style="margin-left:4px;">View confirmation</a>');
         if (results.length) {
           list.innerHTML = results
-            .map((doc) => `<li>${doc.original_name} (${doc.doc_type || "unspecified"}) — status: ${doc.status}</li>`)
+            .map((doc) => `<li>${doc.original_name} (${doc.doc_type || "unspecified"}) - status: ${doc.status}</li>`)
             .join("");
         }
         form.reset();
@@ -255,9 +278,6 @@
         if (email) {
           loadRequirements(email);
         }
-      } catch (ex) {
-        show(err, "Network or server error.");
-      }
       });
 
       renderZones();

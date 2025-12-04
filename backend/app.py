@@ -15,6 +15,7 @@ import pymysql
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "5000"))
 
+
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": int(os.getenv("DB_PORT", "3306")),
@@ -351,8 +352,9 @@ def create_task_record(payload: dict) -> dict:
         "category": payload.get("category", "employee"),
         "status": payload.get("status", "pending"),
         "due_date": payload.get("due_date", "").strip(),
-        "created_at": datetime.utcnow().isoformat() + "Z",
-        "updated_at": datetime.utcnow().isoformat() + "Z",
+        # store as MySQL-friendly strings (avoid ISO/Z format errors)
+        "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
