@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register New Hire</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
+      .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-size:28px; color:#fff; overflow:hidden; }
+      .container { max-width: 1100px; margin: -32px auto 32px auto; padding: 0 16px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
+      .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+      label { font-weight:600; font-size:0.95rem; color:#0f172a; }
+      .text-input { width:100%; }
+      .attachments { border:1px dashed #cbd5e1; border-radius:12px; padding:12px; background:#f8fafc; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">HR</div>
+      <div>
+        <div style="font-weight:700; font-size:1.1rem;" id="fullName">Register New Hire</div>
+        <div style="font-size:0.95rem; color:#d7e4ff;">Digitally register with personal, contact, employment, and compliance attachments.</div>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:10px;">
+        <a class="forgot-link" href="/dashboard.html" style="color:#d7e4ff;">Dashboard</a>
+        <a class="forgot-link" href="/admin_panel.html" style="color:#d7e4ff;">HR Panel</a>
+      </div>
+    </header>
+
+    <div class="container">
+      <form id="hireForm" class="card" enctype="multipart/form-data" method="post" action="/api/hr/register-hire">
+        <div class="grid">
+          <div>
+            <label>First Name</label>
+            <input class="text-input" name="first_name" required />
+          </div>
+          <div>
+            <label>Middle Name</label>
+            <input class="text-input" name="middle_name" />
+          </div>
+          <div>
+            <label>Last Name</label>
+            <input class="text-input" name="last_name" required />
+          </div>
+          <div>
+            <label>Date of Birth</label>
+            <input class="text-input" name="dob" type="date" />
+          </div>
+          <div>
+            <label>Government ID Number</label>
+            <input class="text-input" name="gov_id" />
+          </div>
+        </div>
+
+        <h4>Contact Details</h4>
+        <div class="grid">
+          <div><label>Phone Number</label><input class="text-input" name="phone" /></div>
+          <div><label>Email</label><input class="text-input" name="email" type="email" required /></div>
+          <div><label>Street</label><input class="text-input" name="street" /></div>
+          <div><label>City</label><input class="text-input" name="city" /></div>
+          <div><label>State</label><input class="text-input" name="state" /></div>
+          <div><label>Postal Code</label><input class="text-input" name="postal_code" /></div>
+          <div><label>Country</label><input class="text-input" name="country" /></div>
+        </div>
+
+        <h4>Employment</h4>
+        <div class="grid">
+          <div>
+            <label>Role</label>
+            <select class="text-input" name="role" required>
+              <option value="employee">Employee</option>
+              <option value="contractor">Contractor</option>
+              <option value="hr">HR</option>
+              <option value="it">IT</option>
+              <option value="compliance">Compliance</option>
+              <option value="manager">Manager</option>
+            </select>
+          </div>
+          <div><label>Start Date</label><input class="text-input" name="start_date" type="date" /></div>
+          <div><label>Department</label><input class="text-input" name="department" /></div>
+          <div><label>Manager</label><input class="text-input" name="manager" /></div>
+        </div>
+
+        <h4>Compliance Attachments</h4>
+        <div class="attachments">
+          <div class="grid">
+            <div>
+              <label>Offer Letter</label>
+              <input type="file" name="offer_letter" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+            </div>
+            <div>
+              <label>NDA</label>
+              <input type="file" name="nda" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+            </div>
+            <div>
+              <label>W-4</label>
+              <input type="file" name="w4" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions" style="justify-content:flex-start; gap:12px; margin-top:16px;">
+          <button type="submit" class="submit-button">Register</button>
+          <span id="status" class="muted"></span>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      const form = document.getElementById("hireForm");
+      const statusEl = document.getElementById("status");
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        statusEl.textContent = "";
+        const fd = new FormData(form);
+        try {
+          await fetchJson("/api/hr/register-hire", { method: "POST", body: fd });
+          statusEl.textContent = "New hire registered.";
+          form.reset();
+        } catch (err) {
+          statusEl.textContent = err.message || "Failed to register.";
+        }
+      });
+    </script>
+  </body>
+</html>

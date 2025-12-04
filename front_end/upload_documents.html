@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paoli Group | Upload Documents</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+        max-width: 620px;
+        width: 100%;
+      }
+      .upload-form {
+        display: grid;
+        gap: 12px;
+      }
+      .upload-form input[type="file"] {
+        padding: 8px 0;
+      }
+      .alert {
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: none;
+      }
+      .alert.error { background: #ffe8e6; color: #7d1a1a; }
+      .alert.success { background: #e8f7ee; color: #1a7d44; }
+      .doc-list { margin: 12px 0; padding-left: 18px; color: #33415c; }
+    </style>
+  </head>
+  <body>
+    <main class="login-page" style="background:#f7f7f9;">
+      <section class="form-panel" style="width:100%; max-width:900px; margin:32px auto;">
+        <header style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+          <img src="/assets/paoli_logo.png" alt="Paoli Group logo" style="width:40px; height:40px;" />
+          <div>
+            <div style="font-weight:700; color:#111827;">Document and Form Submission</div>
+            <div style="color:#4b5563; font-size:0.95rem;">Accepted: PDF, DOCX, JPG, PNG • Max 10MB each</div>
+          </div>
+          <a class="forgot-link" href="/dashboard.html" style="margin-left:auto;">Back to dashboard</a>
+        </header>
+
+        <div class="card">
+          <div id="alert-success" class="alert success"></div>
+          <div id="alert-error" class="alert error"></div>
+          <form id="uploadForm" class="upload-form">
+            <div id="identityFields">
+              <label class="input-label" for="full_name">Full Name</label>
+              <input type="text" id="full_name" name="full_name" class="text-input" required />
+
+              <label class="input-label" for="email">Email</label>
+              <input type="email" id="email" name="email" class="text-input" required />
+            </div>
+            <div id="identityBadge" style="display:none; padding:8px 12px; border-radius:10px; background:#eef2ff; color:#1f2937;">
+              Submitting as <strong id="badgeName"></strong> (<span id="badgeEmail"></span>)
+              <button type="button" id="editIdentity" class="forgot-link" style="margin-left:8px;">Not you?</button>
+            </div>
+
+            <div id="requirementList" class="doc-list" style="margin-top:10px;"></div>
+
+            <div id="uploadZones" style="display:grid; gap:12px; margin-top:16px;"></div>
+
+            <div class="form-actions" style="justify-content:space-between; margin-top:12px;">
+              <a class="forgot-link" href="/log_in.html">Back to login</a>
+              <button type="submit" class="submit-button">Submit</button>
+            </div>
+          </form>
+
+          <div id="uploadedList" class="doc-list" style="margin-top:12px;"></div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("uploadForm");
+      const ok = document.getElementById("alert-success");
+      const err = document.getElementById("alert-error");
+      const list = document.getElementById("uploadedList");
+      const reqList = document.getElementById("requirementList");
+      const zones = document.getElementById("uploadZones");
+      const docTypes = [
+        { id: "government_id", label: "Official Identification (license/passport)" },
+        { id: "w9", label: "W-9 / Withholding tax form (Hacienda)" },
+        { id: "asume_clearance", label: "ASUME Certificate" },
+        { id: "background_check", label: "Criminal Background Check" },
+        { id: "tax_return", label: "Tax Return Filing Certification" },
+        { id: "bank_certification", label: "Bank Account Certification for Direct Deposit" },
+        { id: "resume", label: "Resume" },
+        { id: "certifications", label: "Evidence of Certifications" },
+        { id: "signed_contract", label: "Signed Contract" },
+        { id: "crim_compliance", label: "CRIM Compliance Certification" },
+        { id: "comptroller_registry", label: "Comptroller Contractor Registry" },
+        { id: "policy_ack", label: "Policy Acknowledgement (signed)" },
+      ];
+      const identityBadge = document.getElementById("identityBadge");
+      const identityFields = document.getElementById("identityFields");
+      const badgeName = document.getElementById("badgeName");
+      const badgeEmail = document.getElementById("badgeEmail");
+      const editIdentity = document.getElementById("editIdentity");
+
+      function show(el, message) {
+        el.textContent = message;
+        el.style.display = "block";
+      }
+      function hideAll() {
+        ok.style.display = "none";
+        err.style.display = "none";
+        list.innerHTML = "";
+        reqList.innerHTML = "";
+      }
+
+      function renderZones() {
+        zones.innerHTML = docTypes
+          .map(
+            (d) => `
+            <label style="display:block; border:1px dashed #cbd5e1; border-radius:12px; padding:12px 12px 8px 12px; background:#fdfefe;">
+              <div style="font-weight:600; color:#0f172a;">${d.label}</div>
+              <div style="font-size:0.9rem; color:#4b5563;">Drag & drop or browse</div>
+              <input type="file" name="${d.id}" data-type="${d.id}" accept=".pdf,.docx,.jpg,.jpeg,.png" style="margin-top:8px;" />
+            </label>
+          `
+          )
+          .join("");
+      }
+
+      function showBadge(name, email) {
+        badgeName.textContent = name || email || "User";
+        badgeEmail.textContent = email || "";
+        identityBadge.style.display = "block";
+        identityFields.style.display = "none";
+      }
+
+      function showIdentityFields() {
+        identityBadge.style.display = "none";
+        identityFields.style.display = "block";
+        document.getElementById("full_name").readOnly = false;
+        document.getElementById("email").readOnly = false;
+      }
+
+      async function prefillFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const storedEmail = localStorage.getItem("paoli_email") || "";
+        const email = params.get("email") || storedEmail;
+        const name = params.get("name");
+        const emailEl = document.getElementById("email");
+        const nameEl = document.getElementById("full_name");
+        if (email) {
+          emailEl.value = email;
+          emailEl.readOnly = true;
+          loadRequirements(email);
+          try {
+            const res = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
+            if (res.ok) {
+              const user = await res.json();
+              nameEl.value = user.full_name || name || nameEl.value;
+              if (nameEl.value) nameEl.readOnly = true;
+              showBadge(nameEl.value || email, email);
+            } else {
+              showBadge(name || email, email);
+            }
+          } catch (_) {
+            showBadge(name || email, email);
+          }
+        }
+        if (name && !nameEl.value) {
+          nameEl.value = name;
+          nameEl.readOnly = true;
+          if (email) showBadge(name, email);
+        }
+      }
+
+      document.getElementById("email").addEventListener("change", (e) => {
+        const val = e.target.value.trim();
+        if (val) loadRequirements(val);
+      });
+
+      editIdentity.addEventListener("click", () => {
+        document.getElementById("full_name").value = "";
+        document.getElementById("email").value = "";
+        showIdentityFields();
+      });
+
+      async function loadRequirements(email) {
+        try {
+          const res = await fetch(`/documents/requirements?email=${encodeURIComponent(email)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const items = data.requirements || [];
+          if (!items.length) {
+            reqList.innerHTML = "";
+            return;
+          }
+          reqList.innerHTML = items
+            .map(item => `<li><strong>${item.label}</strong> — <span style="text-transform:capitalize;">${item.status}</span></li>`)
+            .join("");
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAll();
+
+        const email = document.getElementById("email").value.trim();
+        const name = document.getElementById("full_name").value.trim();
+        const inputs = zones.querySelectorAll("input[type='file']");
+        const toUpload = [];
+        inputs.forEach((input) => {
+          if (input.files && input.files.length > 0) {
+            toUpload.push({ type: input.dataset.type, file: input.files[0] });
+          }
+        });
+
+        if (!toUpload.length) {
+          show(err, "Please attach at least one file.");
+          return;
+        }
+
+        const results = [];
+        for (const item of toUpload) {
+          const fd = new FormData();
+          fd.append("full_name", name);
+          fd.append("email", email);
+          fd.append("doc_type", item.type);
+          fd.append("documents", item.file);
+          const res = await fetch("/documents/upload", { method: "POST", body: fd });
+          if (!res.ok) {
+            const msg = await res.text();
+            show(err, msg || "Upload failed.");
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          results.push(...(data.documents || []));
+        }
+        try {
+          const res = await fetch("/documents/upload", {
+            method: "POST",
+            body: fd
+          });
+
+        show(ok, "Files uploaded. Pending HR/Compliance review. You can track status on the dashboard. ");
+        ok.insertAdjacentHTML("beforeend", '<a class="forgot-link" href="/doc_submitted.html" style="margin-left:4px;">View confirmation</a>');
+        if (results.length) {
+          list.innerHTML = results
+            .map((doc) => `<li>${doc.original_name} (${doc.doc_type || "unspecified"}) — status: ${doc.status}</li>`)
+            .join("");
+        }
+        form.reset();
+        renderZones();
+        if (email) {
+          loadRequirements(email);
+        }
+      } catch (ex) {
+        show(err, "Network or server error.");
+      }
+      });
+
+      renderZones();
+      prefillFromQuery();
+    </script>
+  </body>
+</html>

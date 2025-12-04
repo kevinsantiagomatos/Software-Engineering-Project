@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paoli Group | Register</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+        max-width: 540px;
+        width: 100%;
+      }
+      .register-form {
+        display: grid;
+        gap: 12px;
+      }
+      .register-form .text-input,
+      .register-form select {
+        width: 100%;
+      }
+      .alert {
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        display: none;
+      }
+      .alert.error {
+        background: #ffe8e6;
+        color: #7d1a1a;
+      }
+      .alert.success {
+        background: #e8f7ee;
+        color: #1a7d44;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="login-page">
+      <section class="brand-panel">
+        <div class="brand-emblem">
+          <img src="/assets/paoli_logo.png" alt="Paoli Group logo" />
+        </div>
+        <p class="brand-name">Paoli Group</p>
+        <p style="color:#d7e4ff; max-width:240px;">Contractor/Employee Registration</p>
+      </section>
+
+      <section class="form-panel">
+        <div class="card">
+          <h2 style="margin-top:0;">Create your profile</h2>
+          <p style="margin:4px 0 16px 0; color:#4c5a73;">Provide your details so HR can review and activate your account.</p>
+          <div id="alert-success" class="alert success"></div>
+          <div id="alert-error" class="alert error"></div>
+          <form id="registerForm" class="register-form" novalidate>
+            <label class="input-label" for="full_name">Full Name</label>
+            <input type="text" id="full_name" name="full_name" class="text-input" required />
+
+            <label class="input-label" for="email">Email</label>
+            <input type="email" id="email" name="email" class="text-input" autocomplete="email" required />
+
+            <label class="input-label" for="department">Department</label>
+            <input type="text" id="department" name="department" class="text-input" placeholder="e.g., HR, IT, Compliance" />
+
+            <label class="input-label" for="role">Role</label>
+            <select id="role" name="role" class="text-input">
+              <option value="employee">Employee</option>
+              <option value="contractor">Contractor</option>
+              <option value="hr">HR</option>
+              <option value="it">IT</option>
+              <option value="compliance">Compliance</option>
+              <option value="manager">Project Manager</option>
+            </select>
+
+            <label class="input-label" for="password">Password</label>
+            <input type="password" id="password" name="password" class="text-input" autocomplete="new-password" required minlength="8" />
+
+            <label class="input-label" for="confirm_password">Confirm Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="text-input" autocomplete="new-password" required minlength="8" />
+
+            <div class="form-actions" style="justify-content:space-between;">
+              <a class="forgot-link" href="/log_in.html">Back to login</a>
+              <button type="submit" class="submit-button">Submit</button>
+            </div>
+            <div class="form-actions" style="justify-content:flex-start; gap:12px;">
+              <a class="forgot-link" href="/upload_documents.html">Upload documents</a>
+              <a class="forgot-link" href="/dashboard.html">View progress</a>
+              <a class="forgot-link" href="/profile.html">My profile</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("registerForm");
+      const ok = document.getElementById("alert-success");
+      const err = document.getElementById("alert-error");
+
+      function show(el, message) {
+        el.textContent = message;
+        el.style.display = "block";
+      }
+
+      function hideAll() {
+        ok.style.display = "none";
+        err.style.display = "none";
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAll();
+
+        const payload = new URLSearchParams(new FormData(form));
+        const pw = payload.get("password") || "";
+        const confirm = payload.get("confirm_password") || "";
+
+        if (pw !== confirm) {
+          show(err, "Passwords must match.");
+          return;
+        }
+        if (pw.length < 8) {
+          show(err, "Password must be at least 8 characters.");
+          return;
+        }
+
+        try {
+          const res = await fetch("/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: payload
+          });
+
+          const text = await res.text();
+          if (!res.ok) {
+            show(err, text || "Registration failed.");
+            return;
+          }
+
+          show(ok, "Registration submitted. HR will review your profile. You can now upload documents and log in to track status.");
+          form.reset();
+        } catch (ex) {
+          show(err, "Network or server error.");
+        }
+      });
+    </script>
+  </body>
+</html>

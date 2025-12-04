@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      .container { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
+      .profile { display:flex; align-items:center; gap:16px; }
+      .avatar { width:96px; height:96px; border-radius:24px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-size:32px; color:#fff; overflow:hidden; }
+      .avatar img { width:100%; height:100%; object-fit:cover; }
+      .muted { color:#4b5563; }
+      .text-input { width: 100%; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div>
+          <h2 style="margin:0;">My Profile</h2>
+          <p class="muted" style="margin:4px 0 0 0;">Update your details and photo.</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <a class="forgot-link" href="/dashboard.html">Dashboard</a>
+          <a class="forgot-link" href="/upload_documents.html">Upload documents</a>
+          <a class="forgot-link" href="/admin_panel.html">HR/PM/IT</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="profile">
+          <div class="avatar" id="avatar">P</div>
+          <div>
+            <div id="name" style="font-weight:700; font-size:1.2rem;">--</div>
+            <div id="emailLabel" class="muted">--</div>
+            <div id="roleLabel" class="muted">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Update photo</h3>
+        <form id="photoForm" class="upload-form">
+          <label class="input-label" for="email">Email</label>
+          <input id="email" name="email" class="text-input" type="email" required />
+          <label class="input-label" for="photo">Photo</label>
+          <input id="photo" name="photo" class="text-input" type="file" accept="image/*" required />
+          <div class="form-actions" style="justify-content:flex-start; gap:12px; margin-top:8px;">
+            <button type="submit" class="submit-button">Upload</button>
+            <span id="status" class="muted"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const nameEl = document.getElementById("name");
+      const emailLabel = document.getElementById("emailLabel");
+      const roleLabel = document.getElementById("roleLabel");
+      const avatar = document.getElementById("avatar");
+      const emailInput = document.getElementById("email");
+      const form = document.getElementById("photoForm");
+      const statusEl = document.getElementById("status");
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      function prefillFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get("email") || localStorage.getItem("paoli_email");
+        if (email) {
+          emailInput.value = email;
+          loadUser(email);
+        }
+      }
+
+      async function loadUser(email) {
+        try {
+          const user = await fetchJson(`/api/user?email=${encodeURIComponent(email)}`);
+          nameEl.textContent = user.full_name || email;
+          emailLabel.textContent = user.email || email;
+          roleLabel.textContent = user.role ? `Role: ${user.role}` : "";
+          if (user.avatar_url) {
+            avatar.innerHTML = `<img src="${user.avatar_url}" alt="avatar" />`;
+          } else {
+            avatar.textContent = (user.full_name || email || "P").slice(0,1).toUpperCase();
+          }
+          localStorage.setItem("paoli_email", email);
+        } catch (err) {
+          statusEl.textContent = err.message;
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        statusEl.textContent = "";
+        const email = emailInput.value.trim();
+        const file = document.getElementById("photo").files[0];
+        if (!email || !file) {
+          statusEl.textContent = "Email and photo are required.";
+          return;
+        }
+        const fd = new FormData();
+        fd.append("email", email);
+        fd.append("photo", file);
+        try {
+          const data = await fetchJson("/api/profile/photo", { method: "POST", body: fd });
+          statusEl.textContent = "Photo updated.";
+          if (data.avatar_url) {
+            avatar.innerHTML = `<img src="${data.avatar_url}" alt="avatar" />`;
+          }
+          localStorage.setItem("paoli_email", email);
+        } catch (err) {
+          statusEl.textContent = err.message || "Upload failed.";
+        }
+      });
+
+      prefillFromQuery();
+    </script>
+  </body>
+</html>

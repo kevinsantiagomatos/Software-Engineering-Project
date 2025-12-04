@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Training Modules</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      body { background:#f4f5f7; margin:0; font-family:'Inter', system-ui, -apple-system, sans-serif; }
+      .container { max-width:900px; margin:20px auto; padding:0 16px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
+      .list { list-style:none; padding:0; margin:0; }
+      .list li { padding:12px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+      .badge { display:inline-block; padding:4px 10px; border-radius:999px; background:#e5e7eb; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Training and Orientation</h2>
+      <div class="card">
+        <div class="controls" style="margin-bottom:12px;">
+          <input id="email" class="text-input" type="email" placeholder="Your email" />
+          <button id="load" class="submit-button" style="padding:10px 16px;">Load</button>
+        </div>
+        <ul id="modules" class="list"></ul>
+      </div>
+    </div>
+
+    <script>
+      const emailInput = document.getElementById("email");
+      const loadBtn = document.getElementById("load");
+      const modulesEl = document.getElementById("modules");
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      let completions = [];
+      let modules = [];
+
+      function render() {
+        modulesEl.innerHTML = modules
+          .map(m => {
+            const done = completions.some(c => c.module_id === m.id);
+            return `<li><div><strong>${m.title}</strong><br/><small>${m.description}</small></div>
+              <div>
+                <span class="badge">${done ? "Completed" : "Pending"}</span>
+                ${done ? "" : `<button data-id="${m.id}" class="submit-button" style="padding:8px 12px;">Mark complete</button>`}
+              </div>
+            </li>`;
+          })
+          .join("");
+        modulesEl.querySelectorAll("button[data-id]").forEach(btn => {
+          btn.addEventListener("click", () => complete(btn.dataset.id));
+        });
+      }
+
+      async function load() {
+        const email = emailInput.value.trim();
+        if (!email) return;
+        localStorage.setItem("paoli_email", email);
+        const [mods, comps] = await Promise.all([
+          fetchJson("/api/training/list"),
+          fetchJson(`/api/training/status?email=${encodeURIComponent(email)}`)
+        ]);
+        modules = mods.modules || [];
+        completions = comps.completions || [];
+        render();
+      }
+
+      async function complete(id) {
+        const email = emailInput.value.trim();
+        if (!email) return;
+        await fetchJson("/api/training/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ email, module_id: id })
+        });
+        load();
+      }
+
+      loadBtn.addEventListener("click", load);
+      (function prefill() {
+        const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
+        if (email) {
+          emailInput.value = email;
+          load();
+        }
+      })();
+    </script>
+  </body>
+</html>

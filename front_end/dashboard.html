@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Onboarding Dashboard</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
+      .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.5rem; color:#fff; }
+      .container { max-width: 1100px; margin: -32px auto 0 auto; padding: 0 16px 32px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
+      .steps { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:start; }
+      .step { background:#f8fafc; border-radius:12px; padding:12px; border:1px solid #e5e7eb; text-align:center; }
+      .step .icon { width:56px; height:56px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-size:28px; margin-bottom:8px; }
+      .status-chip { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px; }
+      .grid-wide { display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:12px; }
+      .list { list-style:none; padding:0; margin:0; }
+      .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; }
+      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; background:#e5e7eb; color:#111827; }
+      .muted { color:#4b5563; font-size:0.95rem; }
+      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+      .text-input { width: 260px; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">P</div>
+      <div>
+        <div style="font-weight:700; font-size:1.1rem;" id="fullName">Paoli Onboarding</div>
+        <div id="joinInfo" style="font-size:0.95rem; color:#d7e4ff;">Joined in --/--/----</div>
+      </div>
+      <div style="margin-left:auto; position:relative;">
+        <button id="menuBtn" class="submit-button" style="padding:10px 12px;">Menu ▾</button>
+        <div id="menu" style="display:none; position:absolute; right:0; top:44px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.12); min-width:180px; z-index:10;"></div>
+      </div>
+    </header>
+
+    <div class="container">
+      <div class="card" style="margin-bottom:20px;">
+        <div class="controls" id="emailControls">
+          <input id="email" class="text-input" type="email" placeholder="Your email" />
+          <button id="load" class="submit-button" style="padding:10px 16px;">Load</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">New Hire Process</h3>
+        <div class="steps" id="steps"></div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Progress</h3>
+          <div id="progressStat" class="stat" style="font-size:1.5rem; color:#0b3c99;">--%</div>
+          <div id="progressDetail" class="muted"></div>
+        </div>
+        <div class="card">
+          <h3>Required Documents</h3>
+          <ul id="reqList" class="list"></ul>
+        </div>
+        <div class="card">
+          <h3>Documents</h3>
+          <ul id="docList" class="list"></ul>
+        </div>
+        <div class="card">
+          <h3>Tasks</h3>
+          <ul id="taskList" class="list"></ul>
+        </div>
+      </div>
+
+      <div class="grid-wide" id="directorySection" style="display:none;">
+        <div class="card">
+          <h3>People Directory</h3>
+          <ul id="userList" class="list"></ul>
+        </div>
+        <div class="card">
+          <h3>Policy & Training</h3>
+          <div class="controls">
+            <a class="forgot-link" id="policyLink" href="/policy_sign.html">Policy Acknowledgment</a>
+            <a class="forgot-link" id="trainingLink" href="/training.html">Training Modules</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>New Hires</h3>
+          <ul id="hireList" class="list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const emailInput = document.getElementById("email");
+      const loadBtn = document.getElementById("load");
+      const progressStat = document.getElementById("progressStat");
+      const progressDetail = document.getElementById("progressDetail");
+      const reqList = document.getElementById("reqList");
+      const docList = document.getElementById("docList");
+      const taskList = document.getElementById("taskList");
+      const uploadLink = null;
+      const profileLink = null;
+      const stepsEl = document.getElementById("steps");
+      const fullNameEl = document.getElementById("fullName");
+      const joinInfoEl = document.getElementById("joinInfo");
+      const avatarEl = document.getElementById("avatar");
+      const emailControls = document.getElementById("emailControls");
+      const menuBtn = document.getElementById("menuBtn");
+      const menu = document.getElementById("menu");
+      let currentEmail = "";
+      let currentRole = "employee";
+      const directorySection = document.getElementById("directorySection");
+      const userList = document.getElementById("userList");
+      const policyLink = document.getElementById("policyLink");
+      const trainingLink = document.getElementById("trainingLink");
+      const hireList = document.getElementById("hireList");
+
+      function statusChip(status) {
+        const colors = {
+          completed: "#d1fae5",
+          in_progress: "#fef9c3",
+          pending: "#f1f5f9"
+        };
+        const color = colors[status] || "#e5e7eb";
+        const textColor = status === "completed" ? "#065f46" : status === "in_progress" ? "#92400e" : "#475569";
+        return `<span class="status-chip" style="background:${color}; color:${textColor};">${status.replace("_", " ")}</span>`;
+      }
+
+      function renderDocs(docs) {
+        if (!docs.length) {
+          docList.innerHTML = "<li>No documents uploaded yet.</li>";
+          return;
+        }
+        docList.innerHTML = docs
+          .map(d => `<li><span>${d.original_name}${d.doc_type ? ` • ${d.doc_type}` : ""}</span><span class="badge">${d.status || "pending_review"}</span></li>`)
+          .join("");
+      }
+
+      function renderTasks(tasks) {
+        if (!tasks.length) {
+          taskList.innerHTML = "<li>No tasks assigned yet.</li>";
+          return;
+        }
+        taskList.innerHTML = tasks
+          .map(t => `<li><div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div><span class="badge">${t.status}</span></li>`)
+          .join("");
+      }
+
+      function renderRequirements(reqs) {
+        if (!reqs.length) {
+          reqList.innerHTML = "<li>No requirements configured.</li>";
+          return;
+        }
+        reqList.innerHTML = reqs
+          .map(r => `<li><span>${r.label}</span><span class="badge">${r.status}</span></li>`)
+          .join("");
+      }
+
+      async function loadDirectory() {
+        if (!["hr", "compliance", "it", "manager"].includes(currentRole)) {
+          directorySection.style.display = "none";
+          return;
+        }
+        directorySection.style.display = "grid";
+        try {
+          const [data, progress, hires] = await Promise.all([
+            fetchJson("/api/users"),
+            fetchJson("/api/progress"),
+            fetchJson("/api/new-hires")
+          ]);
+          const users = data.users || [];
+          const progressByEmail = {};
+          (progress.all || []).forEach(p => { progressByEmail[p.email] = p; });
+          if (!users.length) {
+            userList.innerHTML = "<li>No users found.</li>";
+            return;
+          }
+          userList.innerHTML = users
+            .map((u) => {
+              const emailParam = u.email ? `?email=${encodeURIComponent(u.email)}` : "";
+              const prog = progressByEmail[u.email] || { progress_percent: 0 };
+              return `<li>
+                <div><strong>${u.full_name || u.email}</strong><br/><small>${u.email || ""}</small></div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <span class="badge">${u.role || "employee"}</span>
+                  <span class="badge">${prog.progress_percent || 0}%</span>
+                  <a class="forgot-link" href="/view_documents.html${emailParam}">Docs</a>
+                  <a class="forgot-link" href="/upload_documents.html${emailParam}">Upload</a>
+                </div>
+              </li>`;
+            })
+            .join("");
+
+          const hireItems = hires.hires || [];
+          hireList.innerHTML = hireItems.length
+            ? hireItems
+                .map((h) => {
+                  const em = h.email || "";
+                  const prog = h.progress || {};
+                  const pct = prog.progress_percent || 0;
+                  const stage = prog.stage || "Pending";
+                  const emailParam = em ? `?email=${encodeURIComponent(em)}` : "";
+                  return `<li>
+                    <div><strong>${h.first_name || ""} ${h.last_name || ""}</strong><br/><small>${em}</small><br/><small>${h.department || ""}</small></div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                      <span class="badge">${stage}</span>
+                      <span class="badge">${pct}%</span>
+                      ${em ? `<a class="forgot-link" href="/view_documents.html${emailParam}">Docs</a>` : ""}
+                    </div>
+                  </li>`;
+                })
+                .join("")
+            : "<li>No new hires recorded.</li>";
+        } catch (err) {
+          userList.innerHTML = `<li>${err.message}</li>`;
+          hireList.innerHTML = `<li>${err.message}</li>`;
+        }
+      }
+
+      function deriveStageStatus(reqs, tasks) {
+        const allDocs = reqs.length && reqs.every((r) => r.status === "approved");
+        const anyDocs = reqs.some((r) => r.status !== "missing");
+        const itTasks = tasks.filter(t => (t.category || "").toLowerCase() === "it");
+        const pmTasks = tasks.filter(t => (t.category || "").toLowerCase() === "manager");
+
+        const docsStatus = allDocs ? "completed" : anyDocs ? "in_progress" : "pending";
+        const itDone = itTasks.length && itTasks.every(t => t.status === "completed");
+        const itStatus = itDone ? "completed" : itTasks.length ? "in_progress" : "pending";
+        const pmDone = pmTasks.length && pmTasks.every(t => t.status === "completed");
+        const pmStatus = pmDone ? "completed" : pmTasks.length ? "in_progress" : "pending";
+
+        return {
+          account: "completed",
+          documents: docsStatus,
+          it: itStatus,
+          project: pmStatus
+        };
+      }
+
+      function renderSteps(statuses) {
+        const items = [
+          { key: "account", label: "Account Created", icon: "👤", href: null },
+          { key: "documents", label: "Document Filing and Submitting", icon: "📎", href: "/upload_documents.html" },
+          { key: "it", label: "IT Access Configuration", icon: "🖥️", href: "/admin_panel.html?role=it" },
+          { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: "/admin_panel.html?role=manager" }
+        ];
+        stepsEl.innerHTML = items
+          .map(item => {
+            const st = statuses[item.key] || "pending";
+            const bg = st === "completed" ? "#d1fae5" : st === "in_progress" ? "#fef9c3" : "#e5e7eb";
+            const linkStart = item.href && (st === "in_progress" || st === "pending") ? `<a href="${item.href}${currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : ""}" style="text-decoration:none; color:inherit;">` : "";
+            const linkEnd = linkStart ? "</a>" : "";
+            return `
+              ${linkStart}<div class="step">
+                <div class="icon" style="background:${bg};">${item.icon}</div>
+                <div style="font-weight:600; color:#0f172a;">${item.label}</div>
+                <div>${statusChip(st)}</div>
+              </div>${linkEnd}
+            `;
+          })
+          .join("");
+      }
+
+      async function loadUser(email) {
+        try {
+          const user = await fetchJson(`/api/user?email=${encodeURIComponent(email)}`);
+          fullNameEl.textContent = user.full_name || email;
+          joinInfoEl.textContent = user.created_at ? `Joined in ${new Date(user.created_at).toLocaleDateString()}` : "Onboarding";
+          avatarEl.textContent = (user.full_name || email || "P").slice(0, 1).toUpperCase();
+          if (user.avatar_url) {
+            avatarEl.innerHTML = `<img src="${user.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:16px;" />`;
+          }
+          currentRole = (user.role || "employee").toLowerCase();
+          currentEmail = email;
+          updateMenu();
+        } catch (_) {
+          fullNameEl.textContent = email;
+          joinInfoEl.textContent = "Onboarding";
+          avatarEl.textContent = (email || "P").slice(0,1).toUpperCase();
+          currentRole = "employee";
+          currentEmail = email;
+          updateMenu();
+        }
+      }
+
+      async function loadData() {
+        const email = emailInput.value.trim().toLowerCase();
+        if (!email) return;
+        currentEmail = email;
+        try {
+          const [progress, docs, tasks, reqs] = await Promise.all([
+            fetchJson(`/api/progress?email=${encodeURIComponent(email)}`),
+            fetchJson(`/documents?email=${encodeURIComponent(email)}`),
+            fetchJson(`/api/tasks?email=${encodeURIComponent(email)}`),
+            fetchJson(`/documents/requirements?email=${encodeURIComponent(email)}`)
+          ]);
+
+          progressStat.textContent = `${progress.progress_percent}%`;
+          progressDetail.textContent = `${progress.documents.approved}/${progress.documents.total} docs approved, ${progress.tasks.completed}/${progress.tasks.total} tasks done.`;
+          renderDocs(docs.documents || []);
+          renderTasks(tasks.tasks || []);
+          renderRequirements(reqs.requirements || []);
+
+          const statuses = deriveStageStatus(reqs.requirements || [], tasks.tasks || []);
+          renderSteps(statuses);
+          loadUser(email);
+          localStorage.setItem("paoli_email", email);
+          loadDirectory();
+        } catch (err) {
+          progressStat.textContent = "--";
+          progressDetail.textContent = err.message || "Unable to load data.";
+          docList.innerHTML = "";
+          taskList.innerHTML = "";
+          reqList.innerHTML = "";
+          stepsEl.innerHTML = "";
+          directorySection.style.display = "none";
+        }
+      }
+
+      loadBtn.addEventListener("click", loadData);
+
+      async function fetchJson(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      function updateMenu() {
+        const items = [];
+        const emailParam = currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : "";
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/upload_documents.html${emailParam}">Upload documents</a>`);
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/profile.html${emailParam}">My profile</a>`);
+        const adminRoles = ["hr", "compliance", "it", "manager"];
+        if (adminRoles.includes(currentRole)) {
+          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html?role=${encodeURIComponent(currentRole)}">Admin panel</a>`);
+          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/hr_register.html">Register new hire</a>`);
+          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/policy_sign.html${emailParam}">Policy sign</a>`);
+          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/training.html${emailParam}">Training</a>`);
+        }
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/log_in.html">Log out</a>`);
+        menu.innerHTML = items.join("");
+      }
+
+      menuBtn.addEventListener("click", () => {
+        menu.style.display = menu.style.display === "block" ? "none" : "block";
+      });
+      document.addEventListener("click", (e) => {
+        if (!menu.contains(e.target) && e.target !== menuBtn) {
+          menu.style.display = "none";
+        }
+      });
+
+      function prefillFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get("email") || localStorage.getItem("paoli_email");
+        if (email) {
+          emailInput.value = email;
+          emailControls.style.display = "none";
+          loadData();
+        } else {
+          emailControls.style.display = "flex";
+        }
+      }
+
+      prefillFromQuery();
+    </script>
+  </body>
+</html>

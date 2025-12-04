@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Review | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
+      .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      .card { background:#fff; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,0.08); padding:16px 20px; }
+      .list { list-style:none; padding:0; margin:0; }
+      .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; }
+      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+      .text-input { width: 100%; }
+      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; background:#e5e7eb; color:#111827; }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <h1>HR / Compliance / PM / IT Panel</h1>
+      <p class="muted">Review documents, assign tasks, and update statuses.</p>
+
+      <div class="grid">
+        <div class="card" id="docCard">
+          <h3>Find documents (HR/Compliance)</h3>
+          <div class="controls">
+            <input id="docEmail" class="text-input" type="email" placeholder="Employee email" />
+            <button id="loadDocs" class="submit-button" style="padding:10px 16px;">Load</button>
+          </div>
+          <ul id="docResults" class="list"></ul>
+        </div>
+
+        <div class="card" id="taskCard">
+          <h3>Assign onboarding task (PM/IT)</h3>
+          <form id="taskForm" class="controls" style="flex-direction:column; align-items:stretch;">
+            <input class="text-input" name="title" placeholder="Title" required />
+            <input class="text-input" name="description" placeholder="Description" />
+            <input class="text-input" name="owner_email" type="email" placeholder="Owner email" required />
+            <input class="text-input" name="assigned_by" type="email" placeholder="Your email" />
+            <select class="text-input" name="category">
+              <option value="employee">Employee</option>
+              <option value="contractor">Contractor</option>
+              <option value="hr">HR</option>
+              <option value="it">IT</option>
+              <option value="compliance">Compliance</option>
+              <option value="manager">Project Manager</option>
+            </select>
+            <input class="text-input" name="due_date" placeholder="Due date (optional)" />
+            <button class="submit-button" type="submit" style="align-self:flex-end;">Assign</button>
+          </form>
+          <div id="taskResult" class="muted"></div>
+        </div>
+
+        <div class="card" id="taskListCard">
+          <h3>Tasks for user (PM/IT)</h3>
+          <div class="controls">
+            <input id="taskEmail" class="text-input" type="email" placeholder="Employee email" />
+            <button id="loadTasks" class="submit-button" style="padding:10px 16px;">Load</button>
+          </div>
+          <ul id="taskResults" class="list"></ul>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const docEmail = document.getElementById("docEmail");
+      const loadDocsBtn = document.getElementById("loadDocs");
+      const docResults = document.getElementById("docResults");
+
+      const taskEmail = document.getElementById("taskEmail");
+      const loadTasksBtn = document.getElementById("loadTasks");
+      const taskResults = document.getElementById("taskResults");
+
+      const taskForm = document.getElementById("taskForm");
+      const taskResult = document.getElementById("taskResult");
+      const taskCard = document.getElementById("taskCard");
+      const taskListCard = document.getElementById("taskListCard");
+      const docCard = document.getElementById("docCard");
+      const role = (new URLSearchParams(window.location.search).get("role") || "").toLowerCase();
+      const isAdmin = role === "hr" || role === "compliance" || role === "it" || role === "manager";
+
+      function applyRoleVisibility() {
+        const isHR = role === "hr" || role === "compliance";
+        const isITPM = role === "it" || role === "manager";
+        docCard.style.display = isHR ? "block" : "none";
+        taskCard.style.display = isITPM ? "block" : "none";
+        taskListCard.style.display = isITPM ? "block" : "none";
+      }
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      async function loadDocs() {
+        const email = docEmail.value.trim().toLowerCase();
+        if (!email) return;
+        docResults.innerHTML = "Loading...";
+        try {
+          const data = await fetchJson(`/documents?email=${encodeURIComponent(email)}`);
+          if (!data.documents?.length) {
+            docResults.innerHTML = "<li>No documents found.</li>";
+            return;
+          }
+          docResults.innerHTML = data.documents
+            .map(d => `
+              <li>
+                <div><strong>${d.original_name}</strong><br/><small>${d.uploader_name || ""} • ${d.uploader_email}</small><br/><small>Type: ${d.doc_type || "unspecified"}</small></div>
+                <div class="controls">
+                  <span class="badge">${d.status || "pending_review"}</span>
+                  <button data-id="${d.id}" data-status="approved" class="submit-button" style="padding:8px 12px;">Approve</button>
+                  <button data-id="${d.id}" data-status="rejected" class="submit-button" style="padding:8px 12px; background:#e53e3e;">Reject</button>
+                </div>
+              </li>
+            `)
+            .join("");
+          docResults.querySelectorAll("button[data-id]").forEach(btn => {
+            btn.addEventListener("click", () => updateDoc(btn.dataset.id, btn.dataset.status));
+          });
+        } catch (err) {
+          docResults.innerHTML = `<li>${err.message}</li>`;
+        }
+      }
+
+      async function updateDoc(id, status) {
+        try {
+          await fetchJson(`/documents/${id}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ status })
+          });
+          loadDocs();
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function submitTask(e) {
+        e.preventDefault();
+        taskResult.textContent = "";
+        const formData = new FormData(taskForm);
+        try {
+          await fetchJson("/api/tasks", {
+            method: "POST",
+            body: new URLSearchParams(formData)
+          });
+          taskResult.textContent = "Task assigned.";
+          taskForm.reset();
+        } catch (err) {
+          taskResult.textContent = err.message;
+        }
+      }
+
+      async function loadTasks() {
+        const email = taskEmail.value.trim().toLowerCase();
+        if (!email) return;
+        taskResults.innerHTML = "Loading...";
+        try {
+          const data = await fetchJson(`/api/tasks?email=${encodeURIComponent(email)}`);
+          if (!data.tasks?.length) {
+            taskResults.innerHTML = "<li>No tasks found.</li>";
+            return;
+          }
+          taskResults.innerHTML = data.tasks
+            .map(t => `
+              <li>
+                <div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div>
+                <div class="controls">
+                  <span class="badge">${t.status}</span>
+                  <button data-id="${t.id}" data-status="completed" class="submit-button" style="padding:8px 12px;">Mark complete</button>
+                  <button data-id="${t.id}" data-status="in_progress" class="submit-button" style="padding:8px 12px;">In progress</button>
+                </div>
+              </li>
+            `)
+            .join("");
+
+          taskResults.querySelectorAll("button[data-id]").forEach(btn => {
+            btn.addEventListener("click", () => updateTask(btn.dataset.id, btn.dataset.status));
+          });
+        } catch (err) {
+          taskResults.innerHTML = `<li>${err.message}</li>`;
+        }
+      }
+
+      async function updateTask(id, status) {
+        try {
+          await fetchJson(`/api/tasks/${id}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ status })
+          });
+          loadTasks();
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      loadDocsBtn.addEventListener("click", loadDocs);
+      loadTasksBtn.addEventListener("click", loadTasks);
+      taskForm.addEventListener("submit", submitTask);
+      applyRoleVisibility();
+    </script>
+  </body>
+</html>

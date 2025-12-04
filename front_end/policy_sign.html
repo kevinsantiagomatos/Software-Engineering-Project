@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Policy Acknowledgment</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      .container { max-width:800px; margin:20px auto; padding:0 16px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
+      .list { list-style:none; padding:0; margin:0; }
+      .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Policy Acknowledgment</h2>
+      <div class="card">
+        <div class="controls" style="margin-bottom:12px;">
+          <input id="email" class="text-input" type="email" placeholder="Your email" />
+          <input id="signature" class="text-input" type="text" placeholder="Type your name as signature" />
+          <select id="policy" class="text-input">
+            <option value="code_of_conduct">Code of Conduct</option>
+            <option value="privacy">Privacy Policy</option>
+            <option value="handbook">Employee Handbook</option>
+          </select>
+          <button id="sign" class="submit-button" style="padding:10px 16px;">Sign</button>
+        </div>
+        <div id="status" class="muted"></div>
+      </div>
+      <div class="card">
+        <h3>Your signatures</h3>
+        <ul id="list" class="list"></ul>
+      </div>
+    </div>
+    <script>
+      const emailInput = document.getElementById("email");
+      const signatureInput = document.getElementById("signature");
+      const policySelect = document.getElementById("policy");
+      const signBtn = document.getElementById("sign");
+      const statusEl = document.getElementById("status");
+      const listEl = document.getElementById("list");
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      async function loadStatus() {
+        const email = emailInput.value.trim();
+        if (!email) return;
+        try {
+          const data = await fetchJson(`/api/policy/status?email=${encodeURIComponent(email)}`);
+          const items = data.policies || [];
+          listEl.innerHTML = items.length
+            ? items.map(p => `<li><span>${p.policy_id}</span><span>${p.status}</span></li>`).join("")
+            : "<li>No signatures yet.</li>";
+        } catch (err) {
+          statusEl.textContent = err.message;
+        }
+      }
+
+      signBtn.addEventListener("click", async () => {
+        statusEl.textContent = "";
+        const email = emailInput.value.trim();
+        const sig = signatureInput.value.trim();
+        const policy = policySelect.value;
+        if (!email || !sig) {
+          statusEl.textContent = "Email and signature are required.";
+          return;
+        }
+        try {
+          await fetchJson("/api/policy/ack", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ email, signature: sig, policy_id: policy })
+          });
+          statusEl.textContent = "Signed.";
+          localStorage.setItem("paoli_email", email);
+          loadStatus();
+        } catch (err) {
+          statusEl.textContent = err.message;
+        }
+      });
+
+      function prefill() {
+        const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
+        if (email) {
+          emailInput.value = email;
+          loadStatus();
+        }
+      }
+      prefill();
+    </script>
+  </body>
+</html>
