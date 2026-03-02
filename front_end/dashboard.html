@@ -220,8 +220,10 @@
                 const stage = prog.stage || "Pending";
                 const emailParam = em ? `?email=${encodeURIComponent(em)}` : "";
                 return `<li>
-                  <div><strong>${h.first_name || ""} ${h.last_name || ""}</strong><br/><small>${em}</small><br/><small>${h.department || ""}</small></div>
-                  <div style="display:flex; gap:8px; align-items:center;">
+                  <a href="/profile.html${emailParam}" style="flex:1; text-decoration:none; color:inherit;">
+                    <div><strong>${h.first_name || ""} ${h.last_name || ""}</strong><br/><small>${em}</small><br/><small>${h.department || ""}</small></div>
+                  </a>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <span class="badge">${stage}</span>
                     <span class="badge">${pct}%</span>
                     ${em ? `<a class="forgot-link" href="/view_documents.html${emailParam}">Docs</a>` : ""}
