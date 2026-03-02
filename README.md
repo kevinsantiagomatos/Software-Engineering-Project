@@ -40,5 +40,42 @@ This project demonstrates:
 - Document Handling
 
 ---
+---
 
-## Repository Structure
+## Technologies Used
+
+- Python (Backend)
+- HTML / CSS / JavaScript (Frontend)
+- SQL Database
+- REST-style routing
+- File upload handling
+
+---
+
+##  Running the Project
+
+### Clone
+```bash
+git clone https://github.com/kevinsantiagomatos/Software-Engineering-Project.git
+cd Software-Engineering-Project
+
+## Backend Setup
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+
+**Database**
+
+Import SQL scripts from data_store/ into your SQL engine.
+
+**Frontend**
+
+cd front_end
+python -m http.server 8000
+
+## Author ##
+
+Kevin Santiago
+Computer Science Student
