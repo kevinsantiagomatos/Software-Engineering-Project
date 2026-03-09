@@ -216,6 +216,20 @@
         }
       }
 
+      let csrfToken = null;
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        try {
+          const res = await fetch("/api/csrf");
+          if (!res.ok) return null;
+          const data = await res.json();
+          csrfToken = data.csrf_token;
+          return csrfToken;
+        } catch (_) {
+          return null;
+        }
+      }
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         hideAll();
@@ -241,6 +255,12 @@
           return;
         }
 
+        const token = await ensureCsrf();
+        if (!token) {
+          show(err, "Session expired. Please log in again and retry.");
+          return;
+        }
+
         const results = [];
         for (const item of toUpload) {
           const fd = new FormData();
@@ -248,7 +268,11 @@
           fd.append("email", email);
           fd.append("doc_type", item.type);
           fd.append("documents", item.file);
-          const res = await fetch("/documents/upload", { method: "POST", body: fd });
+          const res = await fetch("/documents/upload", {
+            method: "POST",
+            body: fd,
+            headers: { "X-CSRF-Token": token },
+          });
           if (!res.ok) {
             const msg = await res.text();
             show(err, msg || "Upload failed.");
