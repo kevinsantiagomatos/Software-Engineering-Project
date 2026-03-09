@@ -16,28 +16,36 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `it_provision`
+-- Table structure for table `task`
 --
 
-DROP TABLE IF EXISTS `it_provision`;
+DROP TABLE IF EXISTS `task`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `it_provision` (
+CREATE TABLE `task` (
   `id` varchar(32) NOT NULL,
-  `email` varchar(255) DEFAULT NULL,
-  `items_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`items_json`)),
-  `completed_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  `title` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `owner_email` varchar(255) DEFAULT NULL,
+  `assigned_by` varchar(255) DEFAULT NULL,
+  `category` varchar(32) DEFAULT NULL,
+  `status` varchar(32) DEFAULT NULL,
+  `due_date` varchar(64) DEFAULT NULL,
+  `created_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_owner` (`owner_email`),
+  KEY `idx_task_category` (`category`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `it_provision`
+-- Dumping data for table `task`
 --
 
-LOCK TABLES `it_provision` WRITE;
-/*!40000 ALTER TABLE `it_provision` DISABLE KEYS */;
-/*!40000 ALTER TABLE `it_provision` ENABLE KEYS */;
+LOCK TABLES `task` WRITE;
+/*!40000 ALTER TABLE `task` DISABLE KEYS */;
+/*!40000 ALTER TABLE `task` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -49,4 +57,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-12-03 21:28:56
+-- Dump completed on 2026-03-09 12:28:54

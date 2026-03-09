@@ -16,31 +16,28 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `policy_ack`
+-- Table structure for table `it_provision`
 --
 
-DROP TABLE IF EXISTS `policy_ack`;
+DROP TABLE IF EXISTS `it_provision`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `policy_ack` (
+CREATE TABLE `it_provision` (
   `id` varchar(32) NOT NULL,
   `email` varchar(255) DEFAULT NULL,
-  `policy_id` varchar(128) DEFAULT NULL,
-  `signature` text DEFAULT NULL,
-  `status` varchar(32) DEFAULT NULL,
-  `signed_at` datetime(6) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_policy_email` (`email`)
+  `items_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`items_json`)),
+  `completed_at` datetime(6) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `policy_ack`
+-- Dumping data for table `it_provision`
 --
 
-LOCK TABLES `policy_ack` WRITE;
-/*!40000 ALTER TABLE `policy_ack` DISABLE KEYS */;
-/*!40000 ALTER TABLE `policy_ack` ENABLE KEYS */;
+LOCK TABLES `it_provision` WRITE;
+/*!40000 ALTER TABLE `it_provision` DISABLE KEYS */;
+/*!40000 ALTER TABLE `it_provision` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -52,4 +49,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-12-03 21:28:56
+-- Dump completed on 2026-03-09 12:28:54

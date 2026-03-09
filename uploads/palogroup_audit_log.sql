@@ -16,27 +16,29 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `training_module`
+-- Table structure for table `audit_log`
 --
 
-DROP TABLE IF EXISTS `training_module`;
+DROP TABLE IF EXISTS `audit_log`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `training_module` (
-  `id` varchar(64) NOT NULL,
-  `title` varchar(255) DEFAULT NULL,
-  `description` text DEFAULT NULL,
+CREATE TABLE `audit_log` (
+  `id` varchar(32) NOT NULL,
+  `action` varchar(64) DEFAULT NULL,
+  `actor` varchar(255) DEFAULT NULL,
+  `detail` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`detail`)),
+  `timestamp` datetime(6) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `training_module`
+-- Dumping data for table `audit_log`
 --
 
-LOCK TABLES `training_module` WRITE;
-/*!40000 ALTER TABLE `training_module` DISABLE KEYS */;
-/*!40000 ALTER TABLE `training_module` ENABLE KEYS */;
+LOCK TABLES `audit_log` WRITE;
+/*!40000 ALTER TABLE `audit_log` DISABLE KEYS */;
+/*!40000 ALTER TABLE `audit_log` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -48,4 +50,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-12-03 21:28:56
+-- Dump completed on 2026-03-09 12:28:54
