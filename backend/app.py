@@ -3,10 +3,12 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
 from flask import Flask, request, send_from_directory, Response, jsonify, redirect, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from urllib.parse import quote_plus
 import pymysql
@@ -60,7 +62,15 @@ HR_ATTACHMENT_TYPES = [
 ]
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET", "change-me")
+app.secret_key = os.getenv("FLASK_SECRET") or secrets.token_hex(32)
+
+# Harden session cookies; defaults are safe for local dev and can be overridden via env
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
 
 
 def get_db_connection():
@@ -106,11 +116,16 @@ def verify_user(identifier: str, plain_password: str) -> bool:
     if not identifier or not plain_password:
         return False
 
-    hashed = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
     row = fetch_one("SELECT password_hash FROM `user` WHERE email = %s", (identifier,))
     if not row:
         return False
-    return row["password_hash"] == hashed
+    stored = row["password_hash"]
+    try:
+        return check_password_hash(stored, plain_password)
+    except (ValueError, TypeError):
+        # Legacy unsalted SHA-256 fallback
+        legacy = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+        return legacy == stored
 
 
 def get_user_record(email: str):
@@ -121,14 +136,48 @@ def get_user_record(email: str):
 
 def require_role(allowed_roles):
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
+            if not session.get("email"):
+                return Response("Authentication required", status=401, mimetype="text/plain")
             role = session.get("role", "")
             if role not in allowed_roles:
                 return Response("Forbidden", status=403, mimetype="text/plain")
             return func(*args, **kwargs)
-        wrapper.__name__ = func.__name__
         return wrapper
     return decorator
+
+
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not session.get("email"):
+            return Response("Authentication required", status=401, mimetype="text/plain")
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def ensure_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(16)
+
+
+@app.before_request
+def csrf_protect():
+    # Enforce a lightweight CSRF check for state-changing requests when logged in
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if session.get("email"):
+            ensure_csrf_token()
+            sent = request.headers.get("X-CSRF-Token")
+            if not sent or sent != session.get("csrf_token"):
+                return Response("CSRF token missing or invalid", status=400, mimetype="text/plain")
+
+
+@app.get("/api/csrf")
+@login_required
+def csrf_token():
+    ensure_csrf_token()
+    return jsonify({"csrf_token": session["csrf_token"]})
 
 
 def update_user_avatar_file(email: str, avatar_url: str) -> bool:
@@ -160,14 +209,13 @@ def change_password(email: str, new_password: str) -> bool:
     if not email or not new_password:
         return False
 
-    hashed = hashlib.sha256(new_password.encode("utf-8")).hexdigest()
+    hashed = generate_password_hash(new_password)
     query = "UPDATE `user` SET password_hash = %s WHERE email = %s"
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(query, (hashed, email))
             connection.commit()
             return cursor.rowcount == 1
-from flask import redirect, url_for
 ensure_directories()
 
 
@@ -229,7 +277,7 @@ def register():
     if len(password) < 8:
         return Response("Password must be at least 8 characters.", status=400, mimetype="text/plain")
 
-    hashed = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    hashed = generate_password_hash(password)
     record = create_user_record(email, hashed, full_name, role, department)
 
     try:
@@ -240,6 +288,7 @@ def register():
     return jsonify({"status": "ok", "message": "Registration received and pending HR review."})
 
 @app.post("/reset-password")
+@login_required
 def reset_password():
     email = request.form.get("email")          
     old_pw = request.form.get("current_password")  
@@ -248,28 +297,28 @@ def reset_password():
 
     # Check for missing inputs
     if not email or not old_pw or not pw1 or not pw2:
-         return Response("Missing Fields", status=401, mimetype="text/plain")
+         return Response("Missing fields.", status=400, mimetype="text/plain")
 
     # Make sure new passwords match
     if pw1 != pw2:
-         return Response("Passwords Do Not Matc.", status=401, mimetype="text/plain")
+         return Response("Passwords do not match.", status=400, mimetype="text/plain")
 
     # Verify current password first
     try:
         valid_old = verify_user(email, old_pw)
         if not valid_old:
-            return Response("Credentials are Incorrect.", status=401, mimetype="text/plain")
+            return Response("Current password is incorrect.", status=401, mimetype="text/plain")
 
         # Proceed with password change
         changed = change_password(email, pw1)
 
     except Exception as exc:
         app.logger.error("Reset error: %s", exc, exc_info=True)
-        return Response("Server Error.", status=401, mimetype="text/plain")
+        return Response("Server error.", status=500, mimetype="text/plain")
 
     # Check if password was actually changed
     if not changed:
-        return Response("Credential are Incorrect.", status=401, mimetype="text/plain")
+        return Response("Unable to change password.", status=500, mimetype="text/plain")
 
     # Success → redirect to login
     return redirect("/log_in.html?reset=ok", code=302)
@@ -359,6 +408,7 @@ def create_task_record(payload: dict) -> dict:
 
 
 @app.post("/documents/upload")
+@login_required
 def upload_documents():
     full_name = (request.form.get("full_name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
@@ -374,6 +424,11 @@ def upload_documents():
     valid_doc_ids = {d["id"] for d in REQUIRED_DOCUMENT_TYPES}
     if not doc_type or doc_type not in valid_doc_ids:
         return Response("Invalid or missing document type.", status=400, mimetype="text/plain")
+
+    requester = session.get("email", "")
+    requester_role = session.get("role", "")
+    if requester != email and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
 
     if not files:
         return Response("No documents provided.", status=400, mimetype="text/plain")
@@ -438,8 +493,15 @@ def upload_documents():
 
 
 @app.get("/documents")
+@login_required
 def list_documents():
     email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
     if email:
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
     else:
@@ -468,6 +530,8 @@ def update_document_status(doc_id):
 
 
 @app.post("/api/tasks")
+@login_required
+@require_role({"hr", "manager", "it", "compliance"})
 def create_task():
     payload = {
         "title": request.form.get("title") or "",
@@ -511,6 +575,7 @@ def create_task():
 
 
 @app.get("/api/tasks")
+@login_required
 def list_tasks_api():
     email = (request.args.get("email") or "").strip().lower()
     category = (request.args.get("category") or "").strip().lower()
@@ -522,29 +587,44 @@ def list_tasks_api():
     if category:
         query += " AND category = %s"
         params.append(category)
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if email and email != requester and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
     tasks = fetch_all(query, params)
     return jsonify({"tasks": tasks})
 
 
 @app.post("/api/tasks/<task_id>/status")
+@login_required
 def update_task_status(task_id):
     status = (request.form.get("status") or "").strip().lower()
     if status not in TASK_STATUSES:
         return Response("Invalid status.", status=400, mimetype="text/plain")
 
+    task = fetch_one("SELECT owner_email FROM task WHERE id = %s", (task_id,))
+    if not task:
+        return Response("Task not found.", status=404, mimetype="text/plain")
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if requester != task.get("owner_email") and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE task SET status = %s, updated_at = %s WHERE id = %s",
-                (status, datetime.utcnow(), task_id),
+                (status, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), task_id),
             )
         connection.commit()
-        if cursor.rowcount == 0:
-            return Response("Task not found.", status=404, mimetype="text/plain")
     return jsonify({"status": "ok", "task_id": task_id, "new_status": status})
 
 
 @app.get("/api/progress")
+@login_required
 def onboarding_progress():
     email = (request.args.get("email") or "").strip().lower()
     if email:
@@ -563,17 +643,32 @@ def onboarding_progress():
             trainings=fetch_all("SELECT * FROM training_completion"),
         )
 
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+
     if email:
+        if email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
         return jsonify(user_progress(email))
-    # aggregate for all users (admin view)
+
+    if requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
     emails = {d.get("uploader_email") for d in docs if d.get("uploader_email")} | {t.get("owner_email") for t in tasks if t.get("owner_email")}
     progress_list = [user_progress(e) for e in emails]
     return jsonify({"all": progress_list})
 
 
 @app.get("/documents/requirements")
+@login_required
 def document_requirements():
     email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
     if email:
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
     else:
@@ -587,8 +682,11 @@ def document_requirements():
             "documents": [],
         }
 
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+
     for doc in docs:
-        if email and doc.get("uploader_email") != email:
+        if email and doc.get("uploader_email") != email and requester_role not in {"hr", "manager", "compliance"}:
             continue
         dt = doc.get("doc_type")
         if dt and dt in by_type:
@@ -617,6 +715,7 @@ def login():
         user = get_user_record(username) or {}
         session["email"] = username
         session["role"] = (user.get("role") or "employee").lower()
+        ensure_csrf_token()
         # Send the user to their dashboard with email prefilled for status checks.
         target = f"/dashboard.html?email={quote_plus(username)}"
         return redirect(target, code=302)
@@ -631,10 +730,16 @@ def logout():
 
 
 @app.get("/api/user")
+@login_required
 def get_user():
     email = (request.args.get("email") or "").strip().lower()
     if not email:
         return Response("Email is required.", status=400, mimetype="text/plain")
+
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
 
     record = get_user_record(email)
     if not record:
@@ -653,6 +758,8 @@ def get_user():
 
 
 @app.get("/api/users")
+@login_required
+@require_role({"hr", "manager", "compliance", "it"})
 def get_users():
     role_filter = (request.args.get("role") or "").strip().lower()
     users = list_users()
@@ -662,12 +769,15 @@ def get_users():
 
 
 @app.post("/api/policy/ack")
+@login_required
 def policy_ack():
     email = (request.form.get("email") or "").strip().lower()
     policy_id = (request.form.get("policy_id") or "").strip()
     signature = (request.form.get("signature") or "").strip()
     if not email or not policy_id or not signature:
         return Response("Email, policy_id, and signature are required.", status=400, mimetype="text/plain")
+    if email != session.get("email"):
+        return Response("Forbidden", status=403, mimetype="text/plain")
     execute(
         "INSERT INTO policy_ack (id, email, policy_id, signature, status, signed_at) VALUES (%s,%s,%s,%s,%s,NOW())",
         (secrets.token_hex(8), email, policy_id, signature, "signed"),
@@ -677,16 +787,22 @@ def policy_ack():
 
 
 @app.get("/api/policy/status")
+@login_required
 def policy_status():
     email = (request.args.get("email") or "").strip().lower()
     if email:
+        if email != session.get("email") and session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
         policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,))
     else:
+        if session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
         policies = fetch_all("SELECT * FROM policy_ack")
     return jsonify({"policies": policies})
 
 
 @app.get("/api/training/list")
+@login_required
 def training_list():
     modules = fetch_all("SELECT * FROM training_module")
     if not modules:
@@ -707,11 +823,14 @@ def training_list():
 
 
 @app.post("/api/training/complete")
+@login_required
 def training_complete():
     email = (request.form.get("email") or "").strip().lower()
     module_id = (request.form.get("module_id") or "").strip()
     if not email or not module_id:
         return Response("Email and module_id are required.", status=400, mimetype="text/plain")
+    if email != session.get("email"):
+        return Response("Forbidden", status=403, mimetype="text/plain")
     execute("DELETE FROM training_completion WHERE email = %s AND module_id = %s", (email, module_id))
     execute(
         "INSERT INTO training_completion (email, module_id, completed_at) VALUES (%s,%s,NOW())",
@@ -722,11 +841,16 @@ def training_complete():
 
 
 @app.get("/api/training/status")
+@login_required
 def training_status():
     email = (request.args.get("email") or "").strip().lower()
     if email:
+        if email != session.get("email") and session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
         completions = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,))
     else:
+        if session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
         completions = fetch_all("SELECT * FROM training_completion")
     return jsonify({"completions": completions})
 
@@ -791,12 +915,15 @@ def list_new_hires():
 
 
 @app.post("/api/profile/photo")
+@login_required
 def upload_profile_photo():
     email = (request.form.get("email") or "").strip().lower()
     file = request.files.get("photo")
 
     if not email or not email_is_valid(email):
         return Response("Valid email is required.", status=400, mimetype="text/plain")
+    if email != session.get("email") and session.get("role") not in {"hr", "manager"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
     if not file or not file.filename:
         return Response("No photo provided.", status=400, mimetype="text/plain")
     if not allowed_file(file.filename):
@@ -817,6 +944,7 @@ def upload_profile_photo():
 
 @app.post("/api/hr/register-hire")
 @app.post("/api/hr/register-hire/")
+@require_role({"hr", "manager"})
 def register_hire():
     data = request.form
     files = request.files
@@ -899,6 +1027,7 @@ def style_assets(asset_path):
 
 
 @app.get("/uploads/<path:asset_path>")
+@login_required
 def uploaded_assets(asset_path):
     if not UPLOAD_DIR.exists():
         return Response("Uploads directory missing", status=404, mimetype="text/plain")
