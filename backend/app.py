@@ -162,10 +162,15 @@ def ensure_csrf_token():
         session["csrf_token"] = secrets.token_urlsafe(16)
 
 
+CSRF_EXEMPT_PATHS = {"/login", "/logout", "/register", "/reset-password"}
+
+
 @app.before_request
 def csrf_protect():
     # Enforce a lightweight CSRF check for state-changing requests when logged in
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if request.path in CSRF_EXEMPT_PATHS:
+            return None
         if session.get("email"):
             ensure_csrf_token()
             sent = request.headers.get("X-CSRF-Token")
