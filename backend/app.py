@@ -121,11 +121,15 @@ def verify_user(identifier: str, plain_password: str) -> bool:
         return False
     stored = row["password_hash"]
     try:
-        return check_password_hash(stored, plain_password)
+        if check_password_hash(stored, plain_password):
+            return True
     except (ValueError, TypeError):
-        # Legacy unsalted SHA-256 fallback
-        legacy = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
-        return legacy == stored
+        # fall through to legacy check
+        pass
+
+    # Legacy unsalted SHA-256 fallback (plain hex digest)
+    legacy = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+    return legacy == stored
 
 
 def get_user_record(email: str):
