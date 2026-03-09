@@ -92,8 +92,28 @@
         taskListCard.style.display = isITPM ? "block" : "none";
       }
 
+      let csrfToken = null;
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        try {
+          const res = await fetch('/api/csrf');
+          if (!res.ok) return null;
+          const data = await res.json();
+          csrfToken = data.csrf_token;
+          return csrfToken;
+        } catch (_) {
+          return null;
+        }
+      }
+
       async function fetchJson(url, options) {
-        const res = await fetch(url, options);
+        const opts = options ? { ...options } : {};
+        if (opts.method && opts.method.toUpperCase() !== 'GET') {
+          const token = await ensureCsrf();
+          if (!token) throw new Error('Session expired. Please log in again.');
+          opts.headers = { ...(opts.headers || {}), 'X-CSRF-Token': token };
+        }
+        const res = await fetch(url, opts);
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       }
