@@ -113,6 +113,7 @@ def email_is_valid(email: str) -> bool:
 
 
 def verify_user(identifier: str, plain_password: str) -> bool:
+    identifier = (identifier or "").strip().lower()
     if not identifier or not plain_password:
         return False
 
@@ -711,8 +712,8 @@ def document_requirements():
 
 @app.post("/login")
 def login():
-    username = request.form.get("username")
-    password = request.form.get("password")
+    username = (request.form.get("username") or "").strip().lower()
+    password = request.form.get("password") or ""
 
     try:
         is_valid = verify_user(username, password)
