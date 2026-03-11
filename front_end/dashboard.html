@@ -9,7 +9,7 @@
       body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
       .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
       .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.5rem; color:#fff; }
-      .container { max-width: 1100px; margin: -32px auto 0 auto; padding: 0 16px 32px; }
+      .container { max-width: 1100px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
       .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
       .steps { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:start; }
       .step { background:#f8fafc; border-radius:12px; padding:12px; border:1px solid #e5e7eb; text-align:center; }
@@ -23,6 +23,12 @@
       .muted { color:#4b5563; font-size:0.95rem; }
       .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
       .text-input { width: 260px; }
+      details { width:100%; }
+      details summary { list-style:none; display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 0; font-weight:600; }
+      details summary::-webkit-details-marker { display:none; }
+      details .details-body { list-style:none; margin:0; padding:0; }
+      .doc-row { padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+      .doc-updated { color:#94a3b8; font-size:12px; }
       @media (min-width: 840px) {
         .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .grid-wide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -130,14 +136,61 @@
         return `<span class="status-chip" style="background:${color}; color:${textColor};">${status.replace("_", " ")}</span>`;
       }
 
-      function renderDocs(docs) {
-        if (!docs.length) {
+      function renderDocs(requirements) {
+        if (!requirements.length) {
           docList.innerHTML = "<li>No documents uploaded yet.</li>";
           return;
         }
-        docList.innerHTML = docs
-          .map(d => `<li><span>${d.original_name}${d.doc_type ? ` • ${d.doc_type}` : ""}</span><span class="badge">${d.status || "pending_review"}</span></li>`)
-          .join("");
+        const required = requirements.filter((r) => !r.optional);
+        const optional = requirements.filter((r) => r.optional);
+        const requiredDone = required.filter((r) => r.status === "approved").length;
+        const requiredTotal = required.length || 0;
+        const optionalDone = optional.filter((r) => r.status === "approved").length;
+        const optionalTotal = optional.length || 0;
+
+        const pill = (status) => {
+          const colors = { approved: "#d1fae5", pending_review: "#fef9c3", missing: "#f1f5f9", rejected: "#fee2e2" };
+          const text = { approved: "#065f46", pending_review: "#92400e", missing: "#475569", rejected: "#991b1b" };
+          const bg = colors[status] || "#e5e7eb";
+          const fg = text[status] || "#475569";
+          const label = status.replace("_", " ");
+          return `<span class="badge" style="background:${bg}; color:${fg};">${label}</span>`;
+        };
+
+        const renderGroup = (items) =>
+          items
+            .map((r) => {
+              const last = r.last_updated ? `<div class="doc-updated">Updated: ${r.last_updated}</div>` : "";
+              return `<li class="doc-row">
+                <div><div style="font-weight:600;">${r.label}${r.optional ? " (optional)" : ""}</div>${last}</div>
+                ${pill(r.status || "missing")}
+              </li>`;
+            })
+            .join("");
+
+        const accordion = (title, count, total, bodyHtml, open = true) => {
+          return `
+            <li style="padding:6px 0; border-bottom:1px solid #e2e8f0;">
+              <details ${open ? "open" : ""}>
+                <summary><span class="caret" style="width:16px; display:inline-block; text-align:center;">${open ? "▾" : "▸"}</span><span style="flex:1;">${title}</span><span style="color:#475569; font-weight:500;">${count}/${total}</span></summary>
+                <ul class="details-body">${bodyHtml}</ul>
+              </details>
+            </li>
+          `;
+        };
+
+        const requiredHtml = accordion("Required documents", requiredDone, requiredTotal, renderGroup(required), true);
+        const optionalHtml = optionalTotal ? accordion("Optional / Conditional", optionalDone, optionalTotal, renderGroup(optional), false) : "";
+
+        docList.innerHTML = requiredHtml + optionalHtml;
+
+        // Keep caret indicator in sync with details toggle
+        docList.querySelectorAll("details").forEach((el) => {
+          const caret = el.querySelector(".caret");
+          el.addEventListener("toggle", () => {
+            if (caret) caret.textContent = el.open ? "▾" : "▸";
+          });
+        });
       }
 
       function renderTasks(tasks) {
@@ -146,7 +199,7 @@
           return;
         }
         taskList.innerHTML = tasks
-          .map(t => `<li><div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div><span class="badge">${t.status}</span></li>`)
+          .map(t => `<li style="padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; align-items:center;"><div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div><span class="badge">${t.status}</span></li>`)
           .join("");
       }
 
@@ -238,7 +291,7 @@
         const totalDocs = docProgress.total || 0;
         const approvedDocs = docProgress.approved || 0;
         const docsStatus = totalDocs && approvedDocs >= totalDocs ? "completed" : approvedDocs > 0 ? "in_progress" : "pending";
-        const itTasks = tasks.filter(t => (t.category || "").toLowerCase() === "it");
+        const itTasks = tasks.filter(t => (t.category || "").toLowerCase() === "it" || t.id === "it_provision");
         const pmTasks = tasks.filter(t => (t.category || "").toLowerCase() === "manager");
 
         const itDone = itTasks.length && itTasks.every(t => t.status === "completed");
@@ -309,18 +362,25 @@
         if (!email) return;
         currentEmail = email;
         try {
-          const [progress, docs, tasks] = await Promise.all([
+          const [progress, reqs, tasks] = await Promise.all([
             fetchJson(`/api/progress?email=${encodeURIComponent(email)}`),
-            fetchJson(`/documents?email=${encodeURIComponent(email)}`),
+            fetchJson(`/documents/requirements?email=${encodeURIComponent(email)}`),
             fetchJson(`/api/tasks?email=${encodeURIComponent(email)}`)
           ]);
 
           progressStat.textContent = `${progress.progress_percent}%`;
           progressDetail.textContent = `${progress.documents.approved}/${progress.documents.total} docs approved, ${progress.tasks.completed}/${progress.tasks.total} tasks done.`;
-          renderDocs(docs.documents || []);
-          renderTasks(tasks.tasks || []);
+          renderDocs(reqs.requirements || []);
+          const baseTasks = tasks.tasks || [];
+          const pseudoTasks = [
+            { id: "policy_ack", title: "Sign company policies", description: "", status: progress.policies_signed ? "completed" : "pending" },
+            { id: "training", title: "Complete onboarding training", description: "", status: progress.training_completed ? "completed" : "pending" },
+            { id: "it_provision", title: "IT provisioning checklist", description: "", status: progress.it_provisioned ? "completed" : "pending" },
+          ];
+          const combinedTasks = [...baseTasks, ...pseudoTasks];
+          renderTasks(combinedTasks);
 
-          const statuses = deriveStageStatus(progress.documents || {}, tasks.tasks || []);
+          const statuses = deriveStageStatus(progress.documents || {}, combinedTasks);
           renderSteps(statuses);
           await loadUser(email);
           localStorage.setItem("paoli_email", email);

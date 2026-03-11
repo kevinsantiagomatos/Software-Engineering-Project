@@ -16,6 +16,8 @@ import pymysql
 
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "5000"))
+DEV_AUTOLOGIN_EMAIL = (os.getenv("DEV_AUTOLOGIN_EMAIL") or "").strip().lower()
+DEV_AUTOLOGIN_ROLE = (os.getenv("DEV_AUTOLOGIN_ROLE") or "hr").strip().lower()
 
 
 DB_CONFIG = {
@@ -42,18 +44,17 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 TASK_STATUSES = {"pending", "in_progress", "completed", "blocked"}
 ROLE_CATEGORIES = {"employee", "contractor", "hr", "it", "compliance", "manager"}
 REQUIRED_DOCUMENT_TYPES = [
-    {"id": "government_id", "label": "Official Identification (license/passport)"},
-    {"id": "w9", "label": "W-9 / Withholding tax form (Hacienda)"},
-    {"id": "asume_clearance", "label": "ASUME certificate"},
-    {"id": "background_check", "label": "Criminal Background Check"},
-    {"id": "tax_return", "label": "Tax Return Filing Certification"},
-    {"id": "bank_certification", "label": "Bank Account Certification for Direct Deposit"},
-    {"id": "resume", "label": "Resume"},
-    {"id": "certifications", "label": "Evidence of Certifications"},
-    {"id": "signed_contract", "label": "Signed Contract"},
-    {"id": "crim_compliance", "label": "CRIM Compliance Certification"},
-    {"id": "comptroller_registry", "label": "Comptroller Contractor Registry"},
-    {"id": "policy_ack", "label": "Policy acknowledgement (signed)"},
+    {"id": "government_id", "label": "Official Identification (license/passport)", "optional": False},
+    {"id": "w9", "label": "W-9 / Withholding tax form (Hacienda)", "optional": False},
+    {"id": "asume_clearance", "label": "ASUME certificate", "optional": False},
+    {"id": "background_check", "label": "Criminal Background Check", "optional": False},
+    {"id": "tax_return", "label": "Tax Return Filing Certification", "optional": False},
+    {"id": "bank_certification", "label": "Bank Account Certification for Direct Deposit", "optional": False},
+    {"id": "resume", "label": "Resume", "optional": False},
+    {"id": "certifications", "label": "Evidence of Certifications", "optional": True},
+    {"id": "signed_contract", "label": "Signed Contract", "optional": False},
+    {"id": "crim_compliance", "label": "CRIM Compliance Certification", "optional": False},
+    {"id": "comptroller_registry", "label": "Comptroller Contractor Registry (gov contracts)", "optional": True},
 ]
 HR_ATTACHMENT_TYPES = [
     {"id": "offer_letter", "label": "Offer Letter"},
@@ -144,9 +145,18 @@ def require_role(allowed_roles):
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not session.get("email"):
-                return Response("Authentication required", status=401, mimetype="text/plain")
+                if DEV_AUTOLOGIN_EMAIL:
+                    session["email"] = DEV_AUTOLOGIN_EMAIL
+                    session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
+                    ensure_csrf_token()
+                else:
+                    if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                        return redirect("/log_in.html")
+                    return Response("Authentication required", status=401, mimetype="text/plain")
             role = session.get("role", "")
             if role not in allowed_roles:
+                if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                    return redirect("/log_in.html")
                 return Response("Forbidden", status=403, mimetype="text/plain")
             return func(*args, **kwargs)
         return wrapper
@@ -157,7 +167,15 @@ def login_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if not session.get("email"):
-            return Response("Authentication required", status=401, mimetype="text/plain")
+            # Dev autologin fallback
+            if DEV_AUTOLOGIN_EMAIL:
+                session["email"] = DEV_AUTOLOGIN_EMAIL
+                session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
+                ensure_csrf_token()
+            else:
+                if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                    return redirect("/log_in.html")
+                return Response("Authentication required", status=401, mimetype="text/plain")
         return func(*args, **kwargs)
     return wrapper
 
@@ -358,30 +376,54 @@ def list_users():
     return cleaned
 
 
-def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None):
+def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None, it_provisions=None):
     docs = docs or []
     tasks = tasks or []
     policies = policies or []
     trainings = trainings or []
+    it_provisions = it_provisions or []
+
     ud = [d for d in docs if d.get("uploader_email") == email]
     ut = [t for t in tasks if t.get("owner_email") == email]
     upol = [p for p in policies if p.get("email") == email]
     utr = [t for t in trainings if t.get("email") == email]
+    uit = [p for p in it_provisions if p.get("email") == email]
 
-    doc_total = len(ud)
-    doc_done = sum(1 for d in ud if d.get("status") == "approved")
-    task_total = len(ut)
-    task_done = sum(1 for t in ut if t.get("status") == "completed")
+    required_doc_ids = [d["id"] for d in REQUIRED_DOCUMENT_TYPES if not d.get("optional")]
+    doc_status_by_type = {doc_id: "missing" for doc_id in required_doc_ids}
+    for d in ud:
+        dt = d.get("doc_type")
+        if dt in doc_status_by_type:
+            current = doc_status_by_type[dt]
+            status = d.get("status", "pending_review")
+            if status == "approved":
+                doc_status_by_type[dt] = "approved"
+            elif current != "approved":
+                doc_status_by_type[dt] = status
+
+    doc_total = len(required_doc_ids)
+    doc_done = sum(1 for status in doc_status_by_type.values() if status == "approved")
+
+    expected_checks = [
+        {"key": "policy_ack", "label": "Policies acknowledged", "done": bool(upol)},
+        {"key": "training", "label": "Training completed", "done": bool(utr)},
+        {"key": "it_access", "label": "IT provisioning completed", "done": bool(uit)},
+    ]
+    extra_total = len(expected_checks)
+    extra_done = sum(1 for item in expected_checks if item["done"])
+
+    task_total = len(ut) + extra_total
+    task_done = sum(1 for t in ut if t.get("status") == "completed") + extra_done
+
     total_items = doc_total + task_total
     completed = doc_done + task_done
     percentage = (completed / total_items * 100) if total_items else 0
 
-    # simple stage heuristic
-    if doc_done and task_done and upol and utr:
+    if doc_done == doc_total and task_done == task_total and task_total > 0:
         stage = "Completed"
-    elif doc_done and (task_total or upol or utr):
+    elif doc_done == doc_total:
         stage = "IT/Project/Training"
-    elif doc_total:
+    elif doc_done:
         stage = "Documents"
     else:
         stage = "Account Created"
@@ -392,6 +434,7 @@ def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, tra
         "tasks": {"total": task_total, "completed": task_done},
         "policies_signed": len(upol),
         "training_completed": len(utr),
+        "it_provisioned": len(uit),
         "progress_percent": round(percentage, 2),
         "stage": stage,
     }
@@ -508,9 +551,11 @@ def list_documents():
     email = (request.args.get("email") or "").strip().lower()
     requester = session.get("email")
     requester_role = session.get("role", "")
-    if email and email != requester and requester_role not in {"hr", "manager", "compliance"}:
+    if not email and requester_role == "employee":
+        email = requester or ""
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
         return Response("Forbidden", status=403, mimetype="text/plain")
-    if not email and requester_role not in {"hr", "manager", "compliance"}:
+    if not email and requester_role not in {"hr", "manager", "compliance", "it"}:
         return Response("Forbidden", status=403, mimetype="text/plain")
     if email:
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
@@ -599,6 +644,10 @@ def list_tasks_api():
         params.append(category)
     requester = session.get("email")
     requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
+        query += " AND owner_email = %s"
+        params.append(email)
     if email and email != requester and requester_role not in {"hr", "manager", "it", "compliance"}:
         return Response("Forbidden", status=403, mimetype="text/plain")
     if not email and requester_role not in {"hr", "manager", "it", "compliance"}:
@@ -637,12 +686,18 @@ def update_task_status(task_id):
 @login_required
 def onboarding_progress():
     email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
     if email:
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
         tasks = fetch_all("SELECT * FROM task WHERE owner_email = %s", (email,))
+        it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,))
     else:
         docs = fetch_all("SELECT * FROM document")
         tasks = fetch_all("SELECT * FROM task")
+        it_provisions = fetch_all("SELECT * FROM it_provision")
 
     def user_progress(e):
         return user_progress_snapshot(
@@ -651,10 +706,8 @@ def onboarding_progress():
             tasks=tasks,
             policies=fetch_all("SELECT * FROM policy_ack"),
             trainings=fetch_all("SELECT * FROM training_completion"),
+            it_provisions=it_provisions,
         )
-
-    requester = session.get("email")
-    requester_role = session.get("role", "")
 
     if email:
         if email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
@@ -675,9 +728,11 @@ def document_requirements():
     email = (request.args.get("email") or "").strip().lower()
     requester = session.get("email")
     requester_role = session.get("role", "")
-    if email and email != requester and requester_role not in {"hr", "manager", "compliance"}:
+    if not email and requester_role == "employee":
+        email = requester or ""
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
         return Response("Forbidden", status=403, mimetype="text/plain")
-    if not email and requester_role not in {"hr", "manager", "compliance"}:
+    if not email and requester_role not in {"hr", "manager", "compliance", "it"}:
         return Response("Forbidden", status=403, mimetype="text/plain")
     if email:
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
@@ -688,8 +743,10 @@ def document_requirements():
         by_type[doc_type["id"]] = {
             "id": doc_type["id"],
             "label": doc_type["label"],
+            "optional": bool(doc_type.get("optional")),
             "status": "missing",
             "documents": [],
+            "last_updated": None,
         }
 
     requester = session.get("email")
@@ -702,6 +759,9 @@ def document_requirements():
         if dt and dt in by_type:
             bucket = by_type[dt]
             bucket["documents"].append(doc)
+            uploaded_at = doc.get("uploaded_at")
+            if uploaded_at:
+                bucket["last_updated"] = max(bucket["last_updated"], uploaded_at) if bucket["last_updated"] else uploaded_at
             if doc.get("status") == "approved":
                 bucket["status"] = "approved"
             elif bucket["status"] != "approved":
@@ -911,6 +971,7 @@ def list_new_hires():
     tasks = fetch_all("SELECT * FROM task")
     policies = fetch_all("SELECT * FROM policy_ack")
     trainings = fetch_all("SELECT * FROM training_completion")
+    it_provisions = fetch_all("SELECT * FROM it_provision")
 
     att_by_hire = {}
     for att in attachments:
@@ -920,7 +981,9 @@ def list_new_hires():
         hire["attachments"] = att_by_hire.get(hire["id"], [])
         email = (hire.get("email") or "").lower()
         if email:
-            hire["progress"] = user_progress_snapshot(email, docs=docs, tasks=tasks, policies=policies, trainings=trainings)
+            hire["progress"] = user_progress_snapshot(
+                email, docs=docs, tasks=tasks, policies=policies, trainings=trainings, it_provisions=it_provisions
+            )
     return jsonify({"hires": hires})
 
 
@@ -1051,3 +1114,12 @@ def static_assets(asset_path):
 
 if __name__ == "__main__":
     app.run(host=HOST, port=PORT)
+
+
+@app.errorhandler(401)
+@app.errorhandler(403)
+def handle_auth_errors(err):
+    # For browser requests, land on login page instead of a raw 401/403 screen
+    if request.method == "GET" and "text/html" in request.accept_mimetypes:
+        return redirect("/log_in.html")
+    return Response(err.description if hasattr(err, "description") else "Forbidden", status=err.code, mimetype="text/plain")
