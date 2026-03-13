@@ -38,6 +38,14 @@ DATA_DIR = BASE_DIR / "data_store"
 UPLOAD_DIR = BASE_DIR / "uploads"
 PROFILE_DIR = UPLOAD_DIR / "profile"
 HIRES_DIR = UPLOAD_DIR / "hires"
+PLACEHOLDER_DIR = UPLOAD_DIR / "placeholders"
+PLACEHOLDER_FILES = [
+    ("policies/company_policies.pdf", "Placeholder for Company Policies. Replace with signed version."),
+    ("policies/medical_plan_policy.pdf", "Placeholder for Medical Plan Policy. Replace with signed version."),
+    ("policies/billing_manual.pdf", "Placeholder for Billing Manual. Replace with official document."),
+    ("contracts/offer_letter_template.pdf", "Placeholder offer letter template. Replace with DocuSeal export."),
+    ("contracts/nda_template.pdf", "Placeholder NDA template. Replace with executed NDA."),
+]
 
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "docx"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -46,9 +54,10 @@ ROLE_CATEGORIES = {"employee", "contractor", "hr", "it", "compliance", "manager"
 REQUIRED_DOCUMENT_TYPES = [
     {"id": "government_id", "label": "Official Identification (license/passport)", "optional": False},
     {"id": "w9", "label": "W-9 / Withholding tax form (Hacienda)", "optional": False},
+    {"id": "merchant_registry", "label": "Registro de Comerciante (Dept. de Hacienda)", "optional": False},
     {"id": "asume_clearance", "label": "ASUME certificate", "optional": False},
     {"id": "background_check", "label": "Criminal Background Check", "optional": False},
-    {"id": "tax_return", "label": "Tax Return Filing Certification", "optional": False},
+    {"id": "tax_return", "label": "Certificación de Radicación de Planillas", "optional": False},
     {"id": "bank_certification", "label": "Bank Account Certification for Direct Deposit", "optional": False},
     {"id": "resume", "label": "Resume", "optional": False},
     {"id": "certifications", "label": "Evidence of Certifications", "optional": True},
@@ -61,6 +70,56 @@ HR_ATTACHMENT_TYPES = [
     {"id": "nda", "label": "NDA"},
     {"id": "w4", "label": "W-4"},
 ]
+ONBOARDING_BLUEPRINT = {
+    "preboarding": {
+        "summary": "Approvals, offer, document collection, contract review/signature, archival.",
+        "steps": [
+            {"id": "approval", "title": "Approval of candidate", "owners": ["executive", "operations", "compliance", "finance"], "deliverable": "Recorded approval decision"},
+            {"id": "offer", "title": "Issue formal offer", "owners": ["operations"], "deliverable": "Offer letter sent via email/DocuSeal"},
+            {"id": "document_request", "title": "Request mandatory documentation", "owners": ["hr"], "deliverable": "All required documents uploaded"},
+            {"id": "document_validation", "title": "Validate documentation", "owners": ["hr", "compliance"], "deliverable": "Documents marked approved/rejected"},
+            {"id": "contract_draft", "title": "Send contract draft for review", "owners": ["compliance"], "deliverable": "Contract draft shared with contractor"},
+            {"id": "contract_sign", "title": "Final review & signature (DocuSeal)", "owners": ["compliance", "executive"], "deliverable": "Signed contract"},
+            {"id": "contract_archive", "title": "Archive signed contract (SharePoint & physical)", "owners": ["compliance"], "deliverable": "Signed contract stored in repository"},
+        ],
+    },
+    "integration": {
+        "hr": {
+            "summary": "Policy acknowledgements and billing orientation.",
+            "checklist": [
+                {"id": "policy_company", "title": "Sign Company Policies", "target": "policy_ack"},
+                {"id": "policy_medical", "title": "Sign Medical Plan Policy", "target": "policy_ack"},
+                {"id": "billing_orientation", "title": "Billing manual orientation", "target": "training"},
+            ],
+        },
+        "operations_it": {
+            "summary": "Devices, identity and core tool access.",
+            "checklist": [
+                {"id": "laptop_intune", "title": "Configure laptop with Intune and required apps", "target": "it"},
+                {"id": "m365_account", "title": "Create Microsoft 365 account + Out of Office", "target": "it"},
+                {"id": "quickbooks_time", "title": "Grant QuickBooks Time access (@paoli.io)", "target": "it"},
+                {"id": "slack_access", "title": "Add to Slack with SSO", "target": "it"},
+                {"id": "atlassian_access", "title": "Add to Jira & Confluence (SSO)", "target": "it"},
+                {"id": "client_access", "title": "Provision client/project access", "target": "it"},
+            ],
+        },
+        "training": {
+            "summary": "Orientation led by PM/Technical Architect within 90 days.",
+            "checklist": [
+                {"id": "rrhh_policies", "title": "HR policies & norms walkthrough", "target": "training"},
+                {"id": "it_security", "title": "IT security + MFA configuration", "target": "training"},
+                {"id": "agile_flow", "title": "Agile flow, time entry & documentation", "target": "training"},
+            ],
+        },
+    },
+    "documents_required": REQUIRED_DOCUMENT_TYPES,
+    "stakeholders": [
+        {"id": "hr", "name": "Vianca (HR)", "responsibilities": "Coordination, documents, policies"},
+        {"id": "it", "name": "Bryan (IT)", "responsibilities": "Access, device setup, support"},
+        {"id": "pm", "name": "Doris (PM)", "responsibilities": "Tasks, objectives, agile onboarding"},
+        {"id": "compliance", "name": "Elliot (Compliance)", "responsibilities": "Contracts, approvals"},
+    ],
+}
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET") or secrets.token_hex(32)
@@ -107,6 +166,35 @@ def ensure_directories():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     HIRES_DIR.mkdir(parents=True, exist_ok=True)
+    PLACEHOLDER_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_placeholder_assets():
+    """
+    Create small placeholder PDF files so front-end links don't 404 when official PDFs
+    are not yet uploaded. Safe to run repeatedly.
+    """
+    ensure_directories()
+    try:
+        from PyPDF2 import PdfWriter
+    except Exception:
+        PdfWriter = None
+
+    def write_pdf(path: Path, title: str):
+        if PdfWriter is None:
+            path.write_text(title, encoding="utf-8")
+            return
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)  # Letter size; blank is fine for placeholder
+        writer.add_metadata({"/Title": title})
+        with path.open("wb") as f:
+            writer.write(f)
+
+    for rel_path, description in PLACEHOLDER_FILES:
+        path = UPLOAD_DIR / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            write_pdf(path, description)
 
 
 def email_is_valid(email: str) -> bool:
@@ -245,6 +333,7 @@ def change_password(email: str, new_password: str) -> bool:
             connection.commit()
             return cursor.rowcount == 1
 ensure_directories()
+ensure_placeholder_assets()
 
 
 def create_user_record(email: str, hashed: str, full_name: str, role: str, department: str):
@@ -869,6 +958,22 @@ def policy_status():
             return Response("Forbidden", status=403, mimetype="text/plain")
         policies = fetch_all("SELECT * FROM policy_ack")
     return jsonify({"policies": policies})
+
+
+@app.get("/api/onboarding/blueprint")
+@login_required
+def onboarding_blueprint():
+    """
+    Lightweight API that returns the onboarding flow captured in the UPRA questionnaire.
+    Includes required documents and placeholder file URLs so the front end can link without 404s.
+    """
+    placeholders = []
+    for rel_path, _ in PLACEHOLDER_FILES:
+        placeholders.append({"path": f"/uploads/{rel_path}", "exists": (UPLOAD_DIR / rel_path).exists()})
+    # Deep-ish copy to avoid accidental mutation of the global constant
+    blueprint = json.loads(json.dumps(ONBOARDING_BLUEPRINT))
+    blueprint["placeholders"] = placeholders
+    return jsonify(blueprint)
 
 
 @app.get("/api/training/list")

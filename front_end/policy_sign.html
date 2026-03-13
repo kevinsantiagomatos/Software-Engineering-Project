@@ -5,12 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Policy Acknowledgment</title>
     <link rel="stylesheet" href="/style/log_in.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
       body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
       .container { max-width:800px; margin:20px auto; padding:0 16px; }
       .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
       .list { list-style:none; padding:0; margin:0; }
       .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+      .viewer { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#111827; color:#fff; }
+      .viewer-toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#0b3c99; }
+      .viewer-toolbar button { border:none; background:#0f172a; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
+      .viewer-toolbar button:disabled { opacity:0.4; cursor:not-allowed; }
+      .viewer-canvas { display:block; width:100%; background:#1f2937; }
     </style>
   </head>
   <body>
@@ -21,6 +27,18 @@
       </div>
       <h2>Policy Acknowledgment</h2>
       <div class="card">
+        <h3 style="margin-top:0;">Preview</h3>
+        <div class="viewer">
+          <div class="viewer-toolbar">
+            <button id="prevPage">← Prev</button>
+            <button id="nextPage">Next →</button>
+            <span id="pageLabel" style="margin-left:auto; font-weight:600;"></span>
+          </div>
+          <canvas id="pdfCanvas" class="viewer-canvas"></canvas>
+        </div>
+        <div class="muted" id="previewStatus" style="margin-top:8px;"></div>
+      </div>
+      <div class="card">
         <div class="controls" style="margin-bottom:12px;">
           <input id="email" class="text-input" type="email" placeholder="Your email" />
           <input id="signature" class="text-input" type="text" placeholder="Type your name as signature" />
@@ -28,6 +46,9 @@
             <option value="code_of_conduct">Code of Conduct</option>
             <option value="privacy">Privacy Policy</option>
             <option value="handbook">Employee Handbook</option>
+            <option value="company_policies">Company Policies (placeholder)</option>
+            <option value="medical_plan">Medical Plan Policy (placeholder)</option>
+            <option value="billing_manual">Billing Manual (placeholder)</option>
           </select>
           <button id="sign" class="submit-button" style="padding:10px 16px;">Sign</button>
         </div>
@@ -45,6 +66,22 @@
       const signBtn = document.getElementById("sign");
       const statusEl = document.getElementById("status");
       const listEl = document.getElementById("list");
+      const prevPageBtn = document.getElementById("prevPage");
+      const nextPageBtn = document.getElementById("nextPage");
+      const pageLabel = document.getElementById("pageLabel");
+      const canvas = document.getElementById("pdfCanvas");
+      const previewStatus = document.getElementById("previewStatus");
+      let pdfDoc = null;
+      let currentPage = 1;
+
+      const policyToUrl = {
+        code_of_conduct: "/uploads/policies/company_policies.pdf",
+        privacy: "/uploads/policies/privacy_policy.pdf",
+        handbook: "/uploads/policies/company_policies.pdf",
+        company_policies: "/uploads/policies/company_policies.pdf",
+        medical_plan: "/uploads/policies/medical_plan_policy.pdf",
+        billing_manual: "/uploads/policies/billing_manual.pdf",
+      };
 
       async function fetchJson(url, options) {
         const res = await fetch(url, options);
@@ -89,12 +126,57 @@
         }
       });
 
+      async function loadPdf(policyId) {
+        const url = policyToUrl[policyId] || policyToUrl.company_policies;
+        previewStatus.textContent = "Loading preview...";
+        currentPage = 1;
+        try {
+          pdfDoc = await pdfjsLib.getDocument(url).promise;
+          renderPage(currentPage);
+        } catch (err) {
+          previewStatus.textContent = "Unable to load PDF preview.";
+          pdfDoc = null;
+          pageLabel.textContent = "";
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      async function renderPage(pageNum) {
+        if (!pdfDoc) return;
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.2 });
+        const context = canvas.getContext("2d");
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+        pageLabel.textContent = `Page ${pageNum} / ${pdfDoc.numPages}`;
+        prevPageBtn.disabled = pageNum <= 1;
+        nextPageBtn.disabled = pageNum >= pdfDoc.numPages;
+        previewStatus.textContent = "";
+      }
+
+      prevPageBtn.addEventListener("click", () => {
+        if (!pdfDoc || currentPage <= 1) return;
+        currentPage -= 1;
+        renderPage(currentPage);
+      });
+
+      nextPageBtn.addEventListener("click", () => {
+        if (!pdfDoc || currentPage >= pdfDoc.numPages) return;
+        currentPage += 1;
+        renderPage(currentPage);
+      });
+
+      policySelect.addEventListener("change", () => loadPdf(policySelect.value));
+
       function prefill() {
         const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
         if (email) {
           emailInput.value = email;
           loadStatus();
         }
+        loadPdf(policySelect.value);
       }
       prefill();
     </script>

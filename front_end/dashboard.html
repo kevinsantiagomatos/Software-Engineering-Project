@@ -75,6 +75,18 @@
           <h3>Tasks</h3>
           <ul id="taskList" class="list"></ul>
         </div>
+        <div class="card">
+          <h3>Policies</h3>
+          <div class="controls">
+            <a class="forgot-link policy-link" href="/policy_sign.html">Policy Acknowledgment</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Training</h3>
+          <div class="controls">
+            <a class="forgot-link training-link" href="/training.html">Training Modules</a>
+          </div>
+        </div>
       </div>
 
       <div class="grid-wide" id="directorySection" style="display:none;">
@@ -119,11 +131,11 @@
       let currentRole = null; // viewer's role; set once from their own account
       const directorySection = document.getElementById("directorySection");
       const userList = document.getElementById("userList");
-      const policyLink = document.getElementById("policyLink");
-      const trainingLink = document.getElementById("trainingLink");
       const hireList = document.getElementById("hireList");
       const hireSearch = document.getElementById("hireSearch");
       let hiresData = [];
+      const policyLinks = Array.from(document.querySelectorAll(".policy-link"));
+      const trainingLinks = Array.from(document.querySelectorAll(".training-link"));
 
       function statusChip(status) {
         const colors = {
@@ -384,6 +396,7 @@
           renderSteps(statuses);
           await loadUser(email);
           localStorage.setItem("paoli_email", email);
+          updatePolicyTrainingLinks();
           loadDirectory();
         } catch (err) {
           progressStat.textContent = "--";
@@ -404,6 +417,12 @@
         return res.json();
       }
 
+      function updatePolicyTrainingLinks() {
+        const emailParam = currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : "";
+        policyLinks.forEach(a => { a.href = `/policy_sign.html${emailParam}`; });
+        trainingLinks.forEach(a => { a.href = `/training.html${emailParam}`; });
+      }
+
       function updateMenu() {
         const items = [];
         const emailParam = currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : "";
@@ -414,9 +433,9 @@
         if (adminRoles.includes(role)) {
           items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html?role=${encodeURIComponent(role)}">Admin panel</a>`);
           items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/hr_register.html">Register new hire</a>`);
-          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/policy_sign.html${emailParam}">Policy sign</a>`);
-          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/training.html${emailParam}">Training</a>`);
         }
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/policy_sign.html${emailParam}">Policy sign</a>`);
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/training.html${emailParam}">Training</a>`);
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/log_in.html">Log out</a>`);
         menu.innerHTML = items.join("");
       }
