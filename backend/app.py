@@ -21,11 +21,11 @@ DEV_AUTOLOGIN_ROLE = (os.getenv("DEV_AUTOLOGIN_ROLE") or "hr").strip().lower()
 
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", "3306")),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "palogroup"),
+    "host": os.getenv("DB_HOST", "paolidb-paoli.a.aivencloud.com"),
+    "port": int(os.getenv("DB_PORT", "28505")),
+    "user": os.getenv("DB_USER", "avnadmin"),
+    "password": os.getenv("DB_PASSWORD", "AVNS_PACy97fO-lDRRMeoPvG"),
+    "database": os.getenv("DB_NAME", "defaultdb"),
     "cursorclass": pymysql.cursors.DictCursor,
     "charset": "utf8mb4",
     "autocommit": True,
