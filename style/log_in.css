@@ -81,6 +81,26 @@ body {
   flex-direction: column;
 }
 
+.login-alert {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.login-alert-error {
+  background: #fdecec;
+  border-color: #f2b8b5;
+  color: #8f1f13;
+}
+
+.login-alert-success {
+  background: #e8f8ef;
+  border-color: #b4e3c6;
+  color: #166534;
+}
+
 .input-label {
   font-size: 14px;
   color: #1c1c1c;

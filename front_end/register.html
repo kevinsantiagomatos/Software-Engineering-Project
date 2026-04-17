@@ -3,98 +3,297 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Paoli Group | Register</title>
+    <title>Paoli Group | Account Submission</title>
     <link rel="stylesheet" href="/style/log_in.css" />
     <style>
+      :root {
+        --bg: #edf2f8;
+        --panel: #ffffff;
+        --line: #d7e2ef;
+        --ink: #0f172a;
+        --muted: #5b6475;
+        --brand: #0f2f93;
+        --good: #0f8a4d;
+        --bad: #b42318;
+        --warn: #9a6700;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 8% 8%, #dce6ff 0%, transparent 32%),
+          radial-gradient(circle at 95% 0%, #e5f0ff 0%, transparent 30%),
+          var(--bg);
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: var(--ink);
+      }
+
+      .wrap {
+        width: min(980px, 96vw);
+        margin: 28px auto;
+      }
+
+      .header {
+        background: linear-gradient(120deg, #0c256f, #12349c 70%, #2445b8);
+        color: #fff;
+        border-radius: 18px;
+        box-shadow: 0 16px 34px rgba(15, 47, 147, 0.25);
+        padding: 20px;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 1.35rem;
+      }
+
+      .header p {
+        margin: 6px 0 0;
+        color: #d8e3ff;
+        font-size: 0.95rem;
+      }
+
       .card {
-        background: #ffffff;
-        border-radius: 12px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
-        padding: 24px;
-        max-width: 540px;
-        width: 100%;
+        margin-top: 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+        padding: 20px;
       }
-      .register-form {
-        display: grid;
+
+      .top-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
       }
-      .register-form .text-input,
-      .register-form select {
-        width: 100%;
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.93rem;
       }
+
       .alert {
         padding: 10px 12px;
-        border-radius: 8px;
-        font-size: 0.95rem;
+        border-radius: 10px;
+        font-size: 0.94rem;
         display: none;
+        margin-bottom: 12px;
       }
+
       .alert.error {
-        background: #ffe8e6;
-        color: #7d1a1a;
+        background: #fdecec;
+        color: #8f1f13;
+        border: 1px solid #f8c9c4;
       }
+
       .alert.success {
-        background: #e8f7ee;
-        color: #1a7d44;
+        background: #e8f8ef;
+        color: #146f3d;
+        border: 1px solid #bae6cb;
+      }
+
+      .register-form {
+        display: grid;
+        gap: 14px;
+      }
+
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 0;
+        padding: 14px;
+      }
+
+      legend {
+        padding: 0 6px;
+        font-weight: 700;
+        color: #1d2939;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      .field label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #293142;
+      }
+
+      .text-input,
+      select.text-input {
+        width: 100%;
+        margin: 0;
+        border: 1px solid #c9d5e8;
+        border-radius: 10px;
+        padding: 10px 11px;
+        background: #fff;
+      }
+
+      .text-input:focus,
+      select.text-input:focus {
+        outline: none;
+        border-color: #3b63d1;
+        box-shadow: 0 0 0 3px rgba(59, 99, 209, 0.14);
+      }
+
+      .pwd-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
+      .toggle {
+        border: 1px solid #c9d5e8;
+        border-radius: 10px;
+        background: #fff;
+        padding: 0 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .checks {
+        display: grid;
+        gap: 4px;
+        margin-top: 2px;
+      }
+
+      .check {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .check.ok {
+        color: var(--good);
+      }
+
+      .check.bad {
+        color: var(--bad);
+      }
+
+      .form-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .next-links {
+        display: none;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+
+      @media (max-width: 720px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="login-page">
-      <section class="brand-panel">
-        <div class="brand-emblem">
-          <img src="/assets/paoli_logo.png" alt="Paoli Group logo" />
-        </div>
-        <p class="brand-name">Paoli Group</p>
-        <p style="color:#d7e4ff; max-width:240px;">Contractor/Employee Registration</p>
+    <main class="wrap">
+      <section class="header">
+        <h1>Account Submission</h1>
+        <p>Submit your profile for HR review and onboarding activation.</p>
       </section>
 
-      <section class="form-panel">
-        <div class="card">
-          <h2 style="margin-top:0;">Create your profile</h2>
-          <p style="margin:4px 0 16px 0; color:#4c5a73;">Provide your details so HR can review and activate your account.</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
-            <a class="forgot-link" href="javascript:history.back()">← Back</a>
-            <a class="forgot-link" href="/log_in.html">Login</a>
-          </div>
-          <div id="alert-success" class="alert success"></div>
-          <div id="alert-error" class="alert error"></div>
-          <form id="registerForm" class="register-form" novalidate>
-            <label class="input-label" for="full_name">Full Name</label>
-            <input type="text" id="full_name" name="full_name" class="text-input" required />
-
-            <label class="input-label" for="email">Email</label>
-            <input type="email" id="email" name="email" class="text-input" autocomplete="email" required />
-
-            <label class="input-label" for="department">Department</label>
-            <input type="text" id="department" name="department" class="text-input" placeholder="e.g., HR, IT, Compliance" />
-
-            <label class="input-label" for="role">Role</label>
-            <select id="role" name="role" class="text-input">
-              <option value="employee">Employee</option>
-              <option value="contractor">Contractor</option>
-              <option value="hr">HR</option>
-              <option value="it">IT</option>
-              <option value="compliance">Compliance</option>
-              <option value="manager">Project Manager</option>
-            </select>
-
-            <label class="input-label" for="password">Password</label>
-            <input type="password" id="password" name="password" class="text-input" autocomplete="new-password" required minlength="8" />
-
-            <label class="input-label" for="confirm_password">Confirm Password</label>
-            <input type="password" id="confirm_password" name="confirm_password" class="text-input" autocomplete="new-password" required minlength="8" />
-
-            <div class="form-actions" style="justify-content:space-between;">
-              <a class="forgot-link" href="/log_in.html">Back to login</a>
-              <button type="submit" class="submit-button">Submit</button>
-            </div>
-            <div class="form-actions" style="justify-content:flex-start; gap:12px;">
-              <a class="forgot-link" href="/upload_documents.html">Upload documents</a>
-              <a class="forgot-link" href="/dashboard.html">View progress</a>
-              <a class="forgot-link" href="/profile.html">My profile</a>
-            </div>
-          </form>
+      <section class="card">
+        <div class="top-actions">
+          <span class="hint">Fields marked with * are required.</span>
         </div>
+
+        <div id="alert-success" class="alert success"></div>
+        <div id="alert-error" class="alert error"></div>
+
+        <form id="registerForm" class="register-form" novalidate>
+          <fieldset>
+            <legend>Identity</legend>
+            <div class="grid">
+              <div class="field full">
+                <label for="full_name">Full Name *</label>
+                <input type="text" id="full_name" name="full_name" class="text-input" required />
+              </div>
+              <div class="field">
+                <label for="email">Email *</label>
+                <input type="email" id="email" name="email" class="text-input" autocomplete="email" required />
+              </div>
+              <div class="field">
+                <label for="department">Department</label>
+                <select id="department" name="department" class="text-input">
+                  <option value="">Select department</option>
+                  <option value="operations">Operations</option>
+                  <option value="hr">HR</option>
+                  <option value="it">IT</option>
+                  <option value="compliance">Compliance</option>
+                  <option value="management">Management</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="role">Role *</label>
+                <select id="role" name="role" class="text-input" required>
+                  <option value="employee">Employee</option>
+                  <option value="contractor">Contractor</option>
+                  <option value="hr">HR</option>
+                  <option value="it">IT</option>
+                  <option value="compliance">Compliance</option>
+                  <option value="manager">Project Manager</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Security</legend>
+            <div class="grid">
+              <div class="field">
+                <label for="password">Password *</label>
+                <div class="pwd-row">
+                  <input type="password" id="password" name="password" class="text-input" autocomplete="new-password" required minlength="8" />
+                  <button type="button" id="togglePw" class="toggle">Show</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="confirm_password">Confirm Password *</label>
+                <div class="pwd-row">
+                  <input type="password" id="confirm_password" name="confirm_password" class="text-input" autocomplete="new-password" required minlength="8" />
+                  <button type="button" id="toggleConfirm" class="toggle">Show</button>
+                </div>
+              </div>
+            </div>
+            <div class="checks" id="passwordChecks">
+              <div class="check" id="checkLen">At least 8 characters</div>
+              <div class="check" id="checkMatch">Passwords match</div>
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="submit" id="submitBtn" class="submit-button">Submit Account</button>
+            <span id="submitState" class="hint"></span>
+          </div>
+
+          <div id="nextLinks" class="next-links">
+            <a class="forgot-link" href="/upload_documents.html">Upload documents</a>
+            <a class="forgot-link" href="/dashboard.html">View progress</a>
+            <a class="forgot-link" href="/profile.html">My profile</a>
+          </div>
+        </form>
       </section>
     </main>
 
@@ -102,6 +301,16 @@
       const form = document.getElementById("registerForm");
       const ok = document.getElementById("alert-success");
       const err = document.getElementById("alert-error");
+      const submitBtn = document.getElementById("submitBtn");
+      const submitState = document.getElementById("submitState");
+      const nextLinks = document.getElementById("nextLinks");
+
+      const passwordInput = document.getElementById("password");
+      const confirmInput = document.getElementById("confirm_password");
+      const checkLen = document.getElementById("checkLen");
+      const checkMatch = document.getElementById("checkMatch");
+      const togglePw = document.getElementById("togglePw");
+      const toggleConfirm = document.getElementById("toggleConfirm");
 
       function show(el, message) {
         el.textContent = message;
@@ -113,40 +322,78 @@
         err.style.display = "none";
       }
 
+      function setLoading(isLoading) {
+        submitBtn.disabled = isLoading;
+        submitBtn.textContent = isLoading ? "Submitting..." : "Submit Account";
+        submitState.textContent = isLoading ? "Sending profile to HR..." : "";
+      }
+
+      function setCheck(el, pass) {
+        el.classList.remove("ok", "bad");
+        el.classList.add(pass ? "ok" : "bad");
+      }
+
+      function updatePasswordChecks() {
+        const pw = passwordInput.value || "";
+        const confirm = confirmInput.value || "";
+        const lenPass = pw.length >= 8;
+        const matchPass = pw.length > 0 && pw === confirm;
+        setCheck(checkLen, lenPass);
+        setCheck(checkMatch, matchPass);
+        return lenPass && matchPass;
+      }
+
+      function toggleVisibility(input, button) {
+        const isPassword = input.type === "password";
+        input.type = isPassword ? "text" : "password";
+        button.textContent = isPassword ? "Hide" : "Show";
+      }
+
+      togglePw.addEventListener("click", () => toggleVisibility(passwordInput, togglePw));
+      toggleConfirm.addEventListener("click", () => toggleVisibility(confirmInput, toggleConfirm));
+      passwordInput.addEventListener("input", updatePasswordChecks);
+      confirmInput.addEventListener("input", updatePasswordChecks);
+      updatePasswordChecks();
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         hideAll();
+        nextLinks.style.display = "none";
+
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+
+        if (!updatePasswordChecks()) {
+          show(err, "Please satisfy password requirements before submitting.");
+          return;
+        }
 
         const payload = new URLSearchParams(new FormData(form));
-        const pw = payload.get("password") || "";
-        const confirm = payload.get("confirm_password") || "";
-
-        if (pw !== confirm) {
-          show(err, "Passwords must match.");
-          return;
-        }
-        if (pw.length < 8) {
-          show(err, "Password must be at least 8 characters.");
-          return;
-        }
 
         try {
+          setLoading(true);
           const res = await fetch("/register", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: payload
+            body: payload,
           });
 
           const text = await res.text();
           if (!res.ok) {
-            show(err, text || "Registration failed.");
+            show(err, text || "Account submission failed.");
             return;
           }
 
-          show(ok, "Registration submitted. HR will review your profile. You can now upload documents and log in to track status.");
+          show(ok, "Account submitted. HR will review your profile and activate onboarding access.");
+          nextLinks.style.display = "flex";
           form.reset();
-        } catch (ex) {
+          updatePasswordChecks();
+        } catch (_) {
           show(err, "Network or server error.");
+        } finally {
+          setLoading(false);
         }
       });
     </script>

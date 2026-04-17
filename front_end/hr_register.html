@@ -15,6 +15,21 @@
       label { font-weight:600; font-size:0.95rem; color:#0f172a; }
       .text-input { width:100%; }
       .attachments { border:1px dashed #cbd5e1; border-radius:12px; padding:12px; background:#f8fafc; }
+      .stepper { display:grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap:10px; margin-bottom:18px; }
+      .step-pill { border:1px solid #cbd5e1; border-radius:12px; padding:10px; background:#f8fafc; color:#475569; font-weight:600; font-size:0.9rem; text-align:left; }
+      .step-pill.active { border-color:#123093; background:#e6ecff; color:#0b2b8f; }
+      .step-pill.done { border-color:#86efac; background:#f0fdf4; color:#166534; }
+      .form-step { display:none; }
+      .form-step.active { display:block; }
+      .section-title { margin:0 0 10px 0; font-size:1.1rem; color:#0f172a; }
+      .section-subtitle { margin:0 0 14px 0; font-size:0.95rem; color:#64748b; }
+      .wizard-actions { display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap; }
+      .secondary-button { border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:12px; padding:11px 16px; cursor:pointer; font-weight:600; }
+      .secondary-button:disabled { opacity:0.5; cursor:not-allowed; }
+      #submitBtn { display:none; }
+      @media (max-width: 760px) {
+        .stepper { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      }
     </style>
   </head>
   <body>
@@ -32,78 +47,113 @@
 
     <div class="container">
       <form id="hireForm" class="card" enctype="multipart/form-data" method="post" action="/api/hr/register-hire">
-        <div class="grid">
-          <div>
-            <label>First Name</label>
-            <input class="text-input" name="first_name" required />
-          </div>
-          <div>
-            <label>Middle Name</label>
-            <input class="text-input" name="middle_name" />
-          </div>
-          <div>
-            <label>Last Name</label>
-            <input class="text-input" name="last_name" required />
-          </div>
-          <div>
-            <label>Date of Birth</label>
-            <input class="text-input" name="dob" type="date" />
-          </div>
-          <div>
-            <label>Government ID Number</label>
-            <input class="text-input" name="gov_id" />
-          </div>
+        <div class="stepper">
+          <button type="button" class="step-pill active" data-step="0">1. Personal</button>
+          <button type="button" class="step-pill" data-step="1">2. Contact</button>
+          <button type="button" class="step-pill" data-step="2">3. Employment</button>
+          <button type="button" class="step-pill" data-step="3">4. Attachments</button>
         </div>
 
-        <h4>Contact Details</h4>
-        <div class="grid">
-          <div><label>Phone Number</label><input class="text-input" name="phone" /></div>
-          <div><label>Email</label><input class="text-input" name="email" type="email" required /></div>
-          <div><label>Street</label><input class="text-input" name="street" /></div>
-          <div><label>City</label><input class="text-input" name="city" /></div>
-          <div><label>State</label><input class="text-input" name="state" /></div>
-          <div><label>Postal Code</label><input class="text-input" name="postal_code" /></div>
-          <div><label>Country</label><input class="text-input" name="country" /></div>
-        </div>
-
-        <h4>Employment</h4>
-        <div class="grid">
-          <div>
-            <label>Role</label>
-            <select class="text-input" name="role" required>
-              <option value="employee">Employee</option>
-              <option value="contractor">Contractor</option>
-              <option value="hr">HR</option>
-              <option value="it">IT</option>
-              <option value="compliance">Compliance</option>
-              <option value="manager">Manager</option>
-            </select>
-          </div>
-          <div><label>Start Date</label><input class="text-input" name="start_date" type="date" /></div>
-          <div><label>Department</label><input class="text-input" name="department" /></div>
-          <div><label>Manager</label><input class="text-input" name="manager" /></div>
-        </div>
-
-        <h4>Compliance Attachments</h4>
-        <div class="attachments">
+        <section class="form-step active" data-step="0">
+          <h4 class="section-title">Personal Information</h4>
+          <p class="section-subtitle">Basic identity details for the new hire record.</p>
           <div class="grid">
             <div>
-              <label>Offer Letter</label>
-              <input type="file" name="offer_letter" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              <label>First Name</label>
+              <input class="text-input" name="first_name" required />
             </div>
             <div>
-              <label>NDA</label>
-              <input type="file" name="nda" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              <label>Middle Name</label>
+              <input class="text-input" name="middle_name" />
             </div>
             <div>
-              <label>W-4</label>
-              <input type="file" name="w4" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              <label>Last Name</label>
+              <input class="text-input" name="last_name" required />
+            </div>
+            <div>
+              <label>Date of Birth</label>
+              <input class="text-input" name="dob" type="date" />
+            </div>
+            <div>
+              <label>Government ID Number</label>
+              <input class="text-input" name="gov_id" />
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="form-actions" style="justify-content:flex-start; gap:12px; margin-top:16px;">
-          <button type="submit" class="submit-button">Register</button>
+        <section class="form-step" data-step="1">
+          <h4 class="section-title">Contact Details</h4>
+          <p class="section-subtitle">How we contact the hire and where they are located.</p>
+          <div class="grid">
+            <div><label>Phone Number</label><input class="text-input" name="phone" /></div>
+            <div><label>Email</label><input class="text-input" name="email" type="email" required /></div>
+            <div><label>Street</label><input class="text-input" name="street" /></div>
+            <div><label>City</label><input class="text-input" name="city" /></div>
+            <div><label>State</label><input class="text-input" name="state" /></div>
+            <div><label>Postal Code</label><input class="text-input" name="postal_code" /></div>
+            <div><label>Country</label><input class="text-input" name="country" /></div>
+          </div>
+        </section>
+
+        <section class="form-step" data-step="2">
+          <h4 class="section-title">Employment Setup</h4>
+          <p class="section-subtitle">Role type and organizational assignment.</p>
+          <div class="grid">
+            <div>
+              <label>Employment Type</label>
+              <select class="text-input" id="employmentType" required>
+                <option value="employee">Employee</option>
+                <option value="contractor">Contractor</option>
+              </select>
+              <input type="hidden" name="role" id="roleField" value="employee" />
+            </div>
+            <div><label>Start Date</label><input class="text-input" name="start_date" type="date" /></div>
+            <div>
+              <label>Department</label>
+              <select class="text-input" name="department">
+                <option value="">Select department</option>
+                <option value="operations">Operations</option>
+                <option value="hr">HR</option>
+                <option value="it">IT</option>
+                <option value="compliance">Compliance</option>
+                <option value="management">Management</option>
+              </select>
+            </div>
+            <div><label>Supervisor</label><input class="text-input" name="manager" /></div>
+          </div>
+        </section>
+
+        <section class="form-step" data-step="3">
+          <h4 class="section-title">Compliance Attachments</h4>
+          <p class="section-subtitle">Set temporary login password and optionally upload HR files.</p>
+          <div class="grid" style="margin-bottom:12px;">
+            <div>
+              <label>Temporary Password</label>
+              <input class="text-input" name="temp_password" type="password" minlength="8" required autocomplete="new-password" />
+            </div>
+          </div>
+          <div class="attachments">
+            <div class="grid">
+              <div>
+                <label>Offer Letter</label>
+                <input type="file" name="offer_letter" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              </div>
+              <div>
+                <label>NDA</label>
+                <input type="file" name="nda" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              </div>
+              <div>
+                <label>W-4</label>
+                <input type="file" name="w4" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="wizard-actions">
+          <button type="button" id="prevBtn" class="secondary-button">Back</button>
+          <button type="button" id="nextBtn" class="submit-button">Continue</button>
+          <button type="submit" id="submitBtn" class="submit-button">Register</button>
           <span id="status" class="muted"></span>
         </div>
       </form>
@@ -112,6 +162,19 @@
     <script>
       const form = document.getElementById("hireForm");
       const statusEl = document.getElementById("status");
+      const employmentTypeEl = document.getElementById("employmentType");
+      const roleFieldEl = document.getElementById("roleField");
+      const stepPills = [...document.querySelectorAll(".step-pill")];
+      const steps = [...document.querySelectorAll(".form-step")];
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const submitBtn = document.getElementById("submitBtn");
+      let csrfToken = null;
+      let currentStep = 0;
+
+      function syncRoleFromEmploymentType() {
+        roleFieldEl.value = employmentTypeEl.value || "employee";
+      }
 
       async function fetchJson(url, options) {
         const res = await fetch(url, options);
@@ -119,18 +182,94 @@
         return res.json();
       }
 
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const res = await fetch("/api/csrf");
+        if (!res.ok) throw new Error("Session expired. Please log in again.");
+        const data = await res.json();
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function getStepFields(stepIndex) {
+        return [...steps[stepIndex].querySelectorAll("input, select, textarea")].filter((field) => {
+          if (field.type === "hidden") return false;
+          if (field.disabled) return false;
+          return true;
+        });
+      }
+
+      function validateCurrentStep() {
+        const fields = getStepFields(currentStep);
+        for (const field of fields) {
+          if (!field.checkValidity()) {
+            field.reportValidity();
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function setStep(stepIndex) {
+        currentStep = Math.max(0, Math.min(steps.length - 1, stepIndex));
+        steps.forEach((step, idx) => step.classList.toggle("active", idx === currentStep));
+        stepPills.forEach((pill, idx) => {
+          pill.classList.toggle("active", idx === currentStep);
+          pill.classList.toggle("done", idx < currentStep);
+        });
+        prevBtn.disabled = currentStep === 0;
+        nextBtn.style.display = currentStep === steps.length - 1 ? "none" : "inline-flex";
+        submitBtn.style.display = currentStep === steps.length - 1 ? "inline-flex" : "none";
+      }
+
+      prevBtn.addEventListener("click", () => {
+        statusEl.textContent = "";
+        setStep(currentStep - 1);
+      });
+
+      nextBtn.addEventListener("click", () => {
+        statusEl.textContent = "";
+        if (!validateCurrentStep()) return;
+        setStep(currentStep + 1);
+      });
+
+      stepPills.forEach((pill, idx) => {
+        pill.addEventListener("click", () => {
+          if (idx > currentStep && !validateCurrentStep()) return;
+          statusEl.textContent = "";
+          setStep(idx);
+        });
+      });
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         statusEl.textContent = "";
+        if (!validateCurrentStep()) return;
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+        syncRoleFromEmploymentType();
         const fd = new FormData(form);
         try {
-          await fetchJson("/api/hr/register-hire", { method: "POST", body: fd });
-          statusEl.textContent = "New hire registered.";
+          const token = await ensureCsrf();
+          await fetchJson("/api/hr/register-hire", {
+            method: "POST",
+            body: fd,
+            headers: { "X-CSRF-Token": token }
+          });
+          statusEl.textContent = "New hire registered. Login account created with temporary password.";
           form.reset();
+          setStep(0);
+          syncRoleFromEmploymentType();
         } catch (err) {
           statusEl.textContent = err.message || "Failed to register.";
         }
       });
+
+      employmentTypeEl.addEventListener("change", syncRoleFromEmploymentType);
+      syncRoleFromEmploymentType();
+      setStep(0);
     </script>
   </body>
 </html>

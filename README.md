@@ -75,7 +75,5 @@ Import SQL scripts from data_store/ into your SQL engine.
 cd front_end
 python -m http.server 8000
 
-## Author ##
 
-Kevin Santiago
-Computer Science Student
+

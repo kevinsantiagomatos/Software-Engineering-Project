@@ -8,7 +8,30 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
       body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-      .container { max-width:800px; margin:20px auto; padding:0 16px; }
+      .page { max-width: 1000px; margin: 24px auto 34px; padding: 0 14px; }
+      .hero {
+        background: linear-gradient(120deg, #0d266f, #12349a 72%, #2445b8);
+        color: #fff;
+        border-radius: 18px;
+        box-shadow: 0 16px 32px rgba(15, 47, 147, 0.25);
+        padding: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .hero h1 { margin: 0; font-size: 1.32rem; }
+      .hero p { margin: 6px 0 0; font-size: 0.93rem; color: #d6e3ff; }
+      .hero a {
+        color: #eef4ff;
+        text-decoration: none;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+      }
+      .container { max-width:800px; margin:14px auto 0; padding:0 16px; }
       .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
       .list { list-style:none; padding:0; margin:0; }
       .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; align-items:center; }
@@ -20,11 +43,16 @@
     </style>
   </head>
   <body>
+    <main class="page">
+      <section class="hero">
+        <div>
+          <h1>Policy Acknowledgment</h1>
+          <p>Review company policies and submit your signature acknowledgment for each required policy document.</p>
+        </div>
+        <a href="/dashboard.html">Back to dashboard</a>
+      </section>
+
     <div class="container">
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-        <a class="forgot-link" href="javascript:history.back()">← Back</a>
-        <a class="forgot-link" href="/dashboard.html">Dashboard</a>
-      </div>
       <h2>Policy Acknowledgment</h2>
       <div class="card">
         <h3 style="margin-top:0;">Preview</h3>
@@ -32,6 +60,8 @@
           <div class="viewer-toolbar">
             <button id="prevPage">← Prev</button>
             <button id="nextPage">Next →</button>
+            <a id="openPdf" href="#" target="_blank" rel="noopener" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Open</a>
+            <a id="downloadPdf" href="#" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Download</a>
             <span id="pageLabel" style="margin-left:auto; font-weight:600;"></span>
           </div>
           <canvas id="pdfCanvas" class="viewer-canvas"></canvas>
@@ -40,7 +70,9 @@
       </div>
       <div class="card">
         <div class="controls" style="margin-bottom:12px;">
-          <input id="email" class="text-input" type="email" placeholder="Your email" />
+          <div id="emailBadge" class="muted" style="padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; min-width:240px;">
+            Signed in as: --
+          </div>
           <input id="signature" class="text-input" type="text" placeholder="Type your name as signature" />
           <select id="policy" class="text-input">
             <option value="code_of_conduct">Code of Conduct</option>
@@ -59,8 +91,9 @@
         <ul id="list" class="list"></ul>
       </div>
     </div>
+    </main>
     <script>
-      const emailInput = document.getElementById("email");
+      const emailBadge = document.getElementById("emailBadge");
       const signatureInput = document.getElementById("signature");
       const policySelect = document.getElementById("policy");
       const signBtn = document.getElementById("sign");
@@ -68,11 +101,15 @@
       const listEl = document.getElementById("list");
       const prevPageBtn = document.getElementById("prevPage");
       const nextPageBtn = document.getElementById("nextPage");
+      const openPdfLink = document.getElementById("openPdf");
+      const downloadPdfLink = document.getElementById("downloadPdf");
       const pageLabel = document.getElementById("pageLabel");
       const canvas = document.getElementById("pdfCanvas");
       const previewStatus = document.getElementById("previewStatus");
       let pdfDoc = null;
       let currentPage = 1;
+      let csrfToken = null;
+      let sessionEmail = "";
 
       const policyToUrl = {
         code_of_conduct: "/uploads/policies/company_policies.pdf",
@@ -89,11 +126,16 @@
         return res.json();
       }
 
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
       async function loadStatus() {
-        const email = emailInput.value.trim();
-        if (!email) return;
         try {
-          const data = await fetchJson(`/api/policy/status?email=${encodeURIComponent(email)}`);
+          const data = await fetchJson("/api/policy/status");
           const items = data.policies || [];
           listEl.innerHTML = items.length
             ? items.map(p => `<li><span>${p.policy_id}</span><span>${p.status}</span></li>`).join("")
@@ -105,21 +147,24 @@
 
       signBtn.addEventListener("click", async () => {
         statusEl.textContent = "";
-        const email = emailInput.value.trim();
         const sig = signatureInput.value.trim();
         const policy = policySelect.value;
-        if (!email || !sig) {
-          statusEl.textContent = "Email and signature are required.";
+        if (!sig) {
+          statusEl.textContent = "Signature is required.";
           return;
         }
         try {
+          const token = await ensureCsrf();
           await fetchJson("/api/policy/ack", {
             method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ email, signature: sig, policy_id: policy })
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRF-Token": token,
+            },
+            body: new URLSearchParams({ signature: sig, policy_id: policy })
           });
           statusEl.textContent = "Signed.";
-          localStorage.setItem("paoli_email", email);
+          signatureInput.value = "";
           loadStatus();
         } catch (err) {
           statusEl.textContent = err.message;
@@ -128,6 +173,8 @@
 
       async function loadPdf(policyId) {
         const url = policyToUrl[policyId] || policyToUrl.company_policies;
+        openPdfLink.href = url;
+        downloadPdfLink.href = `${url}${url.includes("?") ? "&" : "?"}download=1`;
         previewStatus.textContent = "Loading preview...";
         currentPage = 1;
         try {
@@ -170,12 +217,20 @@
 
       policySelect.addEventListener("change", () => loadPdf(policySelect.value));
 
-      function prefill() {
+      function prefillIdentity() {
         const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
         if (email) {
-          emailInput.value = email;
-          loadStatus();
+          sessionEmail = email.trim().toLowerCase();
+          localStorage.setItem("paoli_email", sessionEmail);
+          emailBadge.textContent = `Signed in as: ${sessionEmail}`;
+        } else {
+          emailBadge.textContent = "Signed in as: your current session";
         }
+      }
+
+      function prefill() {
+        prefillIdentity();
+        loadStatus();
         loadPdf(policySelect.value);
       }
       prefill();

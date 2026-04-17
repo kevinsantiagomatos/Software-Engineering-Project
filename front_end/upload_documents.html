@@ -3,75 +3,352 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Paoli Group | Upload Documents</title>
+    <title>Paoli Group | Required Document Submission</title>
     <link rel="stylesheet" href="/style/log_in.css" />
     <style>
-      .card {
-        background: #ffffff;
-        border-radius: 12px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
-        padding: 24px;
-        max-width: 620px;
-        width: 100%;
+      :root {
+        --bg: #eef2f8;
+        --panel: #ffffff;
+        --line: #d8e1ef;
+        --ink: #111827;
+        --muted: #5b6475;
+        --brand: #0f2f93;
+        --ok: #0f8a4d;
+        --warn: #9a6700;
+        --bad: #b42318;
       }
-      .upload-form {
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 10% 8%, #dce6ff 0%, transparent 35%),
+          radial-gradient(circle at 95% 0, #e8f1ff 0%, transparent 28%),
+          var(--bg);
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: var(--ink);
+      }
+
+      .page {
+        max-width: 1160px;
+        margin: 24px auto 34px;
+        padding: 0 14px;
+      }
+
+      .hero {
+        background: linear-gradient(120deg, #0d266f, #12349a 72%, #2445b8);
+        color: #fff;
+        border-radius: 18px;
+        box-shadow: 0 16px 32px rgba(15, 47, 147, 0.25);
+        padding: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: 1.32rem;
+      }
+
+      .hero p {
+        margin: 6px 0 0;
+        font-size: 0.93rem;
+        color: #d6e3ff;
+      }
+
+      .hero a {
+        color: #eef4ff;
+        text-decoration: none;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+      }
+
+      .layout {
+        margin-top: 14px;
         display: grid;
-        gap: 12px;
+        grid-template-columns: 0.95fr 1.2fr;
+        gap: 14px;
       }
-      .upload-form input[type="file"] {
-        padding: 8px 0;
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+        padding: 16px;
       }
+
+      .card h2 {
+        margin: 0 0 6px;
+        font-size: 1.06rem;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .identity-fields {
+        display: grid;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .identity-fields .text-input {
+        width: 100%;
+        margin: 0;
+        border: 1px solid #c9d5e8;
+        border-radius: 10px;
+        padding: 10px 11px;
+      }
+
+      .identity-fields .text-input:focus {
+        outline: none;
+        border-color: #3b63d1;
+        box-shadow: 0 0 0 3px rgba(59, 99, 209, 0.14);
+      }
+
+      .identity-badge {
+        margin-top: 10px;
+        display: none;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #cfdbf5;
+        background: #eef4ff;
+        color: #27344d;
+      }
+
+      .identity-badge button {
+        margin-left: 8px;
+      }
+
+      .stats {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(90px, 1fr));
+        gap: 8px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8fbff;
+        padding: 8px;
+        text-align: center;
+      }
+
+      .stat .value {
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+
+      .stat .label {
+        color: var(--muted);
+        font-size: 0.75rem;
+        margin-top: 2px;
+      }
+
+      .requirement-list {
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 7px;
+        max-height: 380px;
+        overflow: auto;
+      }
+
+      .requirement-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #e5ebf6;
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
+
+      .requirement-item .name {
+        font-size: 0.9rem;
+      }
+
+      .pill {
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        border: 1px solid transparent;
+      }
+
+      .pill.pending { background: #fff7e6; color: #8a5a00; border-color: #f3d396; }
+      .pill.approved { background: #e7f8ef; color: #116f3d; border-color: #b8e6cb; }
+      .pill.rejected { background: #fdecec; color: #8f1f13; border-color: #f3c4be; }
+      .pill.missing { background: #eef2f7; color: #485569; border-color: #d6deea; }
+
       .alert {
         padding: 10px 12px;
-        border-radius: 8px;
-        font-size: 0.95rem;
+        border-radius: 10px;
+        font-size: 0.92rem;
         display: none;
+        margin-bottom: 10px;
       }
-      .alert.error { background: #ffe8e6; color: #7d1a1a; }
-      .alert.success { background: #e8f7ee; color: #1a7d44; }
-      .doc-list { margin: 12px 0; padding-left: 18px; color: #33415c; }
+
+      .alert.error { background: #fdecec; color: #8f1f13; border: 1px solid #f8c9c4; }
+      .alert.success { background: #e8f8ef; color: #146f3d; border: 1px solid #bae6cb; }
+
+      .upload-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .upload-tile {
+        border: 1px dashed #c3cfe3;
+        border-radius: 12px;
+        padding: 10px;
+        background: #fcfdff;
+      }
+
+      .upload-tile.locked {
+        border-style: solid;
+        border-color: #f3d396;
+        background: #fffaf0;
+      }
+      .upload-tile.approved {
+        border-style: solid;
+        border-color: #9edbb8;
+        background: #edf9f2;
+      }
+
+      .upload-tile label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+      }
+
+      .upload-tile small {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .upload-tile input[type="file"] {
+        display: block;
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .upload-meta {
+        margin-top: 5px;
+        color: #475569;
+        font-size: 0.79rem;
+      }
+
+      .tile-file-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .tile-file-actions a {
+        text-decoration: none;
+        border: 1px solid #c7d2e5;
+        border-radius: 8px;
+        padding: 4px 8px;
+        font-size: 0.78rem;
+        color: #1f2a44;
+        background: #fff;
+      }
+
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      @media (max-width: 940px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 640px) {
+        .upload-grid { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
-    <main class="login-page" style="background:#f7f7f9;">
-      <section class="form-panel" style="width:100%; max-width:900px; margin:32px auto;">
-        <header style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-          <img src="/assets/paoli_logo.png" alt="Paoli Group logo" style="width:40px; height:40px;" />
-          <div>
-            <div style="font-weight:700; color:#111827;">Document and Form Submission</div>
-            <div style="color:#4b5563; font-size:0.95rem;">Accepted: PDF, DOCX, JPG, PNG • Max 10MB each</div>
-          </div>
-          <a class="forgot-link" href="/dashboard.html" style="margin-left:auto;">Back to dashboard</a>
-        </header>
+    <main class="page">
+      <section class="hero">
+        <div>
+          <h1>Required Document Submission</h1>
+          <p>Upload onboarding documents for HR and Compliance review. Accepted: PDF, DOCX, JPG, PNG (max 10MB each).</p>
+        </div>
+        <a href="/dashboard.html">Back to dashboard</a>
+      </section>
 
-        <div class="card">
-          <div id="alert-success" class="alert success"></div>
-          <div id="alert-error" class="alert error"></div>
-          <form id="uploadForm" class="upload-form">
-            <div id="identityFields">
+      <section class="layout">
+        <aside class="card">
+          <h2>Applicant Identity</h2>
+          <div class="hint">Files will be associated with this profile.</div>
+
+          <div id="identityFields" class="identity-fields">
+            <div>
               <label class="input-label" for="full_name">Full Name</label>
               <input type="text" id="full_name" name="full_name" class="text-input" required />
-
+            </div>
+            <div>
               <label class="input-label" for="email">Email</label>
               <input type="email" id="email" name="email" class="text-input" required />
             </div>
-            <div id="identityBadge" style="display:none; padding:8px 12px; border-radius:10px; background:#eef2ff; color:#1f2937;">
-              Submitting as <strong id="badgeName"></strong> (<span id="badgeEmail"></span>)
-              <button type="button" id="editIdentity" class="forgot-link" style="margin-left:8px;">Not you?</button>
+          </div>
+
+          <div id="identityBadge" class="identity-badge">
+            Submitting as <strong id="badgeName"></strong> (<span id="badgeEmail"></span>)
+            <button type="button" id="editIdentity" class="forgot-link">Not you?</button>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="value" id="statRequired">0/0</div>
+              <div class="label">Required Approved</div>
             </div>
+            <div class="stat">
+              <div class="value" id="statPending">0</div>
+              <div class="label">Pending (Required)</div>
+            </div>
+            <div class="stat">
+              <div class="value" id="statMissing">0</div>
+              <div class="label">Missing</div>
+            </div>
+          </div>
 
-            <div id="requirementList" class="doc-list" style="margin-top:10px;"></div>
+          <ul id="requirementList" class="requirement-list"></ul>
+        </aside>
 
-            <div id="uploadZones" style="display:grid; gap:12px; margin-top:16px;"></div>
+        <section class="card">
+          <h2>Upload Files</h2>
+          <div class="hint">You can upload one or multiple document types in one submission.</div>
 
-            <div class="form-actions" style="justify-content:space-between; margin-top:12px;">
-              <a class="forgot-link" href="/log_in.html">Back to login</a>
-              <button type="submit" class="submit-button">Submit</button>
+          <div id="alert-success" class="alert success"></div>
+          <div id="alert-error" class="alert error"></div>
+
+          <form id="uploadForm" class="upload-form">
+            <div id="uploadZones" class="upload-grid"></div>
+
+            <div class="actions">
+              <button type="submit" class="submit-button" id="submitBtn">Submit Files</button>
+              <span class="hint" id="submitState"></span>
             </div>
           </form>
 
-          <div id="uploadedList" class="doc-list" style="margin-top:12px;"></div>
-        </div>
+        </section>
       </section>
     </main>
 
@@ -79,25 +356,33 @@
       const form = document.getElementById("uploadForm");
       const ok = document.getElementById("alert-success");
       const err = document.getElementById("alert-error");
-      const list = document.getElementById("uploadedList");
       const reqList = document.getElementById("requirementList");
       const zones = document.getElementById("uploadZones");
-      const docTypes = [
-        { id: "government_id", label: "Official Identification (license/passport)" },
-        { id: "w9", label: "W-9 / Withholding tax form (Hacienda)" },
-        { id: "asume_clearance", label: "ASUME Certificate" },
-        { id: "background_check", label: "Criminal Background Check" },
-        { id: "tax_return", label: "Tax Return Filing Certification" },
-        { id: "bank_certification", label: "Bank Account Certification for Direct Deposit" },
-        { id: "resume", label: "Resume" },
-        { id: "certifications", label: "Evidence of Certifications" },
-        { id: "signed_contract", label: "Signed Contract" },
-        { id: "crim_compliance", label: "CRIM Compliance Certification" },
-        { id: "comptroller_registry", label: "Comptroller Contractor Registry" },
-        { id: "policy_ack", label: "Policy Acknowledgement (signed)" },
+      const submitBtn = document.getElementById("submitBtn");
+      const submitState = document.getElementById("submitState");
+      const statRequired = document.getElementById("statRequired");
+      const statPending = document.getElementById("statPending");
+      const statMissing = document.getElementById("statMissing");
+
+      const baseDocTypes = [
+        { id: "government_id", label: "Official Identification (license/passport)", optional: false },
+        { id: "w9", label: "W-9 / Withholding tax form (Hacienda)", optional: false },
+        { id: "merchant_registry", label: "Registro de Comerciante (Dept. de Hacienda)", optional: false },
+        { id: "asume_clearance", label: "ASUME Certificate", optional: false },
+        { id: "background_check", label: "Criminal Background Check", optional: false },
+        { id: "tax_return", label: "Tax Return Filing Certification", optional: false },
+        { id: "bank_certification", label: "Bank Account Certification for Direct Deposit", optional: false },
+        { id: "resume", label: "Resume", optional: false },
+        { id: "certifications", label: "Evidence of Certifications", optional: true },
+        { id: "signed_contract", label: "Signed Contract", optional: false },
+        { id: "crim_compliance", label: "CRIM Compliance Certification", optional: false },
+        { id: "comptroller_registry", label: "Comptroller Contractor Registry", optional: true },
       ];
+      let docTypes = [...baseDocTypes];
+
       const statusByType = {};
-      const lockedStatuses = new Set(["pending_review"]);
+      const latestDocByType = {};
+      const lockedStatuses = new Set(["pending_review", "approved"]);
       const identityBadge = document.getElementById("identityBadge");
       const identityFields = document.getElementById("identityFields");
       const badgeName = document.getElementById("badgeName");
@@ -108,33 +393,105 @@
         el.textContent = message;
         el.style.display = "block";
       }
-      function hideAll() {
+
+      function hideAlerts() {
         ok.style.display = "none";
         err.style.display = "none";
-        list.innerHTML = "";
-        reqList.innerHTML = "";
+      }
+
+      function setSubmitting(loading) {
+        submitBtn.disabled = loading;
+        submitBtn.textContent = loading ? "Submitting..." : "Submit Files";
+        submitState.textContent = loading ? "Uploading selected documents..." : "";
+      }
+
+      function prettyStatus(status) {
+        return (status || "missing").replaceAll("_", " ");
+      }
+
+      function statusClass(status) {
+        if (status === "approved") return "approved";
+        if (status === "rejected") return "rejected";
+        if (status === "pending_review") return "pending";
+        return "missing";
+      }
+
+      function updateStats(items) {
+        const required = items.filter((i) => !i.optional);
+        const reqApproved = required.filter((i) => i.status === "approved").length;
+        const pending = required.filter((i) => i.status === "pending_review").length;
+        const missing = required.filter((i) => (i.status || "missing") === "missing").length;
+
+        statRequired.textContent = `${reqApproved}/${required.length}`;
+        statPending.textContent = String(pending);
+        statMissing.textContent = String(missing);
+      }
+
+      function renderRequirementList(items) {
+        if (!items.length) {
+          reqList.innerHTML = "";
+          statRequired.textContent = "0/0";
+          statPending.textContent = "0";
+          statMissing.textContent = "0";
+          return;
+        }
+        reqList.innerHTML = items
+          .map((item) => `
+            <li class="requirement-item">
+              <div class="name">${item.label}${item.optional ? " (optional)" : ""}</div>
+              <span class="pill ${statusClass(item.status || "missing")}">${prettyStatus(item.status || "missing")}</span>
+            </li>
+          `)
+          .join("");
+        updateStats(items);
       }
 
       function renderZones() {
-        function statusLabel(type) {
-          const status = statusByType[type];
-          if (!status || status === "missing") return "";
-          const text = status.replace("_", " ");
-          const color = status === "approved" ? "#16a34a" : status === "rejected" ? "#b91c1c" : "#92400e";
-          return `<div style="margin-top:6px; font-size:0.9rem; color:${color}; font-weight:600;">${text}</div>`;
-        }
         zones.innerHTML = docTypes
-          .map(
-            (d) => `
-            <label style="display:block; border:1px dashed #cbd5e1; border-radius:12px; padding:12px 12px 8px 12px; background:#fdfefe;">
-              <div style="font-weight:600; color:#0f172a;">${d.label}</div>
-              <div style="font-size:0.9rem; color:#4b5563;">Drag & drop or browse</div>
-              <input type="file" name="${d.id}" data-type="${d.id}" accept=".pdf,.docx,.jpg,.jpeg,.png" style="margin-top:8px;" ${lockedStatuses.has(statusByType[d.id]) ? "disabled" : ""} />
-              ${lockedStatuses.has(statusByType[d.id]) ? '<div style="margin-top:6px; color:#92400e; font-size:0.9rem;">Pending validation. Please wait for review.</div>' : statusLabel(d.id)}
-            </label>
-          `
-          )
+          .map((d) => {
+            const st = statusByType[d.id] || "missing";
+            const latestDoc = latestDocByType[d.id] || null;
+            const locked = lockedStatuses.has(st);
+            const tileClass = st === "approved" ? "upload-tile approved" : locked ? "upload-tile locked" : "upload-tile";
+            const note = st === "approved"
+              ? `<div class="upload-meta" style="color:#116f3d;">Approved by HR/Compliance. Resubmission disabled.</div>`
+              : st === "pending_review"
+              ? `<div class="upload-meta" style="color:#8a5a00;">Already submitted and pending review.</div>`
+              : st !== "missing"
+              ? `<div class="upload-meta">Current status: ${prettyStatus(st)}</div>`
+              : `<div class="upload-meta">No file submitted yet.</div>`;
+            const fileActions = latestDoc && (latestDoc.view_url || latestDoc.download_url)
+              ? `<div class="tile-file-actions">
+                  ${latestDoc.view_url ? `<a href="${latestDoc.view_url}" target="_blank" rel="noopener">View</a>` : ""}
+                  ${latestDoc.download_url ? `<a href="${latestDoc.download_url}">Download</a>` : ""}
+                </div>`
+              : "";
+            return `
+              <div class="${tileClass}">
+                <label>${d.label}${d.optional ? " (optional)" : ""}</label>
+                <small>Accepted: PDF, DOCX, JPG, PNG</small>
+                <input type="file" name="${d.id}" data-type="${d.id}" accept=".pdf,.docx,.jpg,.jpeg,.png" ${locked ? "disabled" : ""} />
+                ${note}
+                ${fileActions}
+              </div>
+            `;
+          })
           .join("");
+      }
+
+      function applyRoleDocumentRules(role) {
+        const normalized = (role || "").trim().toLowerCase();
+        docTypes = normalized === "contractor"
+          ? [...baseDocTypes]
+          : baseDocTypes.filter((d) => d.id !== "merchant_registry");
+        // Ensure stale state for removed types does not leak into stats/tiles.
+        const validIds = new Set(docTypes.map((d) => d.id));
+        Object.keys(statusByType).forEach((key) => {
+          if (!validIds.has(key)) delete statusByType[key];
+        });
+        Object.keys(latestDocByType).forEach((key) => {
+          if (!validIds.has(key)) delete latestDocByType[key];
+        });
       }
 
       function showBadge(name, email) {
@@ -146,7 +503,7 @@
 
       function showIdentityFields() {
         identityBadge.style.display = "none";
-        identityFields.style.display = "block";
+        identityFields.style.display = "grid";
         document.getElementById("full_name").readOnly = false;
         document.getElementById("email").readOnly = false;
       }
@@ -161,20 +518,24 @@
         if (email) {
           emailEl.value = email;
           emailEl.readOnly = true;
-          loadRequirements(email);
           try {
             const res = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
             if (res.ok) {
               const user = await res.json();
+              applyRoleDocumentRules(user.role || "");
               nameEl.value = user.full_name || name || nameEl.value;
               if (nameEl.value) nameEl.readOnly = true;
               showBadge(nameEl.value || email, email);
             } else {
+              applyRoleDocumentRules("");
               showBadge(name || email, email);
             }
           } catch (_) {
+            applyRoleDocumentRules("");
             showBadge(name || email, email);
           }
+          renderZones();
+          await loadRequirements(email);
         }
         if (name && !nameEl.value) {
           nameEl.value = name;
@@ -183,14 +544,31 @@
         }
       }
 
-      document.getElementById("email").addEventListener("change", (e) => {
+      document.getElementById("email").addEventListener("change", async (e) => {
         const val = e.target.value.trim();
-        if (val) loadRequirements(val);
+        if (val) {
+          try {
+            const user = await fetch(`/api/user?email=${encodeURIComponent(val)}`).then((r) => (r.ok ? r.json() : null));
+            applyRoleDocumentRules((user || {}).role || "");
+          } catch (_) {
+            applyRoleDocumentRules("");
+          }
+          renderZones();
+          await loadRequirements(val);
+        }
       });
 
       editIdentity.addEventListener("click", () => {
         document.getElementById("full_name").value = "";
         document.getElementById("email").value = "";
+        Object.keys(statusByType).forEach((k) => {
+          delete statusByType[k];
+        });
+        Object.keys(latestDocByType).forEach((k) => {
+          delete latestDocByType[k];
+        });
+        renderZones();
+        renderRequirementList([]);
         showIdentityFields();
       });
 
@@ -201,16 +579,26 @@
           const data = await res.json();
           const items = data.requirements || [];
           if (!items.length) {
-            reqList.innerHTML = "";
+            Object.keys(latestDocByType).forEach((k) => {
+              delete latestDocByType[k];
+            });
+            renderRequirementList([]);
+            renderZones();
             return;
           }
+          Object.keys(latestDocByType).forEach((k) => {
+            delete latestDocByType[k];
+          });
           items.forEach((item) => {
-            statusByType[item.id] = item.status;
+            statusByType[item.id] = item.status || "missing";
+            const docs = Array.isArray(item.documents) ? item.documents : [];
+            const latest = docs
+              .slice()
+              .sort((a, b) => String(b.uploaded_at || "").localeCompare(String(a.uploaded_at || "")))[0];
+            if (latest) latestDocByType[item.id] = latest;
           });
           renderZones();
-          reqList.innerHTML = items
-            .map(item => `<li><strong>${item.label}</strong> - <span style="text-transform:capitalize;">${item.status}</span></li>`)
-            .join("");
+          renderRequirementList(items);
         } catch (_) {
           /* ignore */
         }
@@ -232,10 +620,16 @@
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        hideAll();
+        hideAlerts();
 
         const email = document.getElementById("email").value.trim();
         const name = document.getElementById("full_name").value.trim();
+
+        if (!email || !name) {
+          show(err, "Full name and email are required.");
+          return;
+        }
+
         const inputs = zones.querySelectorAll("input[type='file']");
         const toUpload = [];
         inputs.forEach((input) => {
@@ -251,7 +645,7 @@
 
         const lockedType = toUpload.find((item) => lockedStatuses.has(statusByType[item.type]));
         if (lockedType) {
-          show(err, "You already submitted this document. Please wait until it is reviewed.");
+          show(err, "One or more selected documents are already pending review.");
           return;
         }
 
@@ -262,45 +656,60 @@
         }
 
         const results = [];
-        for (const item of toUpload) {
-          const fd = new FormData();
-          fd.append("full_name", name);
-          fd.append("email", email);
-          fd.append("doc_type", item.type);
-          fd.append("documents", item.file);
-          const res = await fetch("/documents/upload", {
-            method: "POST",
-            body: fd,
-            headers: { "X-CSRF-Token": token },
-          });
-          if (!res.ok) {
-            const msg = await res.text();
-            show(err, msg || "Upload failed.");
-            return;
+        try {
+          setSubmitting(true);
+          for (const item of toUpload) {
+            const fd = new FormData();
+            fd.append("full_name", name);
+            fd.append("email", email);
+            fd.append("doc_type", item.type);
+            fd.append("documents", item.file);
+
+            const res = await fetch("/documents/upload", {
+              method: "POST",
+              body: fd,
+              headers: { "X-CSRF-Token": token },
+            });
+
+            if (!res.ok) {
+              const msg = await res.text();
+              throw new Error(msg || "Upload failed.");
+            }
+
+            const data = await res.json().catch(() => ({}));
+            results.push(...(data.documents || []));
           }
-          const data = await res.json().catch(() => ({}));
-          results.push(...(data.documents || []));
+        } catch (uploadErr) {
+          show(err, uploadErr.message || "Upload failed.");
+          return;
+        } finally {
+          setSubmitting(false);
         }
 
         results.forEach((doc) => {
           const key = doc.doc_type || doc.id;
           if (key) {
             statusByType[key] = doc.status || "pending_review";
+            latestDocByType[key] = doc;
           }
         });
-        renderZones();
 
-        show(ok, "Files uploaded. Pending HR/Compliance review. You can track status on the dashboard. ");
-        ok.insertAdjacentHTML("beforeend", '<a class="forgot-link" href="/doc_submitted.html" style="margin-left:4px;">View confirmation</a>');
-        if (results.length) {
-          list.innerHTML = results
-            .map((doc) => `<li>${doc.original_name} (${doc.doc_type || "unspecified"}) - status: ${doc.status}</li>`)
-            .join("");
-        }
-        form.reset();
         renderZones();
+        show(ok, "Files uploaded successfully. They are now pending HR/Compliance review.");
+        ok.insertAdjacentHTML("beforeend", ' <a class="forgot-link" href="/doc_submitted.html">View confirmation</a>');
+
+        const emailEl = document.getElementById("email");
+        const nameEl = document.getElementById("full_name");
+        form.reset();
+        emailEl.value = email;
+        nameEl.value = name;
+        emailEl.readOnly = true;
+        nameEl.readOnly = true;
+        showBadge(name, email);
+
         if (email) {
-          loadRequirements(email);
+          await loadRequirements(email);
+          localStorage.setItem("paoli_email", email);
         }
       });
 

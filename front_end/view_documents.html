@@ -13,6 +13,9 @@
       .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:16px; margin-bottom:16px; }
       .doc-item { border:1px dashed #d9e1ec; border-radius:12px; padding:10px 12px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; background:#fdfefe; }
       .status { font-weight:600; }
+      .file-item { border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+      .file-actions { display:flex; gap:8px; align-items:center; }
+      .file-actions a { font-size:0.85rem; text-decoration:none; border:1px solid #d1d5db; border-radius:8px; padding:5px 8px; color:#1f2937; background:#fff; }
     </style>
   </head>
   <body>
@@ -22,7 +25,6 @@
         <div style="font-weight:700;" id="fullName">Document Status</div>
         <div id="emailLabel" style="color:#d7e4ff; font-size:0.95rem;"></div>
       </div>
-      <a href="javascript:history.back()" class="forgot-link" style="color:#d7e4ff; margin-left:auto;">← Go back</a>
     </header>
 
     <div class="container">
@@ -36,10 +38,16 @@
         </div>
         <div id="list"></div>
       </div>
+      <div class="card">
+        <div style="font-weight:700;">Uploaded files</div>
+        <div class="muted">Open or download files already submitted.</div>
+        <div id="filesList" style="margin-top:8px;"></div>
+      </div>
     </div>
 
     <script>
       const listEl = document.getElementById("list");
+      const filesListEl = document.getElementById("filesList");
       const emailLabel = document.getElementById("emailLabel");
       const fullNameEl = document.getElementById("fullName");
       const avatarEl = document.getElementById("avatar");
@@ -64,6 +72,33 @@
           .join("");
       }
 
+      function renderFiles(items) {
+        if (!items.length) {
+          filesListEl.innerHTML = "<p class=\"muted\">No uploaded files yet.</p>";
+          return;
+        }
+        filesListEl.innerHTML = items
+          .map((doc) => {
+            const status = (doc.status || "pending_review").replace("_", " ");
+            const viewUrl = doc.view_url || "";
+            const downloadUrl = doc.download_url || viewUrl;
+            const type = doc.doc_type || "unspecified";
+            return `
+              <div class="file-item">
+                <div>
+                  <div style="font-weight:600;">${doc.original_name || "File"}</div>
+                  <div class="muted" style="font-size:0.82rem;">Type: ${type} • Status: ${status}</div>
+                </div>
+                <div class="file-actions">
+                  ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener">View</a>` : ""}
+                  ${downloadUrl ? `<a href="${downloadUrl}">Download</a>` : ""}
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
       async function load() {
         const params = new URLSearchParams(window.location.search);
         email = params.get("email") || localStorage.getItem("paoli_email") || "";
@@ -74,11 +109,13 @@
         emailLabel.textContent = email;
         uploadLink.href = `/upload_documents.html?email=${encodeURIComponent(email)}`;
         try {
-          const [reqs, user] = await Promise.all([
+          const [reqs, docs, user] = await Promise.all([
             fetchJson(`/documents/requirements?email=${encodeURIComponent(email)}`),
+            fetchJson(`/documents?email=${encodeURIComponent(email)}`),
             fetchJson(`/api/user?email=${encodeURIComponent(email)}`).catch(() => ({}))
           ]);
           render(reqs.requirements || []);
+          renderFiles(docs.documents || []);
           fullNameEl.textContent = (user.full_name || email || "User");
           avatarEl.textContent = (user.full_name || email || "P").slice(0,1).toUpperCase();
           if (user.avatar_url) {
@@ -86,6 +123,7 @@
           }
         } catch (err) {
           listEl.innerHTML = `<p>${err.message}</p>`;
+          filesListEl.innerHTML = `<p>${err.message}</p>`;
         }
       }
 

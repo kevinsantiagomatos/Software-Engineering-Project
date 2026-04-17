@@ -14,12 +14,24 @@
       .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
       .text-input { width: 100%; }
       .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; background:#e5e7eb; color:#111827; }
+      .link-btn {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:8px 12px;
+        border-radius:10px;
+        border:1px solid #cdd9ef;
+        background:#f8fbff;
+        color:#0f2f93;
+        text-decoration:none;
+        font-size:0.86rem;
+        font-weight:600;
+      }
     </style>
   </head>
   <body>
     <main class="container">
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <a class="forgot-link" href="javascript:history.back()">← Back</a>
         <a class="forgot-link" href="/dashboard.html">Dashboard</a>
       </div>
       <h1>HR / Compliance / PM / IT Panel</h1>
@@ -83,6 +95,20 @@
       const docCard = document.getElementById("docCard");
       const role = (new URLSearchParams(window.location.search).get("role") || "").toLowerCase();
       const isAdmin = role === "hr" || role === "compliance" || role === "it" || role === "manager";
+      const docTypeLabels = {
+        government_id: "Official Identification (license/passport)",
+        w9: "W-9 / Withholding tax form (Hacienda)",
+        merchant_registry: "Registro de Comerciante (Dept. de Hacienda)",
+        asume_clearance: "ASUME certificate",
+        background_check: "Criminal Background Check",
+        tax_return: "Certificación de Radicación de Planillas",
+        bank_certification: "Bank Account Certification for Direct Deposit",
+        resume: "Resume",
+        certifications: "Evidence of Certifications",
+        signed_contract: "Signed Contract",
+        crim_compliance: "CRIM Compliance Certification",
+        comptroller_registry: "Comptroller Contractor Registry (gov contracts)",
+      };
 
       function applyRoleVisibility() {
         const isHR = role === "hr" || role === "compliance";
@@ -124,21 +150,31 @@
         docResults.innerHTML = "Loading...";
         try {
           const data = await fetchJson(`/documents?email=${encodeURIComponent(email)}`);
-          if (!data.documents?.length) {
-            docResults.innerHTML = "<li>No documents found.</li>";
+          const docs = (data.documents || []).filter((d) => (d.status || "pending_review") === "pending_review");
+          if (!docs.length) {
+            docResults.innerHTML = "<li>No pending documents for review.</li>";
             return;
           }
-          docResults.innerHTML = data.documents
-            .map(d => `
+          docResults.innerHTML = docs
+            .map(d => {
+              const typeLabel = docTypeLabels[d.doc_type] || d.doc_type || "Unspecified document";
+              return `
               <li>
-                <div><strong>${d.original_name}</strong><br/><small>${d.uploader_name || ""} • ${d.uploader_email}</small><br/><small>Type: ${d.doc_type || "unspecified"}</small></div>
+                <div>
+                  <strong>${typeLabel}</strong>
+                  <br/><small>File: ${d.original_name || "unnamed file"}</small>
+                  <br/><small>${d.uploader_name || ""} • ${d.uploader_email}</small>
+                </div>
                 <div class="controls">
                   <span class="badge">${d.status || "pending_review"}</span>
+                  ${d.view_url ? `<a class="link-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ""}
+                  ${d.download_url ? `<a class="link-btn" href="${d.download_url}">Download</a>` : ""}
                   <button data-id="${d.id}" data-status="approved" class="submit-button" style="padding:8px 12px;">Approve</button>
                   <button data-id="${d.id}" data-status="rejected" class="submit-button" style="padding:8px 12px; background:#e53e3e;">Reject</button>
                 </div>
               </li>
-            `)
+            `;
+            })
             .join("");
           docResults.querySelectorAll("button[data-id]").forEach(btn => {
             btn.addEventListener("click", () => updateDoc(btn.dataset.id, btn.dataset.status));

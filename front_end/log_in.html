@@ -21,6 +21,7 @@
 
       <section class="form-panel">
         <form action="/login" method="POST" class="login-form">
+          <div id="loginAlert" class="login-alert" style="display:none;"></div>
           <label class="input-label" for="username">Username</label>
           <input
             type="text"
@@ -57,5 +58,25 @@
       </div>
       <div class="footer-right">© 2025 Paoli Group. All rights reserved.</div>
     </footer>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const alertEl = document.getElementById("loginAlert");
+        const error = params.get("error");
+        const reset = params.get("reset");
+        if (!alertEl) return;
+        if (error === "invalid_credentials") {
+          alertEl.textContent = "Invalid username or password. Please try again.";
+          alertEl.className = "login-alert login-alert-error";
+          alertEl.style.display = "block";
+          return;
+        }
+        if (reset === "ok") {
+          alertEl.textContent = "Password updated. You can log in now.";
+          alertEl.className = "login-alert login-alert-success";
+          alertEl.style.display = "block";
+        }
+      })();
+    </script>
   </body>
 </html>
