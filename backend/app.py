@@ -1,4 +1,5 @@
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -175,10 +176,15 @@ def ensure_placeholder_assets():
     are not yet uploaded. Safe to run repeatedly.
     """
     ensure_directories()
-    try:
-        from PyPDF2 import PdfWriter
-    except Exception:
-        PdfWriter = None
+    PdfWriter = None
+    for module_name in ("pypdf", "PyPDF2"):
+        try:
+            module = importlib.import_module(module_name)
+            PdfWriter = getattr(module, "PdfWriter", None)
+            if PdfWriter is not None:
+                break
+        except Exception:
+            continue
 
     def write_pdf(path: Path, title: str):
         if PdfWriter is None:
@@ -195,6 +201,19 @@ def ensure_placeholder_assets():
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             write_pdf(path, description)
+
+
+def enrich_document_record(doc: dict) -> dict:
+    enriched = dict(doc or {})
+    stored_name = (enriched.get("stored_name") or "").strip()
+    original_name = (enriched.get("original_name") or stored_name or "document").strip()
+    if stored_name:
+        enriched["view_url"] = f"/uploads/{stored_name}"
+        enriched["download_url"] = f"/uploads/{stored_name}?download=1&filename={quote_plus(original_name)}"
+    else:
+        enriched["view_url"] = ""
+        enriched["download_url"] = ""
+    return enriched
 
 
 def email_is_valid(email: str) -> bool:
@@ -238,17 +257,28 @@ def require_role(allowed_roles):
                     session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
                     ensure_csrf_token()
                 else:
-                    if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                    if should_redirect_to_login_page():
                         return redirect("/log_in.html")
                     return Response("Authentication required", status=401, mimetype="text/plain")
             role = session.get("role", "")
             if role not in allowed_roles:
-                if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                if should_redirect_to_login_page():
                     return redirect("/log_in.html")
                 return Response("Forbidden", status=403, mimetype="text/plain")
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def should_redirect_to_login_page() -> bool:
+    """
+    Only redirect for real page navigation requests.
+    API/data routes should return 401/403 instead of HTML redirects.
+    """
+    path = request.path or ""
+    if path.startswith("/api/") or path.startswith("/documents"):
+        return False
+    return request.method == "GET" and "text/html" in request.accept_mimetypes
 
 
 def login_required(func):
@@ -261,7 +291,7 @@ def login_required(func):
                 session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
                 ensure_csrf_token()
             else:
-                if request.method == "GET" and "text/html" in request.accept_mimetypes:
+                if should_redirect_to_login_page():
                     return redirect("/log_in.html")
                 return Response("Authentication required", status=401, mimetype="text/plain")
         return func(*args, **kwargs)
@@ -465,7 +495,26 @@ def list_users():
     return cleaned
 
 
-def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None, it_provisions=None):
+def get_user_role(email: str) -> str:
+    if not email:
+        return ""
+    row = fetch_one("SELECT role FROM `user` WHERE email = %s", (email,))
+    return (row or {}).get("role", "") or ""
+
+
+def required_document_types_for_role(role: str):
+    normalized = (role or "").strip().lower()
+    # Registro de Comerciante is only required for contractors.
+    contractor_only = {"merchant_registry"}
+    filtered = []
+    for doc in REQUIRED_DOCUMENT_TYPES:
+        if doc.get("id") in contractor_only and normalized != "contractor":
+            continue
+        filtered.append(doc)
+    return filtered
+
+
+def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None, it_provisions=None, required_doc_types=None):
     docs = docs or []
     tasks = tasks or []
     policies = policies or []
@@ -478,7 +527,8 @@ def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, tra
     utr = [t for t in trainings if t.get("email") == email]
     uit = [p for p in it_provisions if p.get("email") == email]
 
-    required_doc_ids = [d["id"] for d in REQUIRED_DOCUMENT_TYPES if not d.get("optional")]
+    required_doc_types = required_doc_types or REQUIRED_DOCUMENT_TYPES
+    required_doc_ids = [d["id"] for d in required_doc_types if not d.get("optional")]
     doc_status_by_type = {doc_id: "missing" for doc_id in required_doc_ids}
     for d in ud:
         dt = d.get("doc_type")
@@ -631,7 +681,7 @@ def upload_documents():
     if not stored_entries:
         return Response("No valid documents received.", status=400, mimetype="text/plain")
 
-    return jsonify({"status": "ok", "documents": stored_entries})
+    return jsonify({"status": "ok", "documents": [enrich_document_record(doc) for doc in stored_entries]})
 
 
 @app.get("/documents")
@@ -650,7 +700,7 @@ def list_documents():
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
     else:
         docs = fetch_all("SELECT * FROM document")
-    return jsonify({"documents": docs})
+    return jsonify({"documents": [enrich_document_record(doc) for doc in docs]})
 
 
 @app.post("/documents/<doc_id>/status")
@@ -789,6 +839,8 @@ def onboarding_progress():
         it_provisions = fetch_all("SELECT * FROM it_provision")
 
     def user_progress(e):
+        role = get_user_role(e)
+        required_doc_types = required_document_types_for_role(role)
         return user_progress_snapshot(
             e,
             docs=docs,
@@ -796,6 +848,7 @@ def onboarding_progress():
             policies=fetch_all("SELECT * FROM policy_ack"),
             trainings=fetch_all("SELECT * FROM training_completion"),
             it_provisions=it_provisions,
+            required_doc_types=required_doc_types,
         )
 
     if email:
@@ -827,8 +880,10 @@ def document_requirements():
         docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
     else:
         docs = fetch_all("SELECT * FROM document")
+    target_role = get_user_role(email) if email else ""
+    effective_doc_types = required_document_types_for_role(target_role) if email else REQUIRED_DOCUMENT_TYPES
     by_type = {}
-    for doc_type in REQUIRED_DOCUMENT_TYPES:
+    for doc_type in effective_doc_types:
         by_type[doc_type["id"]] = {
             "id": doc_type["id"],
             "label": doc_type["label"],
@@ -847,7 +902,7 @@ def document_requirements():
         dt = doc.get("doc_type")
         if dt and dt in by_type:
             bucket = by_type[dt]
-            bucket["documents"].append(doc)
+            bucket["documents"].append(enrich_document_record(doc))
             uploaded_at = doc.get("uploaded_at")
             if uploaded_at:
                 bucket["last_updated"] = max(bucket["last_updated"], uploaded_at) if bucket["last_updated"] else uploaded_at
@@ -879,7 +934,7 @@ def login():
         target = f"/dashboard.html?email={quote_plus(username)}"
         return redirect(target, code=302)
 
-    return Response(render_login_result("Invalid credentials. Try again."), status=401, mimetype="text/html")
+    return redirect("/log_in.html?error=invalid_credentials", code=302)
 
 
 @app.post("/logout")
@@ -930,33 +985,39 @@ def get_users():
 @app.post("/api/policy/ack")
 @login_required
 def policy_ack():
+    session_email = (session.get("email") or "").strip().lower()
     email = (request.form.get("email") or "").strip().lower()
     policy_id = (request.form.get("policy_id") or "").strip()
     signature = (request.form.get("signature") or "").strip()
-    if not email or not policy_id or not signature:
-        return Response("Email, policy_id, and signature are required.", status=400, mimetype="text/plain")
-    if email != session.get("email"):
+    if not session_email:
+        return Response("Authentication required", status=401, mimetype="text/plain")
+    if not policy_id or not signature:
+        return Response("policy_id and signature are required.", status=400, mimetype="text/plain")
+    if email and email != session_email:
         return Response("Forbidden", status=403, mimetype="text/plain")
     execute(
         "INSERT INTO policy_ack (id, email, policy_id, signature, status, signed_at) VALUES (%s,%s,%s,%s,%s,NOW())",
-        (secrets.token_hex(8), email, policy_id, signature, "signed"),
+        (secrets.token_hex(8), session_email, policy_id, signature, "signed"),
     )
-    append_audit("policy_ack", email, {"policy_id": policy_id})
-    return jsonify({"status": "ok"})
+    append_audit("policy_ack", session_email, {"policy_id": policy_id})
+    return jsonify({"status": "ok", "email": session_email})
 
 
 @app.get("/api/policy/status")
 @login_required
 def policy_status():
     email = (request.args.get("email") or "").strip().lower()
+    session_email = (session.get("email") or "").strip().lower()
+    requester_role = session.get("role", "")
     if email:
-        if email != session.get("email") and session.get("role") not in {"hr", "manager", "compliance"}:
+        if email != session_email and requester_role not in {"hr", "manager", "compliance"}:
             return Response("Forbidden", status=403, mimetype="text/plain")
         policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,))
     else:
-        if session.get("role") not in {"hr", "manager", "compliance"}:
-            return Response("Forbidden", status=403, mimetype="text/plain")
-        policies = fetch_all("SELECT * FROM policy_ack")
+        if requester_role in {"hr", "manager", "compliance"}:
+            policies = fetch_all("SELECT * FROM policy_ack")
+        else:
+            policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (session_email,))
     return jsonify({"policies": policies})
 
 
@@ -1086,8 +1147,15 @@ def list_new_hires():
         hire["attachments"] = att_by_hire.get(hire["id"], [])
         email = (hire.get("email") or "").lower()
         if email:
+            role = (hire.get("role") or "").lower()
             hire["progress"] = user_progress_snapshot(
-                email, docs=docs, tasks=tasks, policies=policies, trainings=trainings, it_provisions=it_provisions
+                email,
+                docs=docs,
+                tasks=tasks,
+                policies=policies,
+                trainings=trainings,
+                it_provisions=it_provisions,
+                required_doc_types=required_document_types_for_role(role),
             )
     return jsonify({"hires": hires})
 
@@ -1126,7 +1194,7 @@ def upload_profile_photo():
 def register_hire():
     data = request.form
     files = request.files
-    required_fields = ["first_name", "last_name", "email", "role"]
+    required_fields = ["first_name", "last_name", "email", "role", "temp_password"]
     for field in required_fields:
         if not data.get(field):
             return Response(f"{field} is required.", status=400, mimetype="text/plain")
@@ -1134,8 +1202,20 @@ def register_hire():
     email = data.get("email").strip().lower()
     if not email_is_valid(email):
         return Response("Invalid email.", status=400, mimetype="text/plain")
+    temp_password = data.get("temp_password") or ""
+    if len(temp_password) < 8:
+        return Response("Temporary password must be at least 8 characters.", status=400, mimetype="text/plain")
+    if fetch_one("SELECT email FROM `user` WHERE email = %s", (email,)):
+        return Response("A user with this email already exists.", status=409, mimetype="text/plain")
 
     hire_id = secrets.token_hex(8)
+    first = data.get("first_name", "").strip()
+    middle = data.get("middle_name", "").strip()
+    last = data.get("last_name", "").strip()
+    full_name = " ".join(part for part in [first, middle, last] if part).strip()
+    role = (data.get("role", "").strip() or "employee").lower()
+    department = data.get("department", "").strip()
+
     execute(
         """
         INSERT INTO new_hire (
@@ -1146,9 +1226,9 @@ def register_hire():
         """,
         (
             hire_id,
-            data.get("first_name", "").strip(),
-            data.get("middle_name", "").strip(),
-            data.get("last_name", "").strip(),
+            first,
+            middle,
+            last,
             email,
             data.get("phone", "").strip(),
             data.get("dob", None) or None,
@@ -1158,13 +1238,25 @@ def register_hire():
             data.get("state", "").strip(),
             data.get("postal_code", "").strip(),
             data.get("country", "").strip(),
-            data.get("role", "").strip(),
-            data.get("department", "").strip(),
+            role,
+            department,
             data.get("manager", "").strip(),
             data.get("start_date", None) or None,
             "pending_document_submission",
         ),
     )
+    try:
+        register_user_db(
+            create_user_record(
+                email=email,
+                hashed=generate_password_hash(temp_password),
+                full_name=full_name or email,
+                role=role,
+                department=department,
+            )
+        )
+    except pymysql.err.IntegrityError:
+        return Response("A user with this email already exists.", status=409, mimetype="text/plain")
 
     for att in HR_ATTACHMENT_TYPES:
         f = files.get(att["id"])
@@ -1180,8 +1272,8 @@ def register_hire():
                 (hire_id, att["id"], f.filename, stored, f"/uploads/hires/{stored}"),
             )
 
-    append_audit("hire_register", session.get("email", ""), {"hire_id": hire_id})
-    return jsonify({"status": "ok", "hire_id": hire_id})
+    append_audit("hire_register", session.get("email", ""), {"hire_id": hire_id, "email": email, "role": role})
+    return jsonify({"status": "ok", "hire_id": hire_id, "account_created": True})
 
 
 def serve_frontend(asset_path: str):
@@ -1193,6 +1285,12 @@ def serve_frontend(asset_path: str):
 
 @app.get("/")
 def root():
+    return serve_frontend("log_in.html")
+
+
+@app.get("/log_in.html")
+def login_page():
+    # Keep login page explicitly public and directly reachable.
     return serve_frontend("log_in.html")
 
 
@@ -1209,6 +1307,10 @@ def style_assets(asset_path):
 def uploaded_assets(asset_path):
     if not UPLOAD_DIR.exists():
         return Response("Uploads directory missing", status=404, mimetype="text/plain")
+    download_requested = (request.args.get("download") or "").strip().lower() in {"1", "true", "yes"}
+    filename = (request.args.get("filename") or "").strip() or Path(asset_path).name
+    if download_requested:
+        return send_from_directory(UPLOAD_DIR, asset_path, as_attachment=True, download_name=filename)
     return send_from_directory(UPLOAD_DIR, asset_path)
 
 
@@ -1224,7 +1326,7 @@ if __name__ == "__main__":
 @app.errorhandler(401)
 @app.errorhandler(403)
 def handle_auth_errors(err):
-    # For browser requests, land on login page instead of a raw 401/403 screen
-    if request.method == "GET" and "text/html" in request.accept_mimetypes:
-        return redirect("/log_in.html")
+    # For browser requests, serve the public login page directly.
+    if should_redirect_to_login_page():
+        return serve_frontend("log_in.html")
     return Response(err.description if hasattr(err, "description") else "Forbidden", status=err.code, mimetype="text/plain")
