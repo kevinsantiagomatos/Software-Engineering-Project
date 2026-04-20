@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Hire Profile | Admin</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <style>
+      * { box-sizing:border-box; }
+      html, body { height:100%; overflow:hidden; }
+      body { background:#eef1f6; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color:#0f172a; }
+      .container {
+        width:100%;
+        max-width:none;
+        margin:0;
+        padding:10px 14px;
+        box-sizing:border-box;
+        height:100dvh;
+        overflow:hidden;
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+      .layout {
+        display:grid;
+        gap:16px;
+        grid-template-columns: 420px minmax(0, 1fr);
+        align-items:stretch;
+        flex:1;
+        min-height:0;
+      }
+      .side-panel {
+        position:sticky;
+        top:8px;
+        align-self:start;
+        max-height:calc(100dvh - 18px);
+        overflow:auto;
+        border:1px solid #1f3c97;
+        background:linear-gradient(160deg, #0b1f67 0%, #123093 42%, #0a1a54 100%);
+        box-shadow:0 18px 40px rgba(5, 13, 40, 0.45);
+        padding:14px;
+      }
+      .card.side-panel {
+        border:1px solid #1f3c97;
+        background:linear-gradient(160deg, #0b1f67 0%, #123093 42%, #0a1a54 100%);
+        box-shadow:0 18px 40px rgba(5, 13, 40, 0.45);
+      }
+      .card { background:#fff; border-radius:16px; box-shadow:0 8px 24px rgba(15, 23, 42, 0.08); padding:14px; border:1px solid #e5e7eb; }
+      .title { margin:0; font-size:1.1rem; }
+      .muted { color:#64748b; font-size:.92rem; }
+      .form-grid { display:grid; gap:5px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .side-panel .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap:8px;
+      }
+      .side-panel .form-grid > div:not(.full),
+      .profile-more-grid > div {
+        border:1px solid rgba(191, 219, 254, 0.3);
+        background:rgba(255, 255, 255, 0.08);
+        border-radius:10px;
+        padding:7px 8px;
+      }
+      .form-grid .full { grid-column: 1 / -1; }
+      .text-input { width:100%; }
+      .side-panel .text-input {
+        padding:5px 7px;
+        font-size:0.8rem;
+        min-height:32px;
+        border:1px solid #2b4cb8;
+        background:#f8fbff;
+        color:#0f172a;
+        border-radius:8px;
+      }
+      .side-panel .text-input:focus {
+        outline:none;
+        border-color:#60a5fa;
+        box-shadow:0 0 0 2px rgba(96, 165, 250, 0.25);
+      }
+      .field-label {
+        display:block;
+        font-size:0.72rem;
+        font-weight:700;
+        color:#dbeafe;
+        margin:0 0 3px 0;
+        letter-spacing:0.02em;
+      }
+      .identity-block {
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:8px 10px;
+        border:1px solid rgba(191, 219, 254, 0.4);
+        border-radius:12px;
+        background:rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(2px);
+      }
+      .identity-avatar {
+        width:88px;
+        height:88px;
+        border-radius:16px;
+        background:#1a2b7a;
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-weight:700;
+        overflow:hidden;
+        flex-shrink:0;
+        border:2px solid rgba(255, 255, 255, 0.65);
+        box-shadow:0 10px 24px rgba(2, 6, 23, 0.4);
+      }
+      .identity-name { font-size:1.02rem; font-weight:800; color:#f8fbff; line-height:1.1; }
+      .identity-meta { font-size:0.79rem; color:#c7d5ff; margin-top:2px; line-height:1.2; }
+      .list { list-style:none; margin:0; padding:0; }
+      .list li { border-bottom:1px solid #e5e7eb; padding:10px 0; }
+      .pretty-list li {
+        border:1px solid #e2e8f0;
+        border-radius:12px;
+        padding:12px;
+        background:#fbfdff;
+        margin-bottom:10px;
+      }
+      .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+      .doc-btn {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border:1px solid #cbd5e1;
+        border-radius:10px;
+        padding:8px 12px;
+        background:#fff;
+        color:#0f172a;
+        text-decoration:none;
+        font-size:0.9rem;
+        line-height:1;
+        cursor:pointer;
+      }
+      .doc-btn:hover { background:#f8fafc; border-color:#94a3b8; }
+      .doc-btn.approve { background:#166534; border-color:#166534; color:#fff; }
+      .doc-btn.approve:hover { background:#14532d; border-color:#14532d; }
+      .doc-btn.reject { background:#b91c1c; border-color:#b91c1c; color:#fff; }
+      .doc-btn.reject:hover { background:#991b1b; border-color:#991b1b; }
+      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.82rem; background:#e5e7eb; color:#111827; }
+      .kpi-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+      .kpi { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:0.88rem; }
+      .doc-item-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+      .doc-meta { color:#64748b; font-size:.84rem; margin-top:2px; }
+      .tabs {
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-bottom:8px;
+        padding:8px;
+        border:1px solid #dbe4f1;
+        border-radius:14px;
+        background:linear-gradient(180deg, #ffffff, #f8fbff);
+      }
+      .right-workspace {
+        height:100%;
+        min-height:0;
+        overflow:hidden;
+        display:flex;
+        flex-direction:column;
+      }
+      .right-workspace .tabs { flex:0 0 auto; }
+      .tab-btn {
+        border:1px solid #cfd8ea;
+        background:#fff;
+        color:#1f2937;
+        border-radius:999px;
+        padding:9px 14px;
+        font-weight:700;
+        font-size:0.9rem;
+        cursor:pointer;
+      }
+      .tab-btn.active { background:#0f2f93; border-color:#0f2f93; color:#fff; }
+      .tab-pane { display:none; flex:1; min-height:0; }
+      .tab-pane.active { display:flex; flex-direction:column; }
+      .tab-pane .card { height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+      .tab-pane .pretty-list {
+        flex:1;
+        min-height:0;
+        overflow:auto;
+        padding-right:4px;
+        padding-bottom:32px;
+        overscroll-behavior:contain;
+        -webkit-overflow-scrolling:touch;
+      }
+      .pane-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+      .pane-subtitle { margin:4px 0 0; color:#64748b; font-size:0.92rem; }
+      .section-chip {
+        display:inline-flex;
+        align-items:center;
+        border:1px solid rgba(191, 219, 254, 0.45);
+        background:rgba(239, 246, 255, 0.12);
+        color:#dbeafe;
+        border-radius:999px;
+        font-size:0.75rem;
+        font-weight:700;
+        padding:4px 9px;
+        letter-spacing:0.02em;
+      }
+      .form-divider {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin-top:4px;
+      }
+      .form-divider::before {
+        content:"";
+        flex:1;
+        height:1px;
+        background:#dbe4f1;
+      }
+      .form-divider span {
+        color:#dbeafe;
+        font-size:0.72rem;
+        font-weight:700;
+        text-transform:uppercase;
+        letter-spacing:0.04em;
+      }
+      .form-divider::after {
+        content:"";
+        flex:1;
+        height:1px;
+        background:#dbe4f1;
+      }
+      .title-admin-box {
+        border:1px solid rgba(191, 219, 254, 0.45);
+        background:rgba(239, 246, 255, 0.14);
+        border-radius:12px;
+        padding:8px;
+      }
+      .title-admin-box .muted { color:#dbeafe; }
+      .side-panel .title { color:#f8fbff; }
+      .side-panel .muted { color:#c7d5ff; }
+      .side-panel .doc-btn {
+        border-color:#9cb7ff;
+        background:#f8fbff;
+      }
+      .profile-more {
+        border:1px solid rgba(191, 219, 254, 0.35);
+        border-radius:10px;
+        background:rgba(15, 23, 42, 0.18);
+        padding:6px 8px 8px;
+      }
+      .profile-more summary {
+        cursor:pointer;
+        font-size:0.76rem;
+        font-weight:700;
+        color:#dbeafe;
+        list-style:none;
+      }
+      .profile-more summary::-webkit-details-marker { display:none; }
+      .profile-more summary::after {
+        content:"Expand";
+        float:right;
+        font-weight:600;
+        color:#bfdbfe;
+      }
+      .profile-more[open] summary::after { content:"Collapse"; }
+      .profile-more-grid {
+        margin-top:8px;
+        display:grid;
+        gap:5px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .menu-wrap {
+        position:fixed;
+        top:10px;
+        right:14px;
+        z-index:60;
+      }
+      .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.35); }
+      .menu-panel {
+        position:absolute; right:0; top:calc(100% + 8px); min-width:220px;
+        background:#fff; border:1px solid #dbe1ef; border-radius:12px; box-shadow:0 12px 30px rgba(2,6,23,0.22);
+        display:none; z-index:50; padding:6px;
+      }
+      .menu-panel.open { display:block; }
+      .menu-link {
+        display:block; padding:10px 12px; color:#0f172a; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.92rem;
+      }
+      .menu-link:hover { background:#eff6ff; color:#123093; }
+      #alert { display:none; margin-bottom:12px; border-radius:10px; padding:10px 12px; }
+      #alert.ok { background:#e8f8ef; border:1px solid #bae6cb; color:#146f3d; }
+      #alert.err { background:#fee2e2; border:1px solid #fecaca; color:#991b1b; }
+      @media (max-width: 1060px) {
+        .layout { grid-template-columns: 1fr; }
+        .container { height:auto; overflow:visible; }
+        .side-panel .form-grid,
+        .profile-more-grid { grid-template-columns: 1fr; }
+        .side-panel {
+          position:static;
+          max-height:none;
+          overflow:visible;
+        }
+        .right-workspace {
+          position:static;
+          max-height:none;
+          overflow:hidden;
+          padding-right:0;
+        }
+        .right-workspace .tabs { position:static; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="menu-wrap">
+      <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+      <div id="menuPanel" class="menu-panel">
+        <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
+        <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+        <a class="menu-link" id="menuProfile" href="/profile.html">My Profile</a>
+        <a class="menu-link" href="/dashboard.html">Employee View</a>
+        <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
+        <a class="menu-link" href="/log_in.html">Log Out</a>
+      </div>
+    </div>
+
+    <div class="container">
+      <div id="alert"></div>
+      <div class="kpi-row" id="kpis"></div>
+      <div class="layout">
+        <aside class="card side-panel">
+            <div class="pane-head">
+              <div>
+                <h3 class="title">Hire Information</h3>
+              </div>
+              <span class="section-chip">Profile</span>
+            </div>
+            <div class="identity-block">
+              <div class="identity-avatar" id="sideAvatar">H</div>
+              <div>
+                <div class="identity-name" id="sideName">Hire Name</div>
+                <div class="identity-meta" id="sideMeta">--</div>
+              </div>
+            </div>
+            <form id="hireForm" class="form-grid" style="margin-top:10px;">
+              <div class="full form-divider"><span>Employment</span></div>
+              <div>
+                <label class="field-label" for="employmentType">Employment Type</label>
+                <select class="text-input" id="employmentType" name="employment_type" required>
+                  <option value="employee">Employee</option>
+                  <option value="contractor">Contractor</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="departmentSelect">Department</label>
+                <select class="text-input" name="department" id="departmentSelect">
+                  <option value="">Select department</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="jobTitleSelect">Job Title</label>
+                <select class="text-input" name="job_title" id="jobTitleSelect">
+                  <option value="">Select job title</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="managerField">Manager</label>
+                <input class="text-input" id="managerField" name="manager" />
+              </div>
+              <div>
+                <label class="field-label" for="statusField">Status</label>
+                <input class="text-input" id="statusField" name="status" />
+              </div>
+              <div>
+                <label class="field-label" for="startDateField">Start Date</label>
+                <input class="text-input" id="startDateField" name="start_date" type="date" />
+              </div>
+              <div class="full form-divider"><span>Personal</span></div>
+              <div>
+                <label class="field-label" for="firstNameField">First Name</label>
+                <input class="text-input" id="firstNameField" name="first_name" required />
+              </div>
+              <div>
+                <label class="field-label" for="lastNameField">Last Name</label>
+                <input class="text-input" id="lastNameField" name="last_name" required />
+              </div>
+              <div>
+                <label class="field-label" for="phoneField">Phone</label>
+                <input class="text-input" id="phoneField" name="phone" />
+              </div>
+              <div class="full form-divider"><span>Contact</span></div>
+              <div>
+                <label class="field-label" for="cityField">City</label>
+                <input class="text-input" id="cityField" name="city" />
+              </div>
+              <div>
+                <label class="field-label" for="stateField">State</label>
+                <input class="text-input" id="stateField" name="state" />
+              </div>
+              <div>
+                <label class="field-label" for="countryField">Country</label>
+                <input class="text-input" id="countryField" name="country" />
+              </div>
+              <details class="full profile-more">
+                <summary>More personal and address details</summary>
+                <div class="profile-more-grid">
+                  <div>
+                    <label class="field-label" for="middleNameField">Middle Name</label>
+                    <input class="text-input" id="middleNameField" name="middle_name" />
+                  </div>
+                  <div>
+                    <label class="field-label" for="dobField">Date of Birth</label>
+                    <input class="text-input" id="dobField" name="dob" type="date" />
+                  </div>
+                  <div>
+                    <label class="field-label" for="govIdField">Government ID</label>
+                    <input class="text-input" id="govIdField" name="gov_id" />
+                  </div>
+                  <div>
+                    <label class="field-label" for="streetField">Street</label>
+                    <input class="text-input" id="streetField" name="street" />
+                  </div>
+                  <div>
+                    <label class="field-label" for="postalCodeField">Postal Code</label>
+                    <input class="text-input" id="postalCodeField" name="postal_code" />
+                  </div>
+                </div>
+              </details>
+              <div class="full title-admin-box" id="titleAdminBox">
+                <label class="muted" style="display:block; margin-bottom:6px;">Add job title to selected department</label>
+                <div class="actions" style="margin-top:0;">
+                  <input class="text-input" id="newJobTitleInput" placeholder="e.g. Senior Software Engineer" style="max-width:360px;" />
+                  <button type="button" class="doc-btn" id="createJobTitleBtn">Add Title</button>
+                  <span id="titleCreateState" class="muted"></span>
+                </div>
+              </div>
+              <div class="full actions">
+                <button type="submit" id="saveBtn" class="submit-button" style="padding:10px 16px;">Save Changes</button>
+                <span id="saveState" class="muted"></span>
+              </div>
+            </form>
+          </aside>
+
+        <section class="right-workspace">
+          <div class="tabs">
+            <button type="button" class="tab-btn active" data-tab="documents">Documents</button>
+            <button type="button" class="tab-btn" data-tab="tasks">Tasks</button>
+            <button type="button" class="tab-btn" data-tab="overview">Overview</button>
+          </div>
+
+          <section class="tab-pane active" data-tab-pane="documents">
+            <section class="card">
+              <div class="pane-head">
+                <div>
+                  <h3 class="title">Documents</h3>
+                  <p class="pane-subtitle">Review file status, open files, and re-evaluate decisions when needed.</p>
+                </div>
+              </div>
+              <ul id="docsList" class="list pretty-list" style="margin-top:8px;"></ul>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-pane="tasks">
+            <section class="card">
+              <div class="pane-head">
+                <div>
+                  <h3 class="title">Tasks</h3>
+                  <p class="pane-subtitle">Current onboarding tasks and completion state.</p>
+                </div>
+              </div>
+              <ul id="tasksList" class="list pretty-list" style="margin-top:8px;"></ul>
+            </section>
+          </section>
+
+          <section class="tab-pane" data-tab-pane="overview">
+            <section class="card">
+              <div class="pane-head">
+                <div>
+                  <h3 class="title">Overview</h3>
+                  <p class="pane-subtitle">Snapshot of policy acknowledgments, training progress, and IT provisioning.</p>
+                </div>
+              </div>
+              <ul id="extraList" class="list pretty-list" style="margin-top:8px;"></ul>
+            </section>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
+      const alertEl = document.getElementById("alert");
+      const hireForm = document.getElementById("hireForm");
+      const saveBtn = document.getElementById("saveBtn");
+      const saveState = document.getElementById("saveState");
+      const docsList = document.getElementById("docsList");
+      const tasksList = document.getElementById("tasksList");
+      const extraList = document.getElementById("extraList");
+      const kpis = document.getElementById("kpis");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+      const menuProfile = document.getElementById("menuProfile");
+      const menuRegisterHire = document.getElementById("menuRegisterHire");
+      const sideAvatarEl = document.getElementById("sideAvatar");
+      const sideNameEl = document.getElementById("sideName");
+      const sideMetaEl = document.getElementById("sideMeta");
+      const departmentSelect = document.getElementById("departmentSelect");
+      const jobTitleSelect = document.getElementById("jobTitleSelect");
+      const titleAdminBox = document.getElementById("titleAdminBox");
+      const createJobTitleBtn = document.getElementById("createJobTitleBtn");
+      const newJobTitleInput = document.getElementById("newJobTitleInput");
+      const titleCreateState = document.getElementById("titleCreateState");
+      const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+      const tabPanes = Array.from(document.querySelectorAll(".tab-pane"));
+      const docTypeLabels = {
+        official_id: "Official Identification",
+        w9_hacienda: "W-9 / Withholding tax form (Hacienda)",
+        merchant_registry: "Registro de Comerciante (Dept. de Hacienda)",
+        asume_certificate: "ASUME certificate",
+        background_check: "Criminal Background Check",
+        tax_filing_cert: "Certificacion de Radicacion de Planillas",
+        bank_certification: "Bank Account Certification",
+        resume: "Resume",
+        cert_evidence: "Evidence of Certifications",
+        signed_contract: "Signed Contract",
+        crim_compliance: "CRIM Compliance Certification",
+        comptroller_registry: "Comptroller Contractor Registry",
+        policy_ack: "Policy Acknowledgment"
+      };
+
+      let csrfToken = null;
+      let hireId = "";
+      let sessionRole = "";
+      let canReviewDocs = false;
+      let orgDepartments = [];
+
+      function setActiveTab(tab) {
+        tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
+        tabPanes.forEach((pane) => pane.classList.toggle("active", pane.dataset.tabPane === tab));
+      }
+
+      function docActions(d) {
+        if (!canReviewDocs) return "";
+        const status = (d.status || "pending_review").toLowerCase();
+        if (status === "pending_review") {
+          return `
+            <button class="doc-btn approve" data-doc-id="${d.id}" data-doc-status="approved">Approve</button>
+            <button class="doc-btn reject" data-doc-id="${d.id}" data-doc-status="rejected">Reject</button>
+          `;
+        }
+        if (status === "rejected") {
+          return `<button class="doc-btn" data-doc-id="${d.id}" data-doc-status="pending_review">Re-open Review</button>`;
+        }
+        if (status === "approved") {
+          return `<button class="doc-btn" data-doc-id="${d.id}" data-doc-status="pending_review">Re-evaluate</button>`;
+        }
+        return "";
+      }
+
+      function showAlert(msg, isError=false) {
+        alertEl.textContent = msg;
+        alertEl.className = isError ? "err" : "ok";
+        alertEl.style.display = "block";
+      }
+
+      function badge(status) {
+        const s = (status || "pending").toLowerCase();
+        const bg = s === "approved" || s === "completed" ? "#d1fae5" : s === "rejected" || s === "blocked" ? "#fee2e2" : s === "in_progress" || s === "pending_review" ? "#fef3c7" : "#e5e7eb";
+        const fg = s === "approved" || s === "completed" ? "#065f46" : s === "rejected" || s === "blocked" ? "#991b1b" : s === "in_progress" || s === "pending_review" ? "#92400e" : "#334155";
+        return `<span class="badge" style="background:${bg}; color:${fg};">${s.replace(/_/g, " ")}</span>`;
+      }
+
+      function setDepartmentOptions(selectedDepartment = "") {
+        const previous = selectedDepartment || departmentSelect.value || "";
+        const options = ['<option value="">Select department</option>']
+          .concat(
+            orgDepartments.map((d) => {
+              const selected = (d.name || "").toLowerCase() === previous.toLowerCase() ? "selected" : "";
+              return `<option value="${d.name}" data-department-id="${d.id}" ${selected}>${d.name}</option>`;
+            })
+          );
+        departmentSelect.innerHTML = options.join("");
+      }
+
+      function setJobTitleOptions(selectedTitle = "") {
+        const depName = departmentSelect.value || "";
+        const dep = orgDepartments.find((d) => (d.name || "").toLowerCase() === depName.toLowerCase());
+        const titles = dep?.job_titles || [];
+        const current = selectedTitle || jobTitleSelect.value || "";
+        const options = ['<option value="">Select job title</option>']
+          .concat(
+            titles.map((t) => {
+              const selected = (t.name || "").toLowerCase() === current.toLowerCase() ? "selected" : "";
+              return `<option value="${t.name}" ${selected}>${t.name}</option>`;
+            })
+          );
+        jobTitleSelect.innerHTML = options.join("");
+      }
+
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const res = await fetch('/api/csrf');
+        if (!res.ok) throw new Error('Session expired. Please log in again.');
+        const data = await res.json();
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      async function fetchJson(url, options) {
+        const opts = options ? { ...options } : {};
+        if (opts.method && opts.method.toUpperCase() !== 'GET') {
+          const token = await ensureCsrf();
+          opts.headers = { ...(opts.headers || {}), 'X-CSRF-Token': token };
+        }
+        const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      function populateForm(h) {
+        const fields = ["first_name","middle_name","last_name","phone","dob","start_date","gov_id","street","city","state","postal_code","country","employment_type","manager","status"];
+        fields.forEach((f) => {
+          if (hireForm.elements[f]) hireForm.elements[f].value = h[f] || "";
+        });
+        setDepartmentOptions(h.department || "");
+        setJobTitleOptions(h.job_title || "");
+      }
+
+      function renderHire(h) {
+        const displayName = `${h.first_name || ""} ${h.last_name || ""}`.trim() || h.email || 'Hire Profile';
+        if (h.avatar_url) {
+          sideAvatarEl.innerHTML = `<img src="${h.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;" />`;
+        } else {
+          const initial = (h.first_name || h.email || 'H').slice(0,1).toUpperCase();
+          sideAvatarEl.textContent = initial;
+        }
+        sideNameEl.textContent = displayName;
+        sideMetaEl.textContent = `${h.email || "--"} • ${h.department || "No department"} • ${h.employment_type || "employee"}`;
+
+        const p = h.progress || {};
+        const docs = p.documents || { approved: 0, total: 0 };
+        const tasks = p.tasks || { completed: 0, total: 0 };
+        kpis.innerHTML = `
+          <div class="kpi">Stage: <strong>${p.stage || 'Pending'}</strong></div>
+          <div class="kpi">Progress: <strong>${p.progress_percent || 0}%</strong></div>
+          <div class="kpi">Docs: <strong>${docs.approved}/${docs.total}</strong></div>
+          <div class="kpi">Tasks: <strong>${tasks.completed}/${tasks.total}</strong></div>
+        `;
+
+        const docsArr = h.documents || [];
+        docsList.innerHTML = docsArr.length ? docsArr.map((d) => `
+          <li>
+            <div class="doc-item-head">
+              <div>
+                <strong>${docTypeLabels[d.doc_type] || d.doc_type || 'Document'}</strong>
+                <div class="doc-meta">${d.original_name || ''}</div>
+              </div>
+              ${badge(d.status || 'pending_review')}
+            </div>
+            <div class="actions">
+              ${d.view_url ? `<a class="doc-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ''}
+              ${d.download_url ? `<a class="doc-btn" href="${d.download_url}">Download</a>` : ''}
+              ${docActions(d)}
+            </div>
+          </li>
+        `).join('') : '<li>No documents uploaded.</li>';
+
+        const tasksArr = h.tasks || [];
+        tasksList.innerHTML = tasksArr.length ? tasksArr.map((t) => `
+          <li>
+            <div><strong>${t.title || 'Untitled task'}</strong><br/><small>${t.description || ''}</small></div>
+            <div class="actions">${badge(t.status || 'pending')}</div>
+          </li>
+        `).join('') : '<li>No tasks assigned.</li>';
+
+        const policies = (h.policies || []).length;
+        const trainings = (h.trainings || []).length;
+        const itp = (h.it_provisions || []).length;
+        extraList.innerHTML = `
+          <li><div>Policy signatures</div><div class="actions"><span class="badge">${policies}</span></div></li>
+          <li><div>Training completions</div><div class="actions"><span class="badge">${trainings}</span></div></li>
+          <li><div>IT provisions</div><div class="actions"><span class="badge">${itp}</span></div></li>
+        `;
+      }
+
+      async function loadHire() {
+        const h = await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`);
+        if (!orgDepartments.length) {
+          const org = await fetchJson("/api/org/structure");
+          orgDepartments = org.departments || [];
+        }
+        populateForm(h);
+        renderHire(h);
+      }
+
+      async function bootstrap() {
+        const params = new URLSearchParams(window.location.search);
+        hireId = params.get('hire_id') || '';
+        if (!hireId) {
+          showAlert('Missing hire_id in URL.', true);
+          return;
+        }
+
+        try {
+          const session = await fetchJson('/api/session');
+          sessionRole = (session.role || '').toLowerCase();
+          const sessionEmail = (session.email || "").toLowerCase();
+          if (!ADMIN_ROLES.includes(sessionRole)) {
+            window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
+            return;
+          }
+          canReviewDocs = ["hr", "compliance"].includes(sessionRole);
+          menuProfile.href = sessionEmail ? `/profile.html?email=${encodeURIComponent(sessionEmail)}` : "/profile.html";
+          menuRegisterHire.style.display = sessionRole === "hr" || sessionRole === "manager" ? "block" : "none";
+          if (!orgDepartments.length) {
+            const org = await fetchJson("/api/org/structure");
+            orgDepartments = org.departments || [];
+          }
+
+          const canEdit = sessionRole === 'hr';
+          Array.from(hireForm.elements).forEach((el) => {
+            if (el.name && el.name !== '') el.disabled = !canEdit;
+          });
+          saveBtn.style.display = canEdit ? 'inline-flex' : 'none';
+          saveState.textContent = canEdit ? '' : 'Read-only: only HR can edit hire information.';
+          titleAdminBox.style.display = canEdit ? "block" : "none";
+
+          await loadHire();
+        } catch (err) {
+          showAlert(err.message || 'Unable to load hire profile.', true);
+        }
+      }
+
+      hireForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveState.textContent = '';
+        try {
+          await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`, {
+            method: 'POST',
+            body: new URLSearchParams(new FormData(hireForm)),
+          });
+          saveState.textContent = 'Saved.';
+          await loadHire();
+        } catch (err) {
+          saveState.textContent = err.message;
+        }
+      });
+
+      departmentSelect.addEventListener("change", () => {
+        setJobTitleOptions("");
+      });
+
+      createJobTitleBtn.addEventListener("click", async () => {
+        titleCreateState.textContent = "";
+        const department = (departmentSelect.value || "").trim();
+        const title = (newJobTitleInput.value || "").trim();
+        if (!department) {
+          titleCreateState.textContent = "Select a department first.";
+          return;
+        }
+        if (!title) {
+          titleCreateState.textContent = "Enter a job title.";
+          return;
+        }
+        try {
+          const payload = new URLSearchParams({ department, title });
+          const data = await fetchJson("/api/org/job-titles", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: payload,
+          });
+          orgDepartments = data.departments || [];
+          setDepartmentOptions(department);
+          setJobTitleOptions(title);
+          newJobTitleInput.value = "";
+          titleCreateState.textContent = "Added.";
+        } catch (err) {
+          titleCreateState.textContent = err.message || "Failed to add title.";
+        }
+      });
+
+      docsList.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-doc-id]');
+        if (!btn) return;
+        const id = btn.dataset.docId;
+        const status = btn.dataset.docStatus;
+        try {
+          await fetchJson(`/documents/${id}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ status }),
+          });
+          await loadHire();
+        } catch (err) {
+          showAlert(err.message, true);
+        }
+      });
+
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      tabButtons.forEach((btn) => {
+        btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) {
+          menuPanel.classList.remove("open");
+        }
+      });
+
+      bootstrap();
+    </script>
+  </body>
+</html>

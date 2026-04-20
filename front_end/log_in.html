@@ -65,6 +65,12 @@
         const error = params.get("error");
         const reset = params.get("reset");
         if (!alertEl) return;
+        const form = document.querySelector("form.login-form");
+        if (form) {
+          form.addEventListener("submit", () => {
+            try { sessionStorage.setItem("paoli_login_success_pending", "1"); } catch (_) {}
+          });
+        }
         if (error === "invalid_credentials") {
           alertEl.textContent = "Invalid username or password. Please try again.";
           alertEl.className = "login-alert login-alert-error";

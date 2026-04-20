@@ -68,12 +68,31 @@ python app.py
 
 **Database**
 
-Import SQL scripts from data_store/ into your SQL engine.
+The canonical schema is at `backend/sql/schema.sql`.
+
+You can initialize manually:
+
+```bash
+mysql -u root -p palogroup < backend/sql/schema.sql
+```
+
+Or let the app auto-initialize missing tables on startup (default behavior).  
+To disable auto-initialization:
+
+```bash
+export DB_AUTO_INIT=false
+
+After importing or upgrading older DB snapshots, run hardening migration:
+
+```sql
+USE palogroup;
+-- Open and execute:
+-- backend/sql/migrations/20260418_schema_hardening.sql
+```
+```
 
 **Frontend**
 
 cd front_end
 python -m http.server 8000
-
-
 

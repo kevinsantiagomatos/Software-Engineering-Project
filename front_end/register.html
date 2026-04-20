@@ -238,11 +238,12 @@
                 <label for="department">Department</label>
                 <select id="department" name="department" class="text-input">
                   <option value="">Select department</option>
-                  <option value="operations">Operations</option>
-                  <option value="hr">HR</option>
-                  <option value="it">IT</option>
-                  <option value="compliance">Compliance</option>
-                  <option value="management">Management</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="job_title">Job Title</label>
+                <select id="job_title" name="job_title" class="text-input">
+                  <option value="">Select job title</option>
                 </select>
               </div>
               <div class="field">
@@ -304,6 +305,8 @@
       const submitBtn = document.getElementById("submitBtn");
       const submitState = document.getElementById("submitState");
       const nextLinks = document.getElementById("nextLinks");
+      const departmentSelect = document.getElementById("department");
+      const jobTitleSelect = document.getElementById("job_title");
 
       const passwordInput = document.getElementById("password");
       const confirmInput = document.getElementById("confirm_password");
@@ -311,6 +314,7 @@
       const checkMatch = document.getElementById("checkMatch");
       const togglePw = document.getElementById("togglePw");
       const toggleConfirm = document.getElementById("toggleConfirm");
+      let orgDepartments = [];
 
       function show(el, message) {
         el.textContent = message;
@@ -349,11 +353,49 @@
         button.textContent = isPassword ? "Hide" : "Show";
       }
 
+      function setDepartmentOptions(selectedDepartment = "") {
+        const selectedLower = (selectedDepartment || departmentSelect.value || "").toLowerCase();
+        const options = ['<option value="">Select department</option>']
+          .concat(
+            orgDepartments.map((d) => {
+              const selected = (d.name || "").toLowerCase() === selectedLower ? "selected" : "";
+              return `<option value="${d.name}" ${selected}>${d.name}</option>`;
+            })
+          );
+        departmentSelect.innerHTML = options.join("");
+      }
+
+      function setJobTitleOptions(selectedTitle = "") {
+        const depName = (departmentSelect.value || "").toLowerCase();
+        const dep = orgDepartments.find((d) => (d.name || "").toLowerCase() === depName);
+        const titles = dep?.job_titles || [];
+        const selectedLower = (selectedTitle || jobTitleSelect.value || "").toLowerCase();
+        const options = ['<option value="">Select job title</option>']
+          .concat(
+            titles.map((t) => {
+              const selected = (t.name || "").toLowerCase() === selectedLower ? "selected" : "";
+              return `<option value="${t.name}" ${selected}>${t.name}</option>`;
+            })
+          );
+        jobTitleSelect.innerHTML = options.join("");
+      }
+
+      async function loadOrgStructure() {
+        const res = await fetch("/api/org/structure");
+        if (!res.ok) return;
+        const data = await res.json();
+        orgDepartments = data.departments || [];
+        setDepartmentOptions("");
+        setJobTitleOptions("");
+      }
+
       togglePw.addEventListener("click", () => toggleVisibility(passwordInput, togglePw));
       toggleConfirm.addEventListener("click", () => toggleVisibility(confirmInput, toggleConfirm));
       passwordInput.addEventListener("input", updatePasswordChecks);
       confirmInput.addEventListener("input", updatePasswordChecks);
+      departmentSelect.addEventListener("change", () => setJobTitleOptions(""));
       updatePasswordChecks();
+      loadOrgStructure();
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();

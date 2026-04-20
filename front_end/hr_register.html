@@ -9,7 +9,7 @@
       body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
       .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
       .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-size:28px; color:#fff; overflow:hidden; }
-      .container { max-width: 1100px; margin: -32px auto 32px auto; padding: 0 16px; }
+      .container { max-width: 1100px; margin: 24px auto 32px auto; padding: 0 16px; }
       .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
       .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
       label { font-weight:600; font-size:0.95rem; color:#0f172a; }
@@ -26,6 +26,18 @@
       .wizard-actions { display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap; }
       .secondary-button { border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:12px; padding:11px 16px; cursor:pointer; font-weight:600; }
       .secondary-button:disabled { opacity:0.5; cursor:not-allowed; }
+      .menu-wrap { margin-left:auto; position:relative; }
+      .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.25); }
+      .menu-panel {
+        position:absolute; right:0; top:calc(100% + 8px); min-width:220px;
+        background:#fff; border:1px solid #dbe1ef; border-radius:12px; box-shadow:0 12px 30px rgba(2,6,23,0.22);
+        display:none; z-index:50; padding:6px;
+      }
+      .menu-panel.open { display:block; }
+      .menu-link {
+        display:block; padding:10px 12px; color:#0f172a; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.92rem;
+      }
+      .menu-link:hover { background:#eff6ff; color:#123093; }
       #submitBtn { display:none; }
       @media (max-width: 760px) {
         .stepper { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
@@ -39,9 +51,15 @@
         <div style="font-weight:700; font-size:1.1rem;" id="fullName">Register New Hire</div>
         <div style="font-size:0.95rem; color:#d7e4ff;">Digitally register with personal, contact, employment, and compliance attachments.</div>
       </div>
-      <div style="margin-left:auto; display:flex; gap:10px;">
-        <a class="forgot-link" href="/dashboard.html" style="color:#d7e4ff;">Dashboard</a>
-        <a class="forgot-link" href="/admin_panel.html" style="color:#d7e4ff;">HR Panel</a>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel">
+          <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
+          <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+          <a class="menu-link" href="/dashboard.html">Employee View</a>
+          <a class="menu-link" href="/profile.html">My Profile</a>
+          <a class="menu-link" href="/log_in.html">Log Out</a>
+        </div>
       </div>
     </header>
 
@@ -105,21 +123,30 @@
                 <option value="employee">Employee</option>
                 <option value="contractor">Contractor</option>
               </select>
-              <input type="hidden" name="role" id="roleField" value="employee" />
+              <input type="hidden" name="employment_type" id="employmentTypeField" value="employee" />
             </div>
             <div><label>Start Date</label><input class="text-input" name="start_date" type="date" /></div>
             <div>
               <label>Department</label>
-              <select class="text-input" name="department">
+              <select class="text-input" name="department" id="departmentSelect" required>
                 <option value="">Select department</option>
-                <option value="operations">Operations</option>
-                <option value="hr">HR</option>
-                <option value="it">IT</option>
-                <option value="compliance">Compliance</option>
-                <option value="management">Management</option>
+              </select>
+            </div>
+            <div>
+              <label>Job Title</label>
+              <select class="text-input" name="job_title" id="jobTitleSelect" required>
+                <option value="">Select job title</option>
               </select>
             </div>
             <div><label>Supervisor</label><input class="text-input" name="manager" /></div>
+            <div>
+              <label>Add Job Title To Selected Department</label>
+              <div class="wizard-actions" style="margin-top:6px;">
+                <input class="text-input" id="newJobTitleInput" placeholder="e.g. Software Engineer II" style="max-width:280px;" />
+                <button type="button" id="addJobTitleBtn" class="secondary-button">Add</button>
+              </div>
+              <div id="jobTitleState" class="muted" style="margin-top:6px;"></div>
+            </div>
           </div>
         </section>
 
@@ -163,21 +190,33 @@
       const form = document.getElementById("hireForm");
       const statusEl = document.getElementById("status");
       const employmentTypeEl = document.getElementById("employmentType");
-      const roleFieldEl = document.getElementById("roleField");
+      const employmentTypeFieldEl = document.getElementById("employmentTypeField");
+      const departmentSelect = document.getElementById("departmentSelect");
+      const jobTitleSelect = document.getElementById("jobTitleSelect");
+      const newJobTitleInput = document.getElementById("newJobTitleInput");
+      const addJobTitleBtn = document.getElementById("addJobTitleBtn");
+      const jobTitleState = document.getElementById("jobTitleState");
       const stepPills = [...document.querySelectorAll(".step-pill")];
       const steps = [...document.querySelectorAll(".form-step")];
       const prevBtn = document.getElementById("prevBtn");
       const nextBtn = document.getElementById("nextBtn");
       const submitBtn = document.getElementById("submitBtn");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
       let csrfToken = null;
       let currentStep = 0;
+      let orgDepartments = [];
 
       function syncRoleFromEmploymentType() {
-        roleFieldEl.value = employmentTypeEl.value || "employee";
+        employmentTypeFieldEl.value = employmentTypeEl.value || "employee";
       }
 
       async function fetchJson(url, options) {
         const res = await fetch(url, options);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       }
@@ -189,6 +228,40 @@
         const data = await res.json();
         csrfToken = data.csrf_token;
         return csrfToken;
+      }
+
+      function setDepartmentOptions(selectedDepartment = "") {
+        const selectedLower = (selectedDepartment || departmentSelect.value || "").toLowerCase();
+        const options = ['<option value="">Select department</option>']
+          .concat(
+            orgDepartments.map((d) => {
+              const selected = (d.name || "").toLowerCase() === selectedLower ? "selected" : "";
+              return `<option value="${d.name}" ${selected}>${d.name}</option>`;
+            })
+          );
+        departmentSelect.innerHTML = options.join("");
+      }
+
+      function setJobTitleOptions(selectedTitle = "") {
+        const depName = (departmentSelect.value || "").toLowerCase();
+        const dep = orgDepartments.find((d) => (d.name || "").toLowerCase() === depName);
+        const titles = dep?.job_titles || [];
+        const selectedLower = (selectedTitle || jobTitleSelect.value || "").toLowerCase();
+        const options = ['<option value="">Select job title</option>']
+          .concat(
+            titles.map((t) => {
+              const selected = (t.name || "").toLowerCase() === selectedLower ? "selected" : "";
+              return `<option value="${t.name}" ${selected}>${t.name}</option>`;
+            })
+          );
+        jobTitleSelect.innerHTML = options.join("");
+      }
+
+      async function loadOrgStructure() {
+        const data = await fetchJson("/api/org/structure");
+        orgDepartments = data.departments || [];
+        setDepartmentOptions("");
+        setJobTitleOptions("");
       }
 
       function getStepFields(stepIndex) {
@@ -262,13 +335,61 @@
           form.reset();
           setStep(0);
           syncRoleFromEmploymentType();
+          setDepartmentOptions("");
+          setJobTitleOptions("");
         } catch (err) {
           statusEl.textContent = err.message || "Failed to register.";
         }
       });
 
+      departmentSelect.addEventListener("change", () => setJobTitleOptions(""));
+      addJobTitleBtn.addEventListener("click", async () => {
+        jobTitleState.textContent = "";
+        const department = (departmentSelect.value || "").trim();
+        const title = (newJobTitleInput.value || "").trim();
+        if (!department) {
+          jobTitleState.textContent = "Select a department first.";
+          return;
+        }
+        if (!title) {
+          jobTitleState.textContent = "Enter a job title.";
+          return;
+        }
+        try {
+          const token = await ensureCsrf();
+          const data = await fetchJson("/api/org/job-titles", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRF-Token": token,
+            },
+            body: new URLSearchParams({ department, title }),
+          });
+          orgDepartments = data.departments || [];
+          setDepartmentOptions(department);
+          setJobTitleOptions(title);
+          newJobTitleInput.value = "";
+          jobTitleState.textContent = "Job title added.";
+        } catch (err) {
+          jobTitleState.textContent = err.message || "Unable to add job title.";
+        }
+      });
+
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) {
+          menuPanel.classList.remove("open");
+        }
+      });
+
       employmentTypeEl.addEventListener("change", syncRoleFromEmploymentType);
       syncRoleFromEmploymentType();
+      loadOrgStructure().catch(() => {
+        statusEl.textContent = "Unable to load departments/job titles.";
+      });
       setStep(0);
     </script>
   </body>

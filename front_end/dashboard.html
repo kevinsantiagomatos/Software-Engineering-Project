@@ -57,6 +57,16 @@
       details .details-body { list-style:none; margin:0; padding:0; }
       .doc-row { padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; align-items:center; }
       .doc-updated { color:#94a3b8; font-size:12px; }
+      .page-alert {
+        display:none;
+        margin-bottom:12px;
+        padding:10px 12px;
+        border-radius:10px;
+        border:1px solid #bae6cb;
+        background:#e8f8ef;
+        color:#146f3d;
+        font-weight:600;
+      }
       .action-btn {
         display:inline-flex;
         align-items:center;
@@ -122,7 +132,8 @@
     </header>
 
     <div class="container">
-      <div class="card" style="margin-bottom:20px;">
+      <div id="pageAlert" class="page-alert"></div>
+      <div class="card" id="loadCard" style="margin-bottom:20px;">
         <div class="controls" id="emailControls">
           <input id="email" class="text-input" type="email" placeholder="Your email" />
           <button id="load" class="submit-button" style="padding:10px 16px;">Load</button>
@@ -197,11 +208,14 @@
       const fullNameEl = document.getElementById("fullName");
       const joinInfoEl = document.getElementById("joinInfo");
       const avatarEl = document.getElementById("avatar");
+      const pageAlert = document.getElementById("pageAlert");
+      const loadCard = document.getElementById("loadCard");
       const emailControls = document.getElementById("emailControls");
       const menuBtn = document.getElementById("menuBtn");
       const menu = document.getElementById("menu");
       let currentEmail = "";
       let currentRole = null; // viewer's role; set once from their own account
+      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
       const directorySection = document.getElementById("directorySection");
       const userList = document.getElementById("userList");
       const hireList = document.getElementById("hireList");
@@ -342,7 +356,7 @@
           const name = `${h.first_name || ""} ${h.last_name || ""}`.toLowerCase();
           const email = (h.email || "").toLowerCase();
           const dept = (h.department || "").toLowerCase();
-          const role = (h.employment?.role || h.role || "").toLowerCase();
+          const role = (h.employment_type || "").toLowerCase();
           return name.includes(query) || email.includes(query) || dept.includes(query) || role.includes(query);
         });
 
@@ -401,7 +415,8 @@
             const st = statuses[item.key] || "pending";
             const iconBg = st === "completed" ? "#d1fae5" : st === "in_progress" ? "#fef9c3" : "#e5e7eb";
             const note = st === "completed" ? "Completed" : st === "in_progress" ? "Action in progress" : "Pending next step";
-            const linkStart = item.href && (st === "in_progress" || st === "pending") ? `<a class="step-link" href="${item.href}${currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : ""}">` : "";
+            const isAlwaysClickable = item.key === "documents";
+            const linkStart = item.href && (isAlwaysClickable || st === "in_progress" || st === "pending") ? `<a class="step-link" href="${item.href}${currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : ""}">` : "";
             const linkEnd = linkStart ? "</a>" : "";
             return `
               ${linkStart}<div class="step step-${st}">
@@ -487,6 +502,10 @@
 
       async function fetchJson(url) {
         const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
         if (!res.ok) throw new Error(await res.text());
         const contentType = (res.headers.get("content-type") || "").toLowerCase();
         if (!contentType.includes("application/json")) {
@@ -507,10 +526,9 @@
         const emailParam = currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : "";
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/upload_documents.html${emailParam}">Upload documents</a>`);
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/profile.html${emailParam}">My profile</a>`);
-        const adminRoles = ["hr", "compliance", "it", "manager"];
         const role = currentRole || "employee";
-        if (adminRoles.includes(role)) {
-          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html?role=${encodeURIComponent(role)}">Admin panel</a>`);
+        if (ADMIN_ROLES.includes(role)) {
+          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html">Admin panel</a>`);
           items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/hr_register.html">Register new hire</a>`);
         }
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/policy_sign.html${emailParam}">Policy sign</a>`);
@@ -530,17 +548,55 @@
 
       function prefillFromQuery() {
         const params = new URLSearchParams(window.location.search);
+        const loginByQuery = params.get("login") === "success";
+        const loginByReferrer = (document.referrer || "").includes("/log_in.html");
+        const loginBySessionFlag = (() => {
+          try {
+            return sessionStorage.getItem("paoli_login_success_pending") === "1";
+          } catch (_) {
+            return false;
+          }
+        })();
+        if (loginByQuery || loginByReferrer || loginBySessionFlag) {
+          pageAlert.textContent = "Login successful.";
+          pageAlert.style.display = "block";
+          try { sessionStorage.removeItem("paoli_login_success_pending"); } catch (_) {}
+          params.delete("login");
+          const cleaned = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, "");
+          window.history.replaceState({}, "", cleaned);
+          setTimeout(() => {
+            pageAlert.style.display = "none";
+          }, 3000);
+        }
         const email = params.get("email") || localStorage.getItem("paoli_email");
         if (email) {
           emailInput.value = email;
-          emailControls.style.display = "none";
+          if (loadCard) loadCard.style.display = "none";
           loadData();
         } else {
+          if (loadCard) loadCard.style.display = "block";
           emailControls.style.display = "flex";
         }
       }
 
-      prefillFromQuery();
+      async function enforceEmployeeDashboard() {
+        try {
+          const s = await fetchJson("/api/session");
+          const role = (s.role || "").toLowerCase();
+          if (ADMIN_ROLES.includes(role)) {
+            window.location.replace("/admin_panel.html");
+            return false;
+          }
+        } catch (_) {
+          // If session call fails, keep current behavior and let page handle auth errors.
+        }
+        return true;
+      }
+
+      (async () => {
+        const ok = await enforceEmployeeDashboard();
+        if (ok) prefillFromQuery();
+      })();
     </script>
   </body>
 </html>

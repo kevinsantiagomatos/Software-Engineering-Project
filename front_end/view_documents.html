@@ -56,6 +56,10 @@
 
       async function fetchJson(url) {
         const res = await fetch(url);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       }

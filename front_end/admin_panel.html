@@ -3,98 +3,219 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Review | Paoli</title>
+    <title>Admin Dashboard | Paoli</title>
     <link rel="stylesheet" href="/style/log_in.css" />
     <style>
-      .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
-      .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-      .card { background:#fff; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,0.08); padding:16px 20px; }
+      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
+      .avatar { width:56px; height:56px; border-radius:14px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.2rem; color:#fff; }
+      .container { max-width: 1180px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
+      .grid { display:grid; gap:16px; grid-template-columns: 1.25fr 1fr; }
+      .stack { display:grid; gap:16px; }
+      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; min-width:0; }
+      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .text-input { width:100%; }
       .list { list-style:none; padding:0; margin:0; }
-      .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; }
-      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
-      .text-input { width: 100%; }
-      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; background:#e5e7eb; color:#111827; }
+      .list li { padding:12px 0; border-bottom:1px solid #e5e7eb; }
+      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.82rem; background:#e5e7eb; color:#111827; }
+      .badge.badge-admin { background:#dbeafe; color:#1d4ed8; }
+      .badge.badge-progress { background:#eff6ff; color:#1e3a8a; }
+      .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .doc-btn {
+        display:inline-flex; align-items:center; justify-content:center;
+        border:1px solid #cbd5e1; border-radius:10px; padding:8px 12px;
+        background:#fff; color:#0f172a; text-decoration:none; font-size:0.9rem; line-height:1; cursor:pointer;
+      }
+      .doc-btn:hover { background:#f8fafc; border-color:#94a3b8; }
+      .doc-btn.approve { background:#166534; border-color:#166534; color:#fff; }
+      .doc-btn.approve:hover { background:#14532d; border-color:#14532d; }
+      .doc-btn.reject { background:#b91c1c; border-color:#b91c1c; color:#fff; }
+      .doc-btn.reject:hover { background:#991b1b; border-color:#991b1b; }
       .link-btn {
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        padding:8px 12px;
-        border-radius:10px;
-        border:1px solid #cdd9ef;
-        background:#f8fbff;
-        color:#0f2f93;
-        text-decoration:none;
-        font-size:0.86rem;
-        font-weight:600;
+        display:inline-flex; align-items:center; justify-content:center;
+        padding:8px 12px; border-radius:10px; border:1px solid #cdd9ef;
+        background:#f8fbff; color:#0f2f93; text-decoration:none;
+        font-size:0.86rem; font-weight:600;
+      }
+      .muted { color:#64748b; font-size:0.92rem; }
+      .panel-title { margin:0; font-size:1.1rem; }
+      .panel-subtitle { margin:6px 0 0; color:#64748b; font-size:0.92rem; }
+      .kpi-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+      .kpi-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:0.86rem; color:#334155; }
+      .hire-avatar {
+        width:42px; height:42px; border-radius:12px; background:#1f2b58; color:#fff;
+        display:flex; align-items:center; justify-content:center; font-weight:700;
+        overflow:hidden; flex-shrink:0; text-decoration:none;
+      }
+      .hire-item-link {
+        display:block; text-decoration:none; color:inherit; border:1px solid #e2e8f0; border-radius:12px; padding:12px;
+        background:#fbfdff; transition:all .15s ease;
+      }
+      .hire-item-link:hover {
+        border-color:#cdd9ef; background:#f6f9ff; box-shadow:0 6px 16px rgba(15, 23, 42, 0.08);
+      }
+      .stage-chip { font-weight:700; }
+      .stage-account { background:#dbeafe; border-color:#bfdbfe; color:#1e40af; }
+      .stage-documents { background:#fef3c7; border-color:#fde68a; color:#92400e; }
+      .stage-workflow { background:#e0e7ff; border-color:#c7d2fe; color:#3730a3; }
+      .stage-complete { background:#dcfce7; border-color:#bbf7d0; color:#166534; }
+      .progress-low { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+      .progress-mid { background:#fef3c7; border-color:#fde68a; color:#92400e; }
+      .progress-high { background:#d1fae5; border-color:#a7f3d0; color:#065f46; }
+      .docs-good, .tasks-good { background:#dcfce7; border-color:#bbf7d0; color:#166534; }
+      .docs-warn, .tasks-warn { background:#fef3c7; border-color:#fde68a; color:#92400e; }
+      .menu-wrap { margin-left:auto; position:relative; }
+      .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.25); }
+      .menu-panel {
+        position:absolute; right:0; top:calc(100% + 8px); min-width:220px;
+        background:#fff; border:1px solid #dbe1ef; border-radius:12px; box-shadow:0 12px 30px rgba(2,6,23,0.22);
+        display:none; z-index:50; padding:6px;
+      }
+      .menu-panel.open { display:block; }
+      .menu-link {
+        display:block; padding:10px 12px; color:#0f172a; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.92rem;
+      }
+      .menu-link:hover { background:#eff6ff; color:#123093; }
+      #pageAlert {
+        display:none; margin-bottom:12px; padding:10px 12px; border-radius:10px;
+        border:1px solid #bae6cb; background:#e8f8ef; color:#146f3d; font-weight:600;
+      }
+      @media (max-width: 980px) {
+        .grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
-    <main class="container">
-      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <a class="forgot-link" href="/dashboard.html">Dashboard</a>
+    <header class="topbar">
+      <div class="avatar" id="avatar">A</div>
+      <div>
+        <div style="font-weight:700; font-size:1.08rem;" id="fullName">Admin Dashboard</div>
+        <div class="muted" id="roleLine" style="color:#d7e4ff;">--</div>
       </div>
-      <h1>HR / Compliance / PM / IT Panel</h1>
-      <p class="muted">Review documents, assign tasks, and update statuses.</p>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel">
+          <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
+          <a class="menu-link" href="/dashboard.html">Employee View</a>
+          <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
+          <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+          <a class="menu-link" id="menuProfile" href="/profile.html">My Profile</a>
+          <a class="menu-link" href="/log_in.html">Log Out</a>
+        </div>
+      </div>
+    </header>
 
+    <div class="container">
+      <div id="pageAlert"></div>
       <div class="grid">
-        <div class="card" id="docCard">
-          <h3>Find documents (HR/Compliance)</h3>
-          <div class="controls">
-            <input id="docEmail" class="text-input" type="email" placeholder="Employee email" />
-            <button id="loadDocs" class="submit-button" style="padding:10px 16px;">Load</button>
-          </div>
-          <ul id="docResults" class="list"></ul>
+        <div class="stack">
+          <section class="card">
+            <h3 class="panel-title">New Hire Queue</h3>
+            <p class="panel-subtitle">Color-coded queue of hires. Click a card to open the full admin profile.</p>
+            <div class="controls" style="margin-top:10px;">
+              <input id="hireSearch" class="text-input" placeholder="Search by name, email, department, or type..." />
+              <select id="stageFilter" class="text-input">
+                <option value="">All stages</option>
+                <option value="Account Created">Account Created</option>
+                <option value="Documents">Documents</option>
+                <option value="IT/Project/Training">IT/Project/Training</option>
+                <option value="Completed">Completed</option>
+              </select>
+              <select id="statusFilter" class="text-input">
+                <option value="">All statuses</option>
+                <option value="pending_document_submission">Pending Document Submission</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+              </select>
+              <button id="sortHires" class="submit-button" style="padding:10px 16px; background:#0f172a;">Sort: Progress ↓</button>
+              <button id="reloadHires" class="submit-button" style="padding:10px 16px;">Refresh</button>
+            </div>
+            <ul id="hireList" class="list" style="margin-top:8px;"></ul>
+          </section>
         </div>
 
-        <div class="card" id="taskCard">
-          <h3>Assign onboarding task (PM/IT)</h3>
-          <form id="taskForm" class="controls" style="flex-direction:column; align-items:stretch;">
-            <input class="text-input" name="title" placeholder="Title" required />
-            <input class="text-input" name="description" placeholder="Description" />
-            <input class="text-input" name="owner_email" type="email" placeholder="Owner email" required />
-            <input class="text-input" name="assigned_by" type="email" placeholder="Your email" />
-            <select class="text-input" name="category">
-              <option value="employee">Employee</option>
-              <option value="contractor">Contractor</option>
-              <option value="hr">HR</option>
-              <option value="it">IT</option>
-              <option value="compliance">Compliance</option>
-              <option value="manager">Project Manager</option>
-            </select>
-            <input class="text-input" name="due_date" placeholder="Due date (optional)" />
-            <button class="submit-button" type="submit" style="align-self:flex-end;">Assign</button>
-          </form>
-          <div id="taskResult" class="muted"></div>
-        </div>
+        <div class="stack">
+          <section class="card" id="docCard" style="display:none;">
+            <h3 class="panel-title">Document Review</h3>
+            <p class="panel-subtitle">View and validate uploaded documents by user email.</p>
+            <div class="controls" style="margin-top:10px;">
+              <input id="docEmail" class="text-input" type="email" placeholder="Employee email" />
+              <button id="loadDocs" class="submit-button" style="padding:10px 16px;">Load</button>
+            </div>
+            <ul id="docResults" class="list" style="margin-top:8px;"></ul>
+          </section>
 
-        <div class="card" id="taskListCard">
-          <h3>Tasks for user (PM/IT)</h3>
-          <div class="controls">
-            <input id="taskEmail" class="text-input" type="email" placeholder="Employee email" />
-            <button id="loadTasks" class="submit-button" style="padding:10px 16px;">Load</button>
-          </div>
-          <ul id="taskResults" class="list"></ul>
+          <section class="card" id="taskCard" style="display:none;">
+            <h3 class="panel-title">Assign Task</h3>
+            <p class="panel-subtitle">Create onboarding tasks for a new hire.</p>
+            <form id="taskForm" class="stack" style="margin-top:10px; gap:10px;">
+              <input class="text-input" name="title" placeholder="Title" required />
+              <input class="text-input" name="description" placeholder="Description" />
+              <input class="text-input" name="owner_email" id="ownerEmail" type="email" placeholder="Owner email" required />
+              <input class="text-input" name="assigned_by" id="assignedBy" type="email" placeholder="Assigned by" />
+              <select class="text-input" name="category">
+                <option value="employee">Employee</option>
+                <option value="contractor">Contractor</option>
+                <option value="hr">HR</option>
+                <option value="it">IT</option>
+                <option value="compliance">Compliance</option>
+                <option value="manager">Project Manager</option>
+              </select>
+              <input class="text-input" name="due_date" type="date" />
+              <div class="actions">
+                <button class="submit-button" type="submit" style="padding:10px 16px;">Assign</button>
+                <span id="taskResult" class="muted"></span>
+              </div>
+            </form>
+          </section>
+
+          <section class="card" id="taskListCard" style="display:none;">
+            <h3 class="panel-title">Tasks by User</h3>
+            <div class="controls" style="margin-top:10px;">
+              <input id="taskEmail" class="text-input" type="email" placeholder="Employee email" />
+              <button id="loadTasks" class="submit-button" style="padding:10px 16px;">Load</button>
+            </div>
+            <ul id="taskResults" class="list" style="margin-top:8px;"></ul>
+          </section>
         </div>
       </div>
-    </main>
+    </div>
 
     <script>
+      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
+
+      const pageAlert = document.getElementById("pageAlert");
+      const fullNameEl = document.getElementById("fullName");
+      const roleLineEl = document.getElementById("roleLine");
+      const avatarEl = document.getElementById("avatar");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+      const menuRegisterHire = document.getElementById("menuRegisterHire");
+      const menuProfile = document.getElementById("menuProfile");
+
+      const hireSearch = document.getElementById("hireSearch");
+      const stageFilter = document.getElementById("stageFilter");
+      const statusFilter = document.getElementById("statusFilter");
+      const sortHiresBtn = document.getElementById("sortHires");
+      const reloadHires = document.getElementById("reloadHires");
+      const hireList = document.getElementById("hireList");
+
+      const docCard = document.getElementById("docCard");
+      const taskCard = document.getElementById("taskCard");
+      const taskListCard = document.getElementById("taskListCard");
+
       const docEmail = document.getElementById("docEmail");
       const loadDocsBtn = document.getElementById("loadDocs");
       const docResults = document.getElementById("docResults");
 
+      const taskForm = document.getElementById("taskForm");
+      const taskResult = document.getElementById("taskResult");
+      const ownerEmail = document.getElementById("ownerEmail");
+      const assignedBy = document.getElementById("assignedBy");
       const taskEmail = document.getElementById("taskEmail");
       const loadTasksBtn = document.getElementById("loadTasks");
       const taskResults = document.getElementById("taskResults");
 
-      const taskForm = document.getElementById("taskForm");
-      const taskResult = document.getElementById("taskResult");
-      const taskCard = document.getElementById("taskCard");
-      const taskListCard = document.getElementById("taskListCard");
-      const docCard = document.getElementById("docCard");
-      const role = (new URLSearchParams(window.location.search).get("role") || "").toLowerCase();
-      const isAdmin = role === "hr" || role === "compliance" || role === "it" || role === "manager";
       const docTypeLabels = {
         government_id: "Official Identification (license/passport)",
         w9: "W-9 / Withholding tax form (Hacienda)",
@@ -110,104 +231,244 @@
         comptroller_registry: "Comptroller Contractor Registry (gov contracts)",
       };
 
-      function applyRoleVisibility() {
-        const isHR = role === "hr" || role === "compliance";
-        const isITPM = role === "it" || role === "manager";
-        docCard.style.display = isHR ? "block" : "none";
-        taskCard.style.display = isITPM ? "block" : "none";
-        taskListCard.style.display = isITPM ? "block" : "none";
+      let csrfToken = null;
+      let sessionRole = "";
+      let sessionEmail = "";
+      let hiresData = [];
+      const SORT_MODES = [
+        { key: "progress_desc", label: "Sort: Progress ↓" },
+        { key: "name_asc", label: "Sort: Name A-Z" },
+        { key: "stage_asc", label: "Sort: Stage A-Z" },
+      ];
+      let sortModeIndex = 0;
+
+      function showLoginSuccess() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("login") === "success") {
+          pageAlert.textContent = "Login successful.";
+          pageAlert.style.display = "block";
+          params.delete("login");
+          const cleaned = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, "");
+          window.history.replaceState({}, "", cleaned);
+          setTimeout(() => { pageAlert.style.display = "none"; }, 2500);
+        }
       }
 
-      let csrfToken = null;
+      function badge(status) {
+        const s = (status || "pending").toLowerCase();
+        const bg = s === "approved" || s === "completed" ? "#d1fae5" : s === "rejected" || s === "blocked" ? "#fee2e2" : s === "in_progress" || s === "pending_review" ? "#fef3c7" : "#e5e7eb";
+        const fg = s === "approved" || s === "completed" ? "#065f46" : s === "rejected" || s === "blocked" ? "#991b1b" : s === "in_progress" || s === "pending_review" ? "#92400e" : "#334155";
+        return `<span class="badge" style="background:${bg}; color:${fg};">${s.replace(/_/g, " ")}</span>`;
+      }
+
+      function docReviewActions(d) {
+        const status = (d.status || "pending_review").toLowerCase();
+        if (status === "pending_review") {
+          return `
+            <button data-doc-id="${d.id}" data-doc-status="approved" class="doc-btn approve">Approve</button>
+            <button data-doc-id="${d.id}" data-doc-status="rejected" class="doc-btn reject">Reject</button>
+          `;
+        }
+        if (status === "approved") {
+          return `<button data-doc-id="${d.id}" data-doc-status="pending_review" class="doc-btn">Re-evaluate</button>`;
+        }
+        if (status === "rejected") {
+          return `<button data-doc-id="${d.id}" data-doc-status="pending_review" class="doc-btn">Re-open Review</button>`;
+        }
+        return "";
+      }
+
       async function ensureCsrf() {
         if (csrfToken) return csrfToken;
-        try {
-          const res = await fetch('/api/csrf');
-          if (!res.ok) return null;
-          const data = await res.json();
-          csrfToken = data.csrf_token;
-          return csrfToken;
-        } catch (_) {
-          return null;
-        }
+        const res = await fetch("/api/csrf");
+        if (!res.ok) throw new Error("Session expired. Please log in again.");
+        const data = await res.json();
+        csrfToken = data.csrf_token;
+        return csrfToken;
       }
 
       async function fetchJson(url, options) {
         const opts = options ? { ...options } : {};
-        if (opts.method && opts.method.toUpperCase() !== 'GET') {
+        if (opts.method && opts.method.toUpperCase() !== "GET") {
           const token = await ensureCsrf();
-          if (!token) throw new Error('Session expired. Please log in again.');
-          opts.headers = { ...(opts.headers || {}), 'X-CSRF-Token': token };
+          opts.headers = { ...(opts.headers || {}), "X-CSRF-Token": token };
         }
         const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
         if (!res.ok) throw new Error(await res.text());
         return res.json();
+      }
+
+      function applyRoleVisibility(role) {
+        const r = (role || "").toLowerCase();
+        const isHRReview = r === "hr" || r === "compliance";
+        const isTaskAdmin = r === "it" || r === "manager" || r === "hr";
+
+        docCard.style.display = isHRReview ? "block" : "none";
+        taskCard.style.display = isTaskAdmin ? "block" : "none";
+        taskListCard.style.display = isTaskAdmin ? "block" : "none";
+        menuRegisterHire.style.display = r === "hr" || r === "manager" ? "block" : "none";
+      }
+
+      function stageClass(stage) {
+        const s = (stage || "").toLowerCase();
+        if (s === "account created") return "stage-account";
+        if (s === "documents") return "stage-documents";
+        if (s === "it/project/training") return "stage-workflow";
+        if (s === "completed") return "stage-complete";
+        return "";
+      }
+
+      function renderHireList() {
+        const q = (hireSearch.value || "").toLowerCase();
+        const stageNeedle = (stageFilter.value || "").toLowerCase();
+        const statusNeedle = (statusFilter.value || "").toLowerCase();
+
+        const filtered = hiresData.filter((h) => {
+          if (!q) return true;
+          const name = `${h.first_name || ""} ${h.last_name || ""}`.toLowerCase();
+          const email = (h.email || "").toLowerCase();
+          const dept = (h.department || "").toLowerCase();
+          const t = (h.employment_type || "").toLowerCase();
+          return name.includes(q) || email.includes(q) || dept.includes(q) || t.includes(q);
+        }).filter((h) => {
+          const stage = (h.progress?.stage || "").toLowerCase();
+          const status = (h.status || "").toLowerCase();
+          if (stageNeedle && stage !== stageNeedle) return false;
+          if (statusNeedle && status !== statusNeedle) return false;
+          return true;
+        });
+        const sortKey = SORT_MODES[sortModeIndex].key;
+        const sorted = [...filtered].sort((a, b) => {
+          if (sortKey === "name_asc") {
+            const an = `${a.first_name || ""} ${a.last_name || ""}`.trim().toLowerCase();
+            const bn = `${b.first_name || ""} ${b.last_name || ""}`.trim().toLowerCase();
+            return an.localeCompare(bn);
+          }
+          if (sortKey === "stage_asc") {
+            const as = (a.progress?.stage || "").toLowerCase();
+            const bs = (b.progress?.stage || "").toLowerCase();
+            return as.localeCompare(bs);
+          }
+          const ap = Number(a.progress?.progress_percent || 0);
+          const bp = Number(b.progress?.progress_percent || 0);
+          return bp - ap;
+        });
+
+        if (!sorted.length) {
+          hireList.innerHTML = "<li>No new hires found.</li>";
+          return;
+        }
+
+        hireList.innerHTML = sorted.map((h) => {
+          const email = h.email || "";
+          const prog = h.progress || {};
+          const docs = prog.documents || { approved: 0, total: 0 };
+          const tasks = prog.tasks || { completed: 0, total: 0 };
+          const stage = prog.stage || "Pending";
+          const pct = Number(prog.progress_percent || 0);
+          const detailHref = h.id ? `/admin_hire_detail.html?hire_id=${encodeURIComponent(h.id)}` : "#";
+          const progressClass = pct >= 80 ? "progress-high" : pct >= 50 ? "progress-mid" : "progress-low";
+          const docsClass = docs.total > 0 && docs.approved === docs.total ? "docs-good" : "docs-warn";
+          const tasksClass = tasks.total > 0 && tasks.completed === tasks.total ? "tasks-good" : "tasks-warn";
+          const avatar = h.avatar_url
+            ? `<img src="${h.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;" />`
+            : `${(h.first_name || h.email || "H").slice(0,1).toUpperCase()}`;
+          return `
+            <li>
+              <a class="hire-item-link" href="${detailHref}">
+                <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                  <div style="min-width:220px; display:flex; gap:10px; align-items:flex-start;">
+                    <span class="hire-avatar">${avatar}</span>
+                    <div>
+                      <div style="font-weight:700;">${h.first_name || ""} ${h.last_name || ""}</div>
+                      <div class="muted">${email || "--"}</div>
+                      <div class="muted">${h.department || "No department"} • ${h.employment_type || "employee"}</div>
+                    </div>
+                  </div>
+                  <div class="kpi-row">
+                    <span class="kpi-chip stage-chip ${stageClass(stage)}">Stage: ${stage}</span>
+                    <span class="kpi-chip ${progressClass}">Progress: ${pct}%</span>
+                    <span class="kpi-chip ${docsClass}">Docs: ${docs.approved}/${docs.total}</span>
+                    <span class="kpi-chip ${tasksClass}">Tasks: ${tasks.completed}/${tasks.total}</span>
+                  </div>
+                </div>
+              </a>
+            </li>
+          `;
+        }).join("");
+      }
+
+      async function loadHires() {
+        hireList.innerHTML = "<li>Loading...</li>";
+        try {
+          const data = await fetchJson("/api/new-hires");
+          hiresData = data.hires || [];
+          renderHireList();
+        } catch (err) {
+          hireList.innerHTML = `<li>${err.message}</li>`;
+        }
       }
 
       async function loadDocs() {
         const email = docEmail.value.trim().toLowerCase();
         if (!email) return;
-        docResults.innerHTML = "Loading...";
+        docResults.innerHTML = "<li>Loading...</li>";
         try {
           const data = await fetchJson(`/documents?email=${encodeURIComponent(email)}`);
-          const docs = (data.documents || []).filter((d) => (d.status || "pending_review") === "pending_review");
+          const docs = data.documents || [];
           if (!docs.length) {
-            docResults.innerHTML = "<li>No pending documents for review.</li>";
+            docResults.innerHTML = "<li>No documents found.</li>";
             return;
           }
-          docResults.innerHTML = docs
-            .map(d => {
-              const typeLabel = docTypeLabels[d.doc_type] || d.doc_type || "Unspecified document";
-              return `
+          docResults.innerHTML = docs.map((d) => {
+            const typeLabel = docTypeLabels[d.doc_type] || d.doc_type || "Unspecified document";
+            return `
               <li>
                 <div>
-                  <strong>${typeLabel}</strong>
-                  <br/><small>File: ${d.original_name || "unnamed file"}</small>
-                  <br/><small>${d.uploader_name || ""} • ${d.uploader_email}</small>
+                  <strong>${typeLabel}</strong><br/>
+                  <small>File: ${d.original_name || "unnamed file"}</small><br/>
+                  <small>${d.uploader_name || ""} • ${d.uploader_email || ""}</small>
                 </div>
-                <div class="controls">
-                  <span class="badge">${d.status || "pending_review"}</span>
-                  ${d.view_url ? `<a class="link-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ""}
-                  ${d.download_url ? `<a class="link-btn" href="${d.download_url}">Download</a>` : ""}
-                  <button data-id="${d.id}" data-status="approved" class="submit-button" style="padding:8px 12px;">Approve</button>
-                  <button data-id="${d.id}" data-status="rejected" class="submit-button" style="padding:8px 12px; background:#e53e3e;">Reject</button>
+                <div class="actions" style="margin-top:8px;">
+                  ${badge(d.status || "pending_review")}
+                  ${d.view_url ? `<a class="doc-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ""}
+                  ${d.download_url ? `<a class="doc-btn" href="${d.download_url}">Download</a>` : ""}
+                  ${docReviewActions(d)}
                 </div>
               </li>
             `;
-            })
-            .join("");
-          docResults.querySelectorAll("button[data-id]").forEach(btn => {
-            btn.addEventListener("click", () => updateDoc(btn.dataset.id, btn.dataset.status));
-          });
+          }).join("");
         } catch (err) {
           docResults.innerHTML = `<li>${err.message}</li>`;
         }
       }
 
-      async function updateDoc(id, status) {
-        try {
-          await fetchJson(`/documents/${id}/status`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ status })
-          });
-          loadDocs();
-        } catch (err) {
-          alert(err.message);
-        }
+      async function updateDocStatus(id, status) {
+        await fetchJson(`/documents/${id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ status }),
+        });
+        await loadDocs();
+        await loadHires();
       }
 
       async function submitTask(e) {
         e.preventDefault();
         taskResult.textContent = "";
-        const formData = new FormData(taskForm);
+        const fd = new FormData(taskForm);
         try {
           await fetchJson("/api/tasks", {
             method: "POST",
-            body: new URLSearchParams(formData)
+            body: new URLSearchParams(fd),
           });
           taskResult.textContent = "Task assigned.";
-          taskForm.reset();
+          await loadTasks();
+          await loadHires();
         } catch (err) {
           taskResult.textContent = err.message;
         }
@@ -216,51 +477,117 @@
       async function loadTasks() {
         const email = taskEmail.value.trim().toLowerCase();
         if (!email) return;
-        taskResults.innerHTML = "Loading...";
+        taskResults.innerHTML = "<li>Loading...</li>";
         try {
           const data = await fetchJson(`/api/tasks?email=${encodeURIComponent(email)}`);
-          if (!data.tasks?.length) {
+          const tasks = data.tasks || [];
+          if (!tasks.length) {
             taskResults.innerHTML = "<li>No tasks found.</li>";
             return;
           }
-          taskResults.innerHTML = data.tasks
-            .map(t => `
+          taskResults.innerHTML = tasks.map((t) => {
+            const due = t.due_date ? `Due ${t.due_date}` : "No due date";
+            return `
               <li>
-                <div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div>
-                <div class="controls">
-                  <span class="badge">${t.status}</span>
-                  <button data-id="${t.id}" data-status="completed" class="submit-button" style="padding:8px 12px;">Mark complete</button>
-                  <button data-id="${t.id}" data-status="in_progress" class="submit-button" style="padding:8px 12px;">In progress</button>
+                <div><strong>${t.title || "Untitled task"}</strong><br/><small>${t.description || ""}</small><br/><small>${due}</small></div>
+                <div class="actions" style="margin-top:8px;">
+                  ${badge(t.status || "pending")}
+                  <button data-task-id="${t.id}" data-task-status="in_progress" class="submit-button" style="padding:8px 12px;">In progress</button>
+                  <button data-task-id="${t.id}" data-task-status="completed" class="submit-button" style="padding:8px 12px;">Complete</button>
+                  <button data-task-id="${t.id}" data-task-status="blocked" class="submit-button" style="padding:8px 12px; background:#b45309;">Blocked</button>
                 </div>
               </li>
-            `)
-            .join("");
-
-          taskResults.querySelectorAll("button[data-id]").forEach(btn => {
-            btn.addEventListener("click", () => updateTask(btn.dataset.id, btn.dataset.status));
-          });
+            `;
+          }).join("");
         } catch (err) {
           taskResults.innerHTML = `<li>${err.message}</li>`;
         }
       }
 
-      async function updateTask(id, status) {
+      async function updateTaskStatus(id, status) {
+        await fetchJson(`/api/tasks/${id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ status }),
+        });
+        await loadTasks();
+        await loadHires();
+      }
+
+      async function bootstrap() {
         try {
-          await fetchJson(`/api/tasks/${id}/status`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ status })
-          });
-          loadTasks();
+          const session = await fetchJson("/api/session");
+          sessionRole = (session.role || "").toLowerCase();
+          sessionEmail = (session.email || "").toLowerCase();
+
+          if (!ADMIN_ROLES.includes(sessionRole)) {
+            window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
+            return;
+          }
+
+          fullNameEl.textContent = session.full_name || session.email || "Admin";
+          roleLineEl.innerHTML = `Role: <span class="badge badge-admin">${sessionRole}</span> • ${session.email || ""}`;
+          avatarEl.textContent = (session.full_name || session.email || "A").slice(0, 1).toUpperCase();
+          const profileEmailParam = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
+          menuProfile.href = `/profile.html${profileEmailParam}`;
+
+          assignedBy.value = sessionEmail;
+          applyRoleVisibility(sessionRole);
+          showLoginSuccess();
+          await loadHires();
         } catch (err) {
-          alert(err.message);
+          pageAlert.textContent = err.message || "Session expired. Please log in again.";
+          pageAlert.style.display = "block";
         }
       }
 
+      reloadHires.addEventListener("click", loadHires);
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) {
+          menuPanel.classList.remove("open");
+        }
+      });
+      hireSearch.addEventListener("input", renderHireList);
+      stageFilter.addEventListener("change", renderHireList);
+      statusFilter.addEventListener("change", renderHireList);
+      sortHiresBtn.addEventListener("click", () => {
+        sortModeIndex = (sortModeIndex + 1) % SORT_MODES.length;
+        sortHiresBtn.textContent = SORT_MODES[sortModeIndex].label;
+        renderHireList();
+      });
       loadDocsBtn.addEventListener("click", loadDocs);
       loadTasksBtn.addEventListener("click", loadTasks);
       taskForm.addEventListener("submit", submitTask);
-      applyRoleVisibility();
+
+      docResults.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-doc-id]");
+        if (!btn) return;
+        const id = btn.dataset.docId;
+        const status = btn.dataset.docStatus;
+        try {
+          await updateDocStatus(id, status);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      taskResults.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-task-id]");
+        if (!btn) return;
+        const id = btn.dataset.taskId;
+        const status = btn.dataset.taskStatus;
+        try {
+          await updateTaskStatus(id, status);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      bootstrap();
     </script>
   </body>
 </html>
