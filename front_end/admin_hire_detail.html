@@ -5,314 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>New Hire Profile | Admin</title>
     <link rel="stylesheet" href="/style/log_in.css" />
-    <style>
-      * { box-sizing:border-box; }
-      html, body { height:100%; overflow:hidden; }
-      body { background:#eef1f6; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color:#0f172a; }
-      .container {
-        width:100%;
-        max-width:none;
-        margin:0;
-        padding:10px 14px;
-        box-sizing:border-box;
-        height:100dvh;
-        overflow:hidden;
-        display:flex;
-        flex-direction:column;
-        gap:10px;
-      }
-      .layout {
-        display:grid;
-        gap:16px;
-        grid-template-columns: 420px minmax(0, 1fr);
-        align-items:stretch;
-        flex:1;
-        min-height:0;
-      }
-      .side-panel {
-        position:sticky;
-        top:8px;
-        align-self:start;
-        max-height:calc(100dvh - 18px);
-        overflow:auto;
-        border:1px solid #1f3c97;
-        background:linear-gradient(160deg, #0b1f67 0%, #123093 42%, #0a1a54 100%);
-        box-shadow:0 18px 40px rgba(5, 13, 40, 0.45);
-        padding:14px;
-      }
-      .card.side-panel {
-        border:1px solid #1f3c97;
-        background:linear-gradient(160deg, #0b1f67 0%, #123093 42%, #0a1a54 100%);
-        box-shadow:0 18px 40px rgba(5, 13, 40, 0.45);
-      }
-      .card { background:#fff; border-radius:16px; box-shadow:0 8px 24px rgba(15, 23, 42, 0.08); padding:14px; border:1px solid #e5e7eb; }
-      .title { margin:0; font-size:1.1rem; }
-      .muted { color:#64748b; font-size:.92rem; }
-      .form-grid { display:grid; gap:5px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .side-panel .form-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap:8px;
-      }
-      .side-panel .form-grid > div:not(.full),
-      .profile-more-grid > div {
-        border:1px solid rgba(191, 219, 254, 0.3);
-        background:rgba(255, 255, 255, 0.08);
-        border-radius:10px;
-        padding:7px 8px;
-      }
-      .form-grid .full { grid-column: 1 / -1; }
-      .text-input { width:100%; }
-      .side-panel .text-input {
-        padding:5px 7px;
-        font-size:0.8rem;
-        min-height:32px;
-        border:1px solid #2b4cb8;
-        background:#f8fbff;
-        color:#0f172a;
-        border-radius:8px;
-      }
-      .side-panel .text-input:focus {
-        outline:none;
-        border-color:#60a5fa;
-        box-shadow:0 0 0 2px rgba(96, 165, 250, 0.25);
-      }
-      .field-label {
-        display:block;
-        font-size:0.72rem;
-        font-weight:700;
-        color:#dbeafe;
-        margin:0 0 3px 0;
-        letter-spacing:0.02em;
-      }
-      .identity-block {
-        display:flex;
-        align-items:center;
-        gap:10px;
-        padding:8px 10px;
-        border:1px solid rgba(191, 219, 254, 0.4);
-        border-radius:12px;
-        background:rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(2px);
-      }
-      .identity-avatar {
-        width:88px;
-        height:88px;
-        border-radius:16px;
-        background:#1a2b7a;
-        color:#fff;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-weight:700;
-        overflow:hidden;
-        flex-shrink:0;
-        border:2px solid rgba(255, 255, 255, 0.65);
-        box-shadow:0 10px 24px rgba(2, 6, 23, 0.4);
-      }
-      .identity-name { font-size:1.02rem; font-weight:800; color:#f8fbff; line-height:1.1; }
-      .identity-meta { font-size:0.79rem; color:#c7d5ff; margin-top:2px; line-height:1.2; }
-      .list { list-style:none; margin:0; padding:0; }
-      .list li { border-bottom:1px solid #e5e7eb; padding:10px 0; }
-      .pretty-list li {
-        border:1px solid #e2e8f0;
-        border-radius:12px;
-        padding:12px;
-        background:#fbfdff;
-        margin-bottom:10px;
-      }
-      .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-      .doc-btn {
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        border:1px solid #cbd5e1;
-        border-radius:10px;
-        padding:8px 12px;
-        background:#fff;
-        color:#0f172a;
-        text-decoration:none;
-        font-size:0.9rem;
-        line-height:1;
-        cursor:pointer;
-      }
-      .doc-btn:hover { background:#f8fafc; border-color:#94a3b8; }
-      .doc-btn.approve { background:#166534; border-color:#166534; color:#fff; }
-      .doc-btn.approve:hover { background:#14532d; border-color:#14532d; }
-      .doc-btn.reject { background:#b91c1c; border-color:#b91c1c; color:#fff; }
-      .doc-btn.reject:hover { background:#991b1b; border-color:#991b1b; }
-      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.82rem; background:#e5e7eb; color:#111827; }
-      .kpi-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-      .kpi { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:0.88rem; }
-      .doc-item-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; }
-      .doc-meta { color:#64748b; font-size:.84rem; margin-top:2px; }
-      .tabs {
-        display:flex;
-        gap:10px;
-        flex-wrap:wrap;
-        margin-bottom:8px;
-        padding:8px;
-        border:1px solid #dbe4f1;
-        border-radius:14px;
-        background:linear-gradient(180deg, #ffffff, #f8fbff);
-      }
-      .right-workspace {
-        height:100%;
-        min-height:0;
-        overflow:hidden;
-        display:flex;
-        flex-direction:column;
-      }
-      .right-workspace .tabs { flex:0 0 auto; }
-      .tab-btn {
-        border:1px solid #cfd8ea;
-        background:#fff;
-        color:#1f2937;
-        border-radius:999px;
-        padding:9px 14px;
-        font-weight:700;
-        font-size:0.9rem;
-        cursor:pointer;
-      }
-      .tab-btn.active { background:#0f2f93; border-color:#0f2f93; color:#fff; }
-      .tab-pane { display:none; flex:1; min-height:0; }
-      .tab-pane.active { display:flex; flex-direction:column; }
-      .tab-pane .card { height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-      .tab-pane .pretty-list {
-        flex:1;
-        min-height:0;
-        overflow:auto;
-        padding-right:4px;
-        padding-bottom:32px;
-        overscroll-behavior:contain;
-        -webkit-overflow-scrolling:touch;
-      }
-      .pane-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
-      .pane-subtitle { margin:4px 0 0; color:#64748b; font-size:0.92rem; }
-      .section-chip {
-        display:inline-flex;
-        align-items:center;
-        border:1px solid rgba(191, 219, 254, 0.45);
-        background:rgba(239, 246, 255, 0.12);
-        color:#dbeafe;
-        border-radius:999px;
-        font-size:0.75rem;
-        font-weight:700;
-        padding:4px 9px;
-        letter-spacing:0.02em;
-      }
-      .form-divider {
-        display:flex;
-        align-items:center;
-        gap:8px;
-        margin-top:4px;
-      }
-      .form-divider::before {
-        content:"";
-        flex:1;
-        height:1px;
-        background:#dbe4f1;
-      }
-      .form-divider span {
-        color:#dbeafe;
-        font-size:0.72rem;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:0.04em;
-      }
-      .form-divider::after {
-        content:"";
-        flex:1;
-        height:1px;
-        background:#dbe4f1;
-      }
-      .title-admin-box {
-        border:1px solid rgba(191, 219, 254, 0.45);
-        background:rgba(239, 246, 255, 0.14);
-        border-radius:12px;
-        padding:8px;
-      }
-      .title-admin-box .muted { color:#dbeafe; }
-      .side-panel .title { color:#f8fbff; }
-      .side-panel .muted { color:#c7d5ff; }
-      .side-panel .doc-btn {
-        border-color:#9cb7ff;
-        background:#f8fbff;
-      }
-      .profile-more {
-        border:1px solid rgba(191, 219, 254, 0.35);
-        border-radius:10px;
-        background:rgba(15, 23, 42, 0.18);
-        padding:6px 8px 8px;
-      }
-      .profile-more summary {
-        cursor:pointer;
-        font-size:0.76rem;
-        font-weight:700;
-        color:#dbeafe;
-        list-style:none;
-      }
-      .profile-more summary::-webkit-details-marker { display:none; }
-      .profile-more summary::after {
-        content:"Expand";
-        float:right;
-        font-weight:600;
-        color:#bfdbfe;
-      }
-      .profile-more[open] summary::after { content:"Collapse"; }
-      .profile-more-grid {
-        margin-top:8px;
-        display:grid;
-        gap:5px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .menu-wrap {
-        position:fixed;
-        top:10px;
-        right:14px;
-        z-index:60;
-      }
-      .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.35); }
-      .menu-panel {
-        position:absolute; right:0; top:calc(100% + 8px); min-width:220px;
-        background:#fff; border:1px solid #dbe1ef; border-radius:12px; box-shadow:0 12px 30px rgba(2,6,23,0.22);
-        display:none; z-index:50; padding:6px;
-      }
-      .menu-panel.open { display:block; }
-      .menu-link {
-        display:block; padding:10px 12px; color:#0f172a; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.92rem;
-      }
-      .menu-link:hover { background:#eff6ff; color:#123093; }
-      #alert { display:none; margin-bottom:12px; border-radius:10px; padding:10px 12px; }
-      #alert.ok { background:#e8f8ef; border:1px solid #bae6cb; color:#146f3d; }
-      #alert.err { background:#fee2e2; border:1px solid #fecaca; color:#991b1b; }
-      @media (max-width: 1060px) {
-        .layout { grid-template-columns: 1fr; }
-        .container { height:auto; overflow:visible; }
-        .side-panel .form-grid,
-        .profile-more-grid { grid-template-columns: 1fr; }
-        .side-panel {
-          position:static;
-          max-height:none;
-          overflow:visible;
-        }
-        .right-workspace {
-          position:static;
-          max-height:none;
-          overflow:hidden;
-          padding-right:0;
-        }
-        .right-workspace .tabs { position:static; }
-      }
-    </style>
+    <link rel="stylesheet" href="/style/pages/admin_hire_detail.css" />
   </head>
   <body>
     <div class="menu-wrap">
+      <button id="backBtn" type="button" class="submit-button back-btn">Go Back</button>
       <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
       <div id="menuPanel" class="menu-panel">
+        <a class="menu-link" id="menuSuperDashboard" href="/superadmin_dashboard.html" style="display:none;">Superadmin Console</a>
         <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
         <a class="menu-link" href="/admin_metrics.html">Metrics</a>
         <a class="menu-link" id="menuProfile" href="/profile.html">My Profile</a>
-        <a class="menu-link" href="/dashboard.html">Employee View</a>
         <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
         <a class="menu-link" href="/log_in.html">Log Out</a>
       </div>
@@ -336,7 +39,7 @@
                 <div class="identity-meta" id="sideMeta">--</div>
               </div>
             </div>
-            <form id="hireForm" class="form-grid" style="margin-top:10px;">
+            <form id="hireForm" class="form-grid side-panel-form" style="margin-top:10px;">
               <div class="full form-divider"><span>Employment</span></div>
               <div>
                 <label class="field-label" for="employmentType">Employment Type</label>
@@ -428,11 +131,11 @@
                   <span id="titleCreateState" class="muted"></span>
                 </div>
               </div>
-              <div class="full actions">
-                <button type="submit" id="saveBtn" class="submit-button" style="padding:10px 16px;">Save Changes</button>
-                <span id="saveState" class="muted"></span>
-              </div>
             </form>
+            <div class="actions save-row">
+              <button type="submit" form="hireForm" id="saveBtn" class="submit-button" style="padding:10px 16px;">Save Changes</button>
+              <span id="saveState" class="muted"></span>
+            </div>
           </aside>
 
         <section class="right-workspace">
@@ -450,6 +153,25 @@
                   <p class="pane-subtitle">Review file status, open files, and re-evaluate decisions when needed.</p>
                 </div>
               </div>
+              <form id="docCreateForm" class="task-compose" style="display:none;">
+                <div class="doc-compose-grid">
+                  <div>
+                    <label class="field-label" style="color:#334155;" for="docSlotLabelInput">Document slot label</label>
+                    <input class="text-input" id="docSlotLabelInput" name="label" placeholder="e.g. Professional License Copy" required />
+                  </div>
+                  <div>
+                    <label class="field-label" style="color:#334155;" for="docSlotOptionalInput">Requirement type</label>
+                    <select class="text-input" id="docSlotOptionalInput" name="optional">
+                      <option value="0">Required</option>
+                      <option value="1">Optional</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="task-compose-actions">
+                  <button type="submit" class="doc-btn">+ Add Document</button>
+                  <span id="docCreateState" class="muted"></span>
+                </div>
+              </form>
               <ul id="docsList" class="list pretty-list" style="margin-top:8px;"></ul>
             </section>
           </section>
@@ -462,6 +184,37 @@
                   <p class="pane-subtitle">Current onboarding tasks and completion state.</p>
                 </div>
               </div>
+              <form id="taskCreateForm" class="task-compose" style="display:none;">
+                <div class="task-compose-grid">
+                  <div>
+                    <label class="field-label" style="color:#334155;" for="taskTitleInput">Task title</label>
+                    <input class="text-input" id="taskTitleInput" name="title" placeholder="e.g. Complete onboarding training" required />
+                  </div>
+                  <div>
+                    <label class="field-label" style="color:#334155;" for="taskCategorySelect">Category</label>
+                    <select class="text-input" id="taskCategorySelect" name="category">
+                      <option value="employee">Employee</option>
+                      <option value="contractor">Contractor</option>
+                      <option value="hr">HR</option>
+                      <option value="it">IT</option>
+                      <option value="compliance">Compliance</option>
+                      <option value="manager">Manager</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="field-label" style="color:#334155;" for="taskDueDateInput">Due date</label>
+                    <input class="text-input" id="taskDueDateInput" name="due_date" type="date" />
+                  </div>
+                  <div class="full">
+                    <label class="field-label" style="color:#334155;" for="taskDescriptionInput">Description</label>
+                    <textarea class="text-input" id="taskDescriptionInput" name="description" rows="2" placeholder="Optional details"></textarea>
+                  </div>
+                </div>
+                <div class="task-compose-actions">
+                  <button type="submit" class="doc-btn">+ Add Task</button>
+                  <span id="taskCreateState" class="muted"></span>
+                </div>
+              </form>
               <ul id="tasksList" class="list pretty-list" style="margin-top:8px;"></ul>
             </section>
           </section>
@@ -482,17 +235,26 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
       const alertEl = document.getElementById("alert");
       const hireForm = document.getElementById("hireForm");
       const saveBtn = document.getElementById("saveBtn");
       const saveState = document.getElementById("saveState");
       const docsList = document.getElementById("docsList");
+      const docCreateForm = document.getElementById("docCreateForm");
+      const docSlotLabelInput = document.getElementById("docSlotLabelInput");
+      const docSlotOptionalInput = document.getElementById("docSlotOptionalInput");
+      const docCreateState = document.getElementById("docCreateState");
       const tasksList = document.getElementById("tasksList");
+      const taskCreateForm = document.getElementById("taskCreateForm");
+      const taskCategorySelect = document.getElementById("taskCategorySelect");
+      const taskCreateState = document.getElementById("taskCreateState");
       const extraList = document.getElementById("extraList");
       const kpis = document.getElementById("kpis");
+      const backBtn = document.getElementById("backBtn");
       const menuBtn = document.getElementById("menuBtn");
       const menuPanel = document.getElementById("menuPanel");
+      const menuSuperDashboard = document.getElementById("menuSuperDashboard");
       const menuProfile = document.getElementById("menuProfile");
       const menuRegisterHire = document.getElementById("menuRegisterHire");
       const sideAvatarEl = document.getElementById("sideAvatar");
@@ -524,9 +286,15 @@
 
       let csrfToken = null;
       let hireId = "";
+      let hireEmail = "";
       let sessionRole = "";
+      let sessionDepartment = "";
+      let sessionEmail = "";
       let canReviewDocs = false;
+      let canManageDocSlots = false;
+      let canCreateTasks = false;
       let orgDepartments = [];
+      let dynamicDocLabels = {};
 
       function setActiveTab(tab) {
         tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
@@ -591,6 +359,24 @@
         jobTitleSelect.innerHTML = options.join("");
       }
 
+      function prettyStatusValue(value) {
+        const raw = (value || "").toString().trim();
+        if (!raw) return "";
+        return raw
+          .replace(/_/g, " ")
+          .replace(/\s+/g, " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+
+      function normalizeStatusValue(value) {
+        return (value || "")
+          .toString()
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      }
+
       async function ensureCsrf() {
         if (csrfToken) return csrfToken;
         const res = await fetch('/api/csrf');
@@ -616,10 +402,13 @@
       }
 
       function populateForm(h) {
-        const fields = ["first_name","middle_name","last_name","phone","dob","start_date","gov_id","street","city","state","postal_code","country","employment_type","manager","status"];
+        const fields = ["first_name","middle_name","last_name","phone","dob","start_date","gov_id","street","city","state","postal_code","country","employment_type","manager"];
         fields.forEach((f) => {
           if (hireForm.elements[f]) hireForm.elements[f].value = h[f] || "";
         });
+        if (hireForm.elements.status) {
+          hireForm.elements.status.value = prettyStatusValue(h.status || "");
+        }
         setDepartmentOptions(h.department || "");
         setJobTitleOptions(h.job_title || "");
       }
@@ -647,10 +436,10 @@
 
         const docsArr = h.documents || [];
         docsList.innerHTML = docsArr.length ? docsArr.map((d) => `
-          <li>
+          <li class="doc-row doc-row-${(d.status || "pending_review").toLowerCase()}">
             <div class="doc-item-head">
               <div>
-                <strong>${docTypeLabels[d.doc_type] || d.doc_type || 'Document'}</strong>
+                <strong>${dynamicDocLabels[d.doc_type] || docTypeLabels[d.doc_type] || d.doc_type || 'Document'}</strong>
                 <div class="doc-meta">${d.original_name || ''}</div>
               </div>
               ${badge(d.status || 'pending_review')}
@@ -683,6 +472,18 @@
 
       async function loadHire() {
         const h = await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`);
+        hireEmail = (h.email || "").toLowerCase();
+        dynamicDocLabels = {};
+        if (hireEmail) {
+          try {
+            const reqData = await fetchJson(`/documents/requirements?email=${encodeURIComponent(hireEmail)}`);
+            (reqData.requirements || []).forEach((r) => {
+              if (r && r.id) dynamicDocLabels[r.id] = r.label || r.id;
+            });
+          } catch (_) {
+            dynamicDocLabels = {};
+          }
+        }
         if (!orgDepartments.length) {
           const org = await fetchJson("/api/org/structure");
           orgDepartments = org.departments || [];
@@ -702,20 +503,29 @@
         try {
           const session = await fetchJson('/api/session');
           sessionRole = (session.role || '').toLowerCase();
-          const sessionEmail = (session.email || "").toLowerCase();
+          sessionDepartment = (session.department || "").toLowerCase();
+          sessionEmail = (session.email || "").toLowerCase();
           if (!ADMIN_ROLES.includes(sessionRole)) {
             window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
             return;
           }
-          canReviewDocs = ["hr", "compliance"].includes(sessionRole);
+          canReviewDocs = sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment)) || ["hr", "compliance"].includes(sessionRole);
+          canManageDocSlots = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "hr") || sessionRole === "hr";
+          canCreateTasks = ["admin", "manager", "superadmin", "hr", "it", "compliance"].includes(sessionRole);
           menuProfile.href = sessionEmail ? `/profile.html?email=${encodeURIComponent(sessionEmail)}` : "/profile.html";
-          menuRegisterHire.style.display = sessionRole === "hr" || sessionRole === "manager" ? "block" : "none";
+          menuSuperDashboard.style.display = sessionRole === "superadmin" ? "block" : "none";
+          menuRegisterHire.style.display = (sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && sessionDepartment === "hr") || sessionRole === "hr") ? "block" : "none";
+          docCreateForm.style.display = canManageDocSlots ? "block" : "none";
+          taskCreateForm.style.display = canCreateTasks ? "block" : "none";
+          if (sessionRole && taskCategorySelect) {
+            taskCategorySelect.value = sessionRole;
+          }
           if (!orgDepartments.length) {
             const org = await fetchJson("/api/org/structure");
             orgDepartments = org.departments || [];
           }
 
-          const canEdit = sessionRole === 'hr';
+          const canEdit = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "hr") || sessionRole === "hr";
           Array.from(hireForm.elements).forEach((el) => {
             if (el.name && el.name !== '') el.disabled = !canEdit;
           });
@@ -733,9 +543,13 @@
         e.preventDefault();
         saveState.textContent = '';
         try {
+          const formData = new FormData(hireForm);
+          if (formData.has("status")) {
+            formData.set("status", normalizeStatusValue(formData.get("status")));
+          }
           await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`, {
             method: 'POST',
-            body: new URLSearchParams(new FormData(hireForm)),
+            body: new URLSearchParams(formData),
           });
           saveState.textContent = 'Saved.';
           await loadHire();
@@ -777,6 +591,69 @@
         }
       });
 
+      taskCreateForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        taskCreateState.textContent = "";
+        if (!hireEmail) {
+          taskCreateState.textContent = "Hire email unavailable.";
+          return;
+        }
+        const formData = new FormData(taskCreateForm);
+        const title = (formData.get("title") || "").toString().trim();
+        if (!title) {
+          taskCreateState.textContent = "Task title is required.";
+          return;
+        }
+        const payload = new URLSearchParams({
+          title,
+          description: (formData.get("description") || "").toString().trim(),
+          owner_email: hireEmail,
+          assigned_by: sessionEmail,
+          category: (formData.get("category") || "employee").toString().toLowerCase(),
+          status: "pending",
+          due_date: (formData.get("due_date") || "").toString(),
+        });
+        try {
+          await fetchJson("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: payload,
+          });
+          taskCreateForm.reset();
+          taskCategorySelect.value = sessionRole || "employee";
+          taskCreateState.textContent = "Task added.";
+          await loadHire();
+        } catch (err) {
+          taskCreateState.textContent = err.message || "Unable to create task.";
+        }
+      });
+
+      docCreateForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        docCreateState.textContent = "";
+        const label = (docSlotLabelInput.value || "").trim();
+        if (!label) {
+          docCreateState.textContent = "Document slot label is required.";
+          return;
+        }
+        const payload = new URLSearchParams({
+          label,
+          optional: (docSlotOptionalInput.value || "0").toString(),
+        });
+        try {
+          await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}/document-slots`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: payload,
+          });
+          docCreateForm.reset();
+          docCreateState.textContent = "Document slot added.";
+          await loadHire();
+        } catch (err) {
+          docCreateState.textContent = err.message || "Unable to add document slot.";
+        }
+      });
+
       docsList.addEventListener('click', async (e) => {
         const btn = e.target.closest('button[data-doc-id]');
         if (!btn) return;
@@ -797,6 +674,13 @@
       menuBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         menuPanel.classList.toggle("open");
+      });
+      backBtn.addEventListener("click", () => {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        window.location.href = "/admin_panel.html";
       });
       tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));

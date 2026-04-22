@@ -5,118 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Onboarding Dashboard</title>
     <link rel="stylesheet" href="/style/log_in.css" />
-    <style>
-      html {
-        overflow-y: scroll;
-        scrollbar-gutter: stable;
-      }
-      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-      .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
-      .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.5rem; color:#fff; }
-      .container { max-width: 1100px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
-      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; min-width:0; }
-      .steps { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:stretch; }
-      .step-link { display:block; height:100%; text-decoration:none; color:inherit; }
-      .step {
-        background:#f8fafc;
-        border-radius:14px;
-        padding:10px;
-        border:1px solid #dce5f2;
-        min-height:108px;
-        height:100%;
-        display:flex;
-        flex-direction:column;
-        justify-content:space-between;
-        gap:6px;
-        transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-        overflow:hidden;
-      }
-      .step-link:hover .step { transform:translateY(-2px); box-shadow:0 12px 26px rgba(2, 12, 27, 0.12); }
-      .step.step-completed { border-color:#9bdfb8; background:linear-gradient(180deg, #f3fcf7, #f8fafc); }
-      .step.step-in_progress { border-color:#f2d896; background:linear-gradient(180deg, #fffaf0, #f8fafc); }
-      .step.step-pending { border-color:#dce5f2; background:linear-gradient(180deg, #f8fbff, #f8fafc); }
-      .step-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-      .step .icon { width:34px; height:34px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; font-size:17px; box-shadow: inset 0 0 0 1px rgba(15,23,42,.07); }
-      .step .label { font-weight:700; color:#0f172a; font-size:0.83rem; line-height:1.15; min-height:34px; }
-      .step-note { color:#64748b; font-size:0.73rem; }
-      .status-chip { display:inline-block; padding:3px 9px; border-radius:999px; font-size:0.72rem; border:1px solid transparent; font-weight:600; letter-spacing:.01em; }
-      .status-chip.status-completed { background:#e7f8ef; color:#116f3d; border-color:#b8e6cb; }
-      .status-chip.status-in_progress { background:#fff7e6; color:#8a5a00; border-color:#f3d396; }
-      .status-chip.status-pending { background:#eef2f7; color:#485569; border-color:#d6deea; }
-      .grid { display:grid; grid-template-columns: 1fr; gap:12px; }
-      .grid-wide { display:grid; grid-template-columns: 1fr; gap:12px; }
-      .list { list-style:none; padding:0; margin:0; }
-      .list li { padding:10px 0; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:12px; }
-      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.85rem; background:#e5e7eb; color:#111827; }
-      .muted { color:#4b5563; font-size:0.95rem; }
-      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-      .text-input { width: 260px; }
-      details { width:100%; }
-      details summary { list-style:none; display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px 0; font-weight:600; }
-      details summary::-webkit-details-marker { display:none; }
-      details .details-body { list-style:none; margin:0; padding:0; }
-      .doc-row { padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; align-items:center; }
-      .doc-updated { color:#94a3b8; font-size:12px; }
-      .page-alert {
-        display:none;
-        margin-bottom:12px;
-        padding:10px 12px;
-        border-radius:10px;
-        border:1px solid #bae6cb;
-        background:#e8f8ef;
-        color:#146f3d;
-        font-weight:600;
-      }
-      .action-btn {
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        gap:8px;
-        min-height:42px;
-        padding:0 14px;
-        border-radius:10px;
-        border:1px solid #cdd9ef;
-        background: linear-gradient(180deg, #f8fbff, #eef4ff);
-        color:#0f2f93;
-        font-weight:700;
-        text-decoration:none;
-        box-shadow: 0 6px 14px rgba(15, 47, 147, 0.1);
-        transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-      }
-      .action-btn:hover {
-        transform: translateY(-1px);
-        border-color:#9fb6ea;
-        box-shadow: 0 10px 18px rgba(15, 47, 147, 0.16);
-      }
-      .process-card { min-height: 200px; padding-bottom: 28px; }
-      .documents-card { display:flex; flex-direction:column; min-height:352px; overflow:hidden; }
-      #docList {
-        max-height:270px;
-        width:100%;
-        overflow-y: scroll;
-        overflow-x: hidden;
-        padding-right: 4px;
-        scrollbar-gutter: stable;
-        box-sizing: border-box;
-      }
-      #docList details,
-      #docList summary,
-      #docList .details-body,
-      #docList .doc-row {
-        max-width: 100%;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      #docList summary > span { min-width: 0; }
-      #docList .doc-row > div:first-child { min-width: 0; }
-      #docList .doc-row > div:first-child > div,
-      #docList .doc-row > div:first-child > .doc-updated { overflow-wrap:anywhere; }
-      #docList .doc-row .badge { flex-shrink:0; white-space:nowrap; }
-      @media (min-width: 840px) {
-        .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .grid-wide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      }
-    </style>
+    <link rel="stylesheet" href="/style/pages/dashboard.css" />
   </head>
   <body>
     <header class="topbar">
@@ -215,7 +104,7 @@
       const menu = document.getElementById("menu");
       let currentEmail = "";
       let currentRole = null; // viewer's role; set once from their own account
-      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
       const directorySection = document.getElementById("directorySection");
       const userList = document.getElementById("userList");
       const hireList = document.getElementById("hireList");
@@ -301,7 +190,7 @@
 
       async function loadDirectory() {
         const role = (currentRole || "employee").toLowerCase();
-        const isAdmin = ["hr", "compliance", "it", "manager"].includes(role);
+        const isAdmin = ["admin", "manager", "superadmin", "hr", "it", "compliance"].includes(role);
         if (!isAdmin) {
           directorySection.style.display = "none";
           userList.innerHTML = "";
@@ -583,6 +472,10 @@
         try {
           const s = await fetchJson("/api/session");
           const role = (s.role || "").toLowerCase();
+          if (role === "superadmin") {
+            window.location.replace("/superadmin_dashboard.html");
+            return false;
+          }
           if (ADMIN_ROLES.includes(role)) {
             window.location.replace("/admin_panel.html");
             return false;

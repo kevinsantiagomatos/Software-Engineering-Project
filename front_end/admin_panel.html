@@ -5,85 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Dashboard | Paoli</title>
     <link rel="stylesheet" href="/style/log_in.css" />
-    <style>
-      body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-      .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
-      .avatar { width:56px; height:56px; border-radius:14px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.2rem; color:#fff; }
-      .container { max-width: 1180px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
-      .grid { display:grid; gap:16px; grid-template-columns: 1.25fr 1fr; }
-      .stack { display:grid; gap:16px; }
-      .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; min-width:0; }
-      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-      .text-input { width:100%; }
-      .list { list-style:none; padding:0; margin:0; }
-      .list li { padding:12px 0; border-bottom:1px solid #e5e7eb; }
-      .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.82rem; background:#e5e7eb; color:#111827; }
-      .badge.badge-admin { background:#dbeafe; color:#1d4ed8; }
-      .badge.badge-progress { background:#eff6ff; color:#1e3a8a; }
-      .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-      .doc-btn {
-        display:inline-flex; align-items:center; justify-content:center;
-        border:1px solid #cbd5e1; border-radius:10px; padding:8px 12px;
-        background:#fff; color:#0f172a; text-decoration:none; font-size:0.9rem; line-height:1; cursor:pointer;
-      }
-      .doc-btn:hover { background:#f8fafc; border-color:#94a3b8; }
-      .doc-btn.approve { background:#166534; border-color:#166534; color:#fff; }
-      .doc-btn.approve:hover { background:#14532d; border-color:#14532d; }
-      .doc-btn.reject { background:#b91c1c; border-color:#b91c1c; color:#fff; }
-      .doc-btn.reject:hover { background:#991b1b; border-color:#991b1b; }
-      .link-btn {
-        display:inline-flex; align-items:center; justify-content:center;
-        padding:8px 12px; border-radius:10px; border:1px solid #cdd9ef;
-        background:#f8fbff; color:#0f2f93; text-decoration:none;
-        font-size:0.86rem; font-weight:600;
-      }
-      .muted { color:#64748b; font-size:0.92rem; }
-      .panel-title { margin:0; font-size:1.1rem; }
-      .panel-subtitle { margin:6px 0 0; color:#64748b; font-size:0.92rem; }
-      .kpi-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-      .kpi-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:0.86rem; color:#334155; }
-      .hire-avatar {
-        width:42px; height:42px; border-radius:12px; background:#1f2b58; color:#fff;
-        display:flex; align-items:center; justify-content:center; font-weight:700;
-        overflow:hidden; flex-shrink:0; text-decoration:none;
-      }
-      .hire-item-link {
-        display:block; text-decoration:none; color:inherit; border:1px solid #e2e8f0; border-radius:12px; padding:12px;
-        background:#fbfdff; transition:all .15s ease;
-      }
-      .hire-item-link:hover {
-        border-color:#cdd9ef; background:#f6f9ff; box-shadow:0 6px 16px rgba(15, 23, 42, 0.08);
-      }
-      .stage-chip { font-weight:700; }
-      .stage-account { background:#dbeafe; border-color:#bfdbfe; color:#1e40af; }
-      .stage-documents { background:#fef3c7; border-color:#fde68a; color:#92400e; }
-      .stage-workflow { background:#e0e7ff; border-color:#c7d2fe; color:#3730a3; }
-      .stage-complete { background:#dcfce7; border-color:#bbf7d0; color:#166534; }
-      .progress-low { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
-      .progress-mid { background:#fef3c7; border-color:#fde68a; color:#92400e; }
-      .progress-high { background:#d1fae5; border-color:#a7f3d0; color:#065f46; }
-      .docs-good, .tasks-good { background:#dcfce7; border-color:#bbf7d0; color:#166534; }
-      .docs-warn, .tasks-warn { background:#fef3c7; border-color:#fde68a; color:#92400e; }
-      .menu-wrap { margin-left:auto; position:relative; }
-      .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.25); }
-      .menu-panel {
-        position:absolute; right:0; top:calc(100% + 8px); min-width:220px;
-        background:#fff; border:1px solid #dbe1ef; border-radius:12px; box-shadow:0 12px 30px rgba(2,6,23,0.22);
-        display:none; z-index:50; padding:6px;
-      }
-      .menu-panel.open { display:block; }
-      .menu-link {
-        display:block; padding:10px 12px; color:#0f172a; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.92rem;
-      }
-      .menu-link:hover { background:#eff6ff; color:#123093; }
-      #pageAlert {
-        display:none; margin-bottom:12px; padding:10px 12px; border-radius:10px;
-        border:1px solid #bae6cb; background:#e8f8ef; color:#146f3d; font-weight:600;
-      }
-      @media (max-width: 980px) {
-        .grid { grid-template-columns: 1fr; }
-      }
-    </style>
+    <link rel="stylesheet" href="/style/pages/admin_panel.css" />
   </head>
   <body>
     <header class="topbar">
@@ -95,6 +17,7 @@
       <div class="menu-wrap">
         <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
         <div id="menuPanel" class="menu-panel">
+          <a class="menu-link" id="menuSuperDashboard" href="/superadmin_dashboard.html" style="display:none;">Superadmin Console</a>
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
           <a class="menu-link" href="/dashboard.html">Employee View</a>
           <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
@@ -182,7 +105,7 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["hr", "compliance", "it", "manager"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
 
       const pageAlert = document.getElementById("pageAlert");
       const fullNameEl = document.getElementById("fullName");
@@ -190,6 +113,7 @@
       const avatarEl = document.getElementById("avatar");
       const menuBtn = document.getElementById("menuBtn");
       const menuPanel = document.getElementById("menuPanel");
+      const menuSuperDashboard = document.getElementById("menuSuperDashboard");
       const menuRegisterHire = document.getElementById("menuRegisterHire");
       const menuProfile = document.getElementById("menuProfile");
 
@@ -233,6 +157,7 @@
 
       let csrfToken = null;
       let sessionRole = "";
+      let sessionDepartment = "";
       let sessionEmail = "";
       let hiresData = [];
       const SORT_MODES = [
@@ -302,15 +227,19 @@
         return res.json();
       }
 
-      function applyRoleVisibility(role) {
+      function applyRoleVisibility(role, department) {
         const r = (role || "").toLowerCase();
-        const isHRReview = r === "hr" || r === "compliance";
-        const isTaskAdmin = r === "it" || r === "manager" || r === "hr";
+        const d = (department || "").toLowerCase();
+        const isSuper = r === "superadmin";
+        const isAdmin = r === "admin";
+        const isHRReview = isSuper || r === "manager" || (isAdmin && (d === "hr" || d === "compliance")) || r === "hr" || r === "compliance";
+        const isTaskAdmin = isSuper || r === "manager" || isAdmin || r === "it" || r === "hr";
 
         docCard.style.display = isHRReview ? "block" : "none";
         taskCard.style.display = isTaskAdmin ? "block" : "none";
         taskListCard.style.display = isTaskAdmin ? "block" : "none";
-        menuRegisterHire.style.display = r === "hr" || r === "manager" ? "block" : "none";
+        menuSuperDashboard.style.display = isSuper ? "block" : "none";
+        menuRegisterHire.style.display = (isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr") ? "block" : "none";
       }
 
       function stageClass(stage) {
@@ -518,6 +447,7 @@
         try {
           const session = await fetchJson("/api/session");
           sessionRole = (session.role || "").toLowerCase();
+          sessionDepartment = (session.department || "").toLowerCase();
           sessionEmail = (session.email || "").toLowerCase();
 
           if (!ADMIN_ROLES.includes(sessionRole)) {
@@ -532,7 +462,7 @@
           menuProfile.href = `/profile.html${profileEmailParam}`;
 
           assignedBy.value = sessionEmail;
-          applyRoleVisibility(sessionRole);
+          applyRoleVisibility(sessionRole, sessionDepartment);
           showLoginSuccess();
           await loadHires();
         } catch (err) {

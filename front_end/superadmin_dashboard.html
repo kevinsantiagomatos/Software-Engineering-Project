@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Superadmin Console | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <link rel="stylesheet" href="/style/pages/superadmin_dashboard.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div id="avatar" class="avatar">S</div>
+      <div>
+        <div id="titleLine" style="font-size:1.08rem; font-weight:700;">Superadmin Console</div>
+        <div id="roleLine" style="font-size:.9rem; color:#d7e4ff;">--</div>
+      </div>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel">
+          <a class="menu-link" href="/superadmin_dashboard.html">Superadmin Console</a>
+          <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
+          <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+          <a class="menu-link" id="profileLink" href="/profile.html">My Profile</a>
+          <a class="menu-link" href="/log_in.html">Log Out</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="alert" class="alert"></div>
+
+      <section class="hero">
+        <h2 style="margin:0; font-size:1.18rem;">Global Governance</h2>
+        <p class="subtitle">Manage platform roles, departmental ownership, account status, and audit traceability across all onboarding workflows.</p>
+        <div class="hero-grid" id="heroStats"></div>
+        <div class="quick-links">
+          <a class="btn" href="/admin_panel.html">Open Operations Queue</a>
+          <a class="btn" href="/admin_metrics.html">Open Metrics</a>
+          <a class="btn" href="/hr_register.html">Register New Hire</a>
+        </div>
+      </section>
+
+      <div class="layout">
+        <section class="card">
+          <h3 class="title">Identity & Access Control</h3>
+          <p class="subtitle">Set role and status by user. Admin users should always have an assigned department.</p>
+          <div class="controls">
+            <input id="searchInput" type="text" placeholder="Search user by name/email/department..." style="flex:1; min-width:240px;" />
+            <button id="refreshBtn" class="btn">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Current Role</th>
+                  <th>Department</th>
+                  <th>Set Role</th>
+                  <th>Set Department</th>
+                  <th>Set Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="title">Audit Trail</h3>
+          <p class="subtitle">Most recent sensitive actions in the system.</p>
+          <div class="controls">
+            <select id="auditLimit">
+              <option value="50">Last 50</option>
+              <option value="100" selected>Last 100</option>
+              <option value="200">Last 200</option>
+            </select>
+            <button id="loadAuditBtn" class="btn">Reload</button>
+          </div>
+          <ul id="auditList" class="audit-list"></ul>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const ADMIN_ROLES = ["employee", "contractor", "manager", "admin", "superadmin"];
+      const USER_STATUSES = ["active", "inactive", "disabled", "pending_hr_review"];
+      let csrfToken = null;
+      let allUsers = [];
+      let departments = [];
+
+      const alertEl = document.getElementById("alert");
+      const avatarEl = document.getElementById("avatar");
+      const titleLineEl = document.getElementById("titleLine");
+      const roleLineEl = document.getElementById("roleLine");
+      const heroStatsEl = document.getElementById("heroStats");
+      const usersBody = document.getElementById("usersBody");
+      const searchInput = document.getElementById("searchInput");
+      const refreshBtn = document.getElementById("refreshBtn");
+      const auditList = document.getElementById("auditList");
+      const auditLimit = document.getElementById("auditLimit");
+      const loadAuditBtn = document.getElementById("loadAuditBtn");
+      const profileLink = document.getElementById("profileLink");
+
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) menuPanel.classList.remove("open");
+      });
+
+      function showAlert(msg, isError = false) {
+        alertEl.textContent = msg;
+        alertEl.className = `alert ${isError ? "err" : "ok"}`;
+      }
+
+      async function fetchJson(url, opts = {}) {
+        const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error((await res.text()) || "Request failed");
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) return res.json();
+        return {};
+      }
+
+      async function getCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf", { headers: { Accept: "application/json" } });
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function optionHtml(options, selected) {
+        return options.map((val) => `<option value="${val}" ${String(selected || "").toLowerCase() === String(val).toLowerCase() ? "selected" : ""}>${val}</option>`).join("");
+      }
+
+      function renderHeroStats(users) {
+        const counts = {
+          total: users.length,
+          superadmin: users.filter((u) => (u.role || "").toLowerCase() === "superadmin").length,
+          admin: users.filter((u) => ["admin", "manager"].includes((u.role || "").toLowerCase())).length,
+          active: users.filter((u) => (u.status || "").toLowerCase() === "active").length,
+          pending: users.filter((u) => (u.status || "").toLowerCase() === "pending_hr_review").length,
+        };
+        heroStatsEl.innerHTML = `
+          <div class="chip"><strong>${counts.total}</strong><br/>Total accounts</div>
+          <div class="chip"><strong>${counts.superadmin}</strong><br/>Superadmins</div>
+          <div class="chip"><strong>${counts.admin}</strong><br/>Admins + Managers</div>
+          <div class="chip"><strong>${counts.active}</strong><br/>Active accounts</div>
+          <div class="chip"><strong>${counts.pending}</strong><br/>Pending HR review</div>
+        `;
+      }
+
+      function roleBadge(role) {
+        const r = (role || "").toLowerCase();
+        return `<span class="badge role-${r || "employee"}">${r || "employee"}</span>`;
+      }
+
+      function statusBadge(status) {
+        const s = (status || "").toLowerCase();
+        return `<span class="badge status-${s || "inactive"}">${s || "inactive"}</span>`;
+      }
+
+      function renderUsers() {
+        const q = (searchInput.value || "").trim().toLowerCase();
+        const filtered = allUsers.filter((u) => {
+          if (!q) return true;
+          const haystack = `${u.full_name || ""} ${u.email || ""} ${u.department || ""} ${u.role || ""}`.toLowerCase();
+          return haystack.includes(q);
+        });
+
+        usersBody.innerHTML = filtered.map((u) => {
+          const email = (u.email || "").toLowerCase();
+          const currentRole = (u.role || "employee").toLowerCase();
+          const currentDept = u.department || "";
+          const currentStatus = (u.status || "active").toLowerCase();
+          return `
+            <tr data-email="${email}">
+              <td>
+                <div style="font-weight:700;">${u.full_name || email}</div>
+                <div class="muted">${email}</div>
+              </td>
+              <td>${roleBadge(currentRole)}</td>
+              <td>${currentDept || "<span class='muted'>none</span>"}</td>
+              <td>
+                <select class="role-select">${optionHtml(ADMIN_ROLES, currentRole)}</select>
+              </td>
+              <td>
+                <select class="dept-select">
+                  <option value="">(none)</option>
+                  ${optionHtml(departments, currentDept)}
+                </select>
+              </td>
+              <td>
+                <div style="margin-bottom:6px;">${statusBadge(currentStatus)}</div>
+                <select class="status-select">${optionHtml(USER_STATUSES, currentStatus)}</select>
+              </td>
+              <td>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button class="btn primary save-role-btn">Save Role</button>
+                  <button class="btn save-status-btn">Save Status</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      async function saveRole(row) {
+        const email = row.dataset.email;
+        const role = row.querySelector(".role-select").value;
+        const department = row.querySelector(".dept-select").value;
+        const csrf = await getCsrf();
+        const form = new URLSearchParams();
+        form.set("role", role);
+        form.set("department", department);
+        await fetchJson(`/api/admin/users/${encodeURIComponent(email)}/role`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-CSRF-Token": csrf,
+            Accept: "application/json",
+          },
+          body: form.toString(),
+        });
+      }
+
+      async function saveStatus(row) {
+        const email = row.dataset.email;
+        const status = row.querySelector(".status-select").value;
+        const csrf = await getCsrf();
+        const form = new URLSearchParams();
+        form.set("status", status);
+        await fetchJson(`/api/admin/users/${encodeURIComponent(email)}/status`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-CSRF-Token": csrf,
+            Accept: "application/json",
+          },
+          body: form.toString(),
+        });
+      }
+
+      async function loadUsersAndOrg(showNotice = false) {
+        const [usersRes, orgRes] = await Promise.all([
+          fetchJson("/api/users"),
+          fetchJson("/api/org/structure"),
+        ]);
+        allUsers = usersRes.users || [];
+        departments = (orgRes.departments || []).map((d) => d.name).filter(Boolean);
+        renderHeroStats(allUsers);
+        renderUsers();
+        if (showNotice) showAlert("User governance data refreshed.");
+      }
+
+      async function loadAudit() {
+        const limit = Number(auditLimit.value || "100");
+        const data = await fetchJson(`/api/admin/audit-log?limit=${encodeURIComponent(limit)}`);
+        const entries = data.entries || [];
+        if (!entries.length) {
+          auditList.innerHTML = '<li class="muted">No audit entries available.</li>';
+          return;
+        }
+        auditList.innerHTML = entries.map((e) => {
+          let detailText = "";
+          try {
+            detailText = JSON.stringify(typeof e.detail === "string" ? JSON.parse(e.detail) : e.detail || {}, null, 0);
+          } catch (_) {
+            detailText = String(e.detail || "");
+          }
+          return `
+            <li>
+              <div style="font-weight:700;">${e.action || "action"}</div>
+              <div class="muted" style="margin-top:4px; word-break:break-word;">${detailText || "{}"}</div>
+              <div class="audit-meta">Actor: ${e.actor || "system"} · ${e.timestamp || ""}</div>
+            </li>
+          `;
+        }).join("");
+      }
+
+      usersBody.addEventListener("click", async (e) => {
+        const row = e.target.closest("tr");
+        if (!row) return;
+        try {
+          if (e.target.classList.contains("save-role-btn")) {
+            await saveRole(row);
+            await loadUsersAndOrg();
+            showAlert("Role updated.");
+          }
+          if (e.target.classList.contains("save-status-btn")) {
+            await saveStatus(row);
+            await loadUsersAndOrg();
+            showAlert("Status updated.");
+          }
+        } catch (err) {
+          showAlert(err.message || "Unable to save change.", true);
+        }
+      });
+
+      searchInput.addEventListener("input", renderUsers);
+      refreshBtn.addEventListener("click", async () => {
+        try {
+          await loadUsersAndOrg(true);
+          await loadAudit();
+        } catch (err) {
+          showAlert(err.message || "Refresh failed.", true);
+        }
+      });
+      loadAuditBtn.addEventListener("click", async () => {
+        try {
+          await loadAudit();
+          showAlert("Audit log refreshed.");
+        } catch (err) {
+          showAlert(err.message || "Failed to load audit log.", true);
+        }
+      });
+
+      async function bootstrap() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get("login") === "success") {
+            showAlert("Login successful.");
+            params.delete("login");
+            const cleaned = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, "");
+            window.history.replaceState({}, "", cleaned);
+          }
+
+          const session = await fetchJson("/api/session", { headers: { Accept: "application/json" } });
+          const role = (session.role || "").toLowerCase();
+          if (role !== "superadmin") {
+            if (["admin", "manager"].includes(role)) {
+              window.location.replace("/admin_panel.html");
+            } else {
+              const email = encodeURIComponent(session.email || "");
+              window.location.replace(`/dashboard.html?email=${email}`);
+            }
+            return;
+          }
+
+          titleLineEl.textContent = `${session.full_name || session.email} · Superadmin Console`;
+          roleLineEl.textContent = `Role: ${role} · ${session.email || ""}`;
+          avatarEl.textContent = (session.full_name || session.email || "S").slice(0, 1).toUpperCase();
+          profileLink.href = `/profile.html?email=${encodeURIComponent((session.email || "").toLowerCase())}`;
+
+          await loadUsersAndOrg();
+          await loadAudit();
+          if (!alertEl.textContent) showAlert("Superadmin console ready.");
+        } catch (err) {
+          showAlert(err.message || "Unable to initialize superadmin console.", true);
+        }
+      }
+
+      bootstrap();
+    </script>
+  </body>
+</html>
