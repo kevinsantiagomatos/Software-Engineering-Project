@@ -161,6 +161,7 @@ def register_hire_routes(app, deps):
         policies = fetch_all("SELECT * FROM policy_ack")
         trainings = fetch_all("SELECT * FROM training_completion")
         it_provisions = fetch_all("SELECT * FROM it_provision")
+        it_access_items = fetch_all("SELECT * FROM it_access_item")
         users = fetch_all("SELECT email, full_name, avatar_url FROM `user`")
         users_by_email = {(u.get("email") or "").lower(): u for u in users}
         hydrated = hydrate_hires_with_context(
@@ -171,6 +172,7 @@ def register_hire_routes(app, deps):
             policies,
             trainings,
             it_provisions,
+            it_access_items=it_access_items,
             users_by_email=users_by_email,
         )
         return jsonify({"hires": hydrated})
@@ -191,6 +193,7 @@ def register_hire_routes(app, deps):
         policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,)) if email else []
         trainings = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,)) if email else []
         it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,)) if email else []
+        it_access_items = fetch_all("SELECT * FROM it_access_item WHERE email = %s", (email,)) if email else []
         user = fetch_one("SELECT email, full_name, avatar_url FROM `user` WHERE email = %s", (email,)) if email else {}
         users_by_email = {email: user} if email else {}
 
@@ -202,6 +205,7 @@ def register_hire_routes(app, deps):
             policies,
             trainings,
             it_provisions,
+            it_access_items=it_access_items,
             users_by_email=users_by_email,
         )
         payload = hydrated[0] if hydrated else {}
@@ -210,6 +214,7 @@ def register_hire_routes(app, deps):
         payload["policies"] = policies
         payload["trainings"] = trainings
         payload["it_provisions"] = it_provisions
+        payload["it_access_items"] = it_access_items
         return jsonify(payload)
 
     @app.post("/api/new-hires/<hire_id>")

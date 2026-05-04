@@ -393,7 +393,7 @@
           opts.headers = { ...(opts.headers || {}), 'X-CSRF-Token': token };
         }
         const res = await fetch(url, opts);
-        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+        if (res.status === 401 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
           window.location.replace("/log_in.html");
           throw new Error("Authentication required");
         }
@@ -462,11 +462,16 @@
 
         const policies = (h.policies || []).length;
         const trainings = (h.trainings || []).length;
+        const itSummary = h.progress?.it_access || {};
+        const itConfirmed = Number(itSummary.confirmed_count || 0);
+        const itTotal = Number(itSummary.total_items || 0);
         const itp = (h.it_provisions || []).length;
+        const itLink = h.email ? `/it_access.html?email=${encodeURIComponent(h.email)}` : "/it_access.html";
         extraList.innerHTML = `
           <li><div>Policy signatures</div><div class="actions"><span class="badge">${policies}</span></div></li>
           <li><div>Training completions</div><div class="actions"><span class="badge">${trainings}</span></div></li>
-          <li><div>IT provisions</div><div class="actions"><span class="badge">${itp}</span></div></li>
+          <li><div>IT access checklist</div><div class="actions"><span class="badge">${itConfirmed}/${itTotal || 0}</span><a class="doc-btn" href="${itLink}">Open</a></div></li>
+          <li><div>Legacy IT provision records</div><div class="actions"><span class="badge">${itp}</span></div></li>
         `;
       }
 
@@ -474,7 +479,7 @@
         const h = await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`);
         hireEmail = (h.email || "").toLowerCase();
         dynamicDocLabels = {};
-        if (hireEmail) {
+        if (hireEmail && (canReviewDocs || canManageDocSlots)) {
           try {
             const reqData = await fetchJson(`/documents/requirements?email=${encodeURIComponent(hireEmail)}`);
             (reqData.requirements || []).forEach((r) => {

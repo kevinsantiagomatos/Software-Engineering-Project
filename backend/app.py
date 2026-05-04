@@ -39,6 +39,7 @@ from routes.admin_routes import register_admin_routes
 from routes.auth_routes import register_auth_routes
 from routes.document_routes import register_document_routes
 from routes.hire_routes import register_hire_routes
+from routes.it_access_routes import register_it_access_routes
 from routes.page_routes import register_page_routes
 from routes.task_routes import register_task_routes
 REQUIRED_TABLES = (
@@ -154,6 +155,23 @@ ONBOARDING_BLUEPRINT = {
         {"id": "compliance", "name": "Elliot (Compliance)", "responsibilities": "Contracts, approvals"},
     ],
 }
+IT_ACCESS_STATE_NOT_CONFIGURED = "not_configured"
+IT_ACCESS_STATE_PENDING = "configured_pending_confirmation"
+IT_ACCESS_STATE_CONFIRMED = "configured_confirmed"
+IT_ACCESS_STATE_DECLINED = "configured_declined"
+IT_ACCESS_STATE_ERROR = "configured_error"
+IT_ACCESS_STATES = {
+    IT_ACCESS_STATE_NOT_CONFIGURED,
+    IT_ACCESS_STATE_PENDING,
+    IT_ACCESS_STATE_CONFIRMED,
+    IT_ACCESS_STATE_DECLINED,
+    IT_ACCESS_STATE_ERROR,
+}
+IT_ACCESS_TEMPLATE_KEY_ORDER = [
+    item.get("id")
+    for item in (ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or [])
+    if (item.get("id") or "").strip()
+]
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET") or secrets.token_hex(32)
@@ -348,6 +366,34 @@ def ensure_additive_schema():
             """
         )
 
+    if not _table_exists("it_access_item"):
+        execute(
+            """
+            CREATE TABLE it_access_item (
+                id BIGINT NOT NULL AUTO_INCREMENT,
+                email VARCHAR(255) NOT NULL,
+                access_key VARCHAR(64) NOT NULL,
+                access_title VARCHAR(255) NOT NULL,
+                state VARCHAR(48) NOT NULL DEFAULT 'not_configured',
+                details TEXT DEFAULT NULL,
+                portal_url VARCHAR(512) DEFAULT NULL,
+                username_hint VARCHAR(255) DEFAULT NULL,
+                notes TEXT DEFAULT NULL,
+                configured_by VARCHAR(255) DEFAULT NULL,
+                configured_at DATETIME(6) DEFAULT NULL,
+                hire_response_note TEXT DEFAULT NULL,
+                hire_response_at DATETIME(6) DEFAULT NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                updated_by VARCHAR(255) DEFAULT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_it_access_email_key (email, access_key),
+                KEY idx_it_access_email_state (email, state),
+                KEY idx_it_access_email_updated (email, updated_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
+
     for dep_name in DEFAULT_DEPARTMENTS:
         execute(
             """
@@ -422,6 +468,44 @@ def ensure_additive_schema():
         WHERE LOWER(role) = 'superadmin'
         """
     )
+
+    # Backfill granular IT access checklist from legacy coarse it_provision records.
+    if _table_exists("it_provision"):
+        legacy_it_rows = fetch_all(
+            """
+            SELECT DISTINCT LOWER(email) AS email
+            FROM it_provision
+            WHERE email IS NOT NULL AND email <> ''
+            """
+        )
+        template_items = ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or []
+        template_map = {
+            (item.get("id") or "").strip().lower(): (item.get("title") or "IT Access").strip()
+            for item in template_items
+            if (item.get("id") or "").strip()
+        }
+        for row in legacy_it_rows:
+            legacy_email = (row.get("email") or "").strip().lower()
+            if not legacy_email:
+                continue
+            for access_key, access_title in template_map.items():
+                execute(
+                    """
+                    INSERT INTO it_access_item (
+                        email, access_key, access_title, state, configured_by, configured_at, hire_response_at, created_at, updated_at, updated_by
+                    )
+                    VALUES (%s, %s, %s, %s, %s, NOW(6), NOW(6), NOW(6), NOW(6), %s)
+                    ON DUPLICATE KEY UPDATE access_title = VALUES(access_title)
+                    """,
+                    (
+                        legacy_email,
+                        access_key,
+                        access_title,
+                        IT_ACCESS_STATE_CONFIRMED,
+                        "legacy_migration",
+                        "legacy_migration",
+                    ),
+                )
 
 
 def ensure_placeholder_assets():
@@ -767,6 +851,18 @@ def can_manage_hiring_admin() -> bool:
     return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department == "hr")
 
 
+def can_view_it_access_admin() -> bool:
+    role = (session.get("role") or "").strip().lower()
+    department = session_department_name()
+    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "it", "compliance"})
+
+
+def can_manage_it_access_admin() -> bool:
+    role = (session.get("role") or "").strip().lower()
+    department = session_department_name()
+    return role == SUPERADMIN_ROLE or (role == "admin" and department == "it")
+
+
 def task_category_allowed_for_current_admin(category: str) -> bool:
     role = (session.get("role") or "").strip().lower()
     department = session_department_name()
@@ -936,6 +1032,159 @@ def effective_required_document_types_for_email(email: str, role_hint: str = "")
     return merged
 
 
+def it_access_template_items():
+    checklist = ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or []
+    items = []
+    for item in checklist:
+        key = (item.get("id") or "").strip().lower()
+        if not key:
+            continue
+        items.append(
+            {
+                "id": key,
+                "title": (item.get("title") or key.replace("_", " ").title()).strip(),
+                "target": (item.get("target") or "it").strip().lower(),
+            }
+        )
+    return items
+
+
+def normalize_it_access_state(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in IT_ACCESS_STATES:
+        return IT_ACCESS_STATE_NOT_CONFIGURED
+    return normalized
+
+
+def it_access_state_label(state: str) -> str:
+    normalized = normalize_it_access_state(state)
+    labels = {
+        IT_ACCESS_STATE_NOT_CONFIGURED: "Not configured",
+        IT_ACCESS_STATE_PENDING: "Configured, awaiting confirmation",
+        IT_ACCESS_STATE_CONFIRMED: "Configured and confirmed",
+        IT_ACCESS_STATE_DECLINED: "Configured, access declined",
+        IT_ACCESS_STATE_ERROR: "Configured, access error",
+    }
+    return labels.get(normalized, "Not configured")
+
+
+def it_access_state_color(state: str) -> str:
+    normalized = normalize_it_access_state(state)
+    palette = {
+        IT_ACCESS_STATE_NOT_CONFIGURED: "white",
+        IT_ACCESS_STATE_PENDING: "yellow",
+        IT_ACCESS_STATE_CONFIRMED: "green",
+        IT_ACCESS_STATE_DECLINED: "red",
+        IT_ACCESS_STATE_ERROR: "red",
+    }
+    return palette.get(normalized, "white")
+
+
+def ensure_it_access_rows_for_email(email: str):
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return
+    for item in it_access_template_items():
+        execute(
+            """
+            INSERT INTO it_access_item (email, access_key, access_title, state, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, NOW(6), NOW(6))
+            ON DUPLICATE KEY UPDATE access_title = VALUES(access_title)
+            """,
+            (normalized, item["id"], item["title"], IT_ACCESS_STATE_NOT_CONFIGURED),
+        )
+
+
+def serialize_it_access_rows(rows):
+    normalized = []
+    for row in rows or []:
+        item = dict(row or {})
+        state = normalize_it_access_state(item.get("state"))
+        item["email"] = (item.get("email") or "").strip().lower()
+        item["access_key"] = (item.get("access_key") or "").strip().lower()
+        item["access_title"] = (item.get("access_title") or item.get("access_key") or "IT Access").strip()
+        item["state"] = state
+        item["state_label"] = it_access_state_label(state)
+        item["state_color"] = it_access_state_color(state)
+        item["configured"] = state != IT_ACCESS_STATE_NOT_CONFIGURED
+        item["confirmed"] = state == IT_ACCESS_STATE_CONFIRMED
+        for date_field in ("configured_at", "hire_response_at", "created_at", "updated_at"):
+            value = item.get(date_field)
+            if value is None:
+                item[date_field] = None
+            elif hasattr(value, "isoformat"):
+                item[date_field] = value.isoformat()
+            else:
+                item[date_field] = str(value)
+        normalized.append(item)
+    return normalized
+
+
+def load_it_access_items_for_email(email: str):
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return []
+    rows = fetch_all(
+        """
+        SELECT
+            id,
+            email,
+            access_key,
+            access_title,
+            state,
+            details,
+            portal_url,
+            username_hint,
+            notes,
+            configured_by,
+            configured_at,
+            hire_response_note,
+            hire_response_at,
+            created_at,
+            updated_at,
+            updated_by
+        FROM it_access_item
+        WHERE LOWER(email) = LOWER(%s)
+        """,
+        (normalized,),
+    )
+    order = {key: idx for idx, key in enumerate(IT_ACCESS_TEMPLATE_KEY_ORDER)}
+    serialized = serialize_it_access_rows(rows)
+    serialized.sort(
+        key=lambda row: (
+            order.get((row.get("access_key") or "").strip().lower(), 999),
+            (row.get("access_title") or "").strip().lower(),
+        )
+    )
+    return serialized
+
+
+def it_access_summary_for_rows(rows):
+    states_by_key = {
+        item["id"]: IT_ACCESS_STATE_NOT_CONFIGURED for item in it_access_template_items()
+    }
+    for row in rows or []:
+        key = (row.get("access_key") or "").strip().lower()
+        if key in states_by_key:
+            states_by_key[key] = normalize_it_access_state(row.get("state"))
+
+    total = len(states_by_key)
+    confirmed = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_CONFIRMED)
+    pending = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_PENDING)
+    issues = sum(1 for state in states_by_key.values() if state in {IT_ACCESS_STATE_DECLINED, IT_ACCESS_STATE_ERROR})
+    configured = sum(1 for state in states_by_key.values() if state != IT_ACCESS_STATE_NOT_CONFIGURED)
+    not_configured = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_NOT_CONFIGURED)
+    return {
+        "total_items": total,
+        "configured_count": configured,
+        "confirmed_count": confirmed,
+        "pending_count": pending,
+        "issues_count": issues,
+        "not_configured_count": not_configured,
+        "all_confirmed": total > 0 and confirmed == total,
+    }
+
+
 def normalize_optional_date_field(value, field_name: str):
     raw = (value or "").strip()
     if not raw:
@@ -947,18 +1196,31 @@ def normalize_optional_date_field(value, field_name: str):
     return parsed.strftime("%Y-%m-%d")
 
 
-def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None, it_provisions=None, required_doc_types=None):
+def user_progress_snapshot(
+    email: str,
+    docs=None,
+    tasks=None,
+    policies=None,
+    trainings=None,
+    it_provisions=None,
+    required_doc_types=None,
+    it_access_items=None,
+):
     docs = docs or []
     tasks = tasks or []
     policies = policies or []
     trainings = trainings or []
     it_provisions = it_provisions or []
+    it_access_items = it_access_items or []
 
     ud = [d for d in docs if d.get("uploader_email") == email]
     ut = [t for t in tasks if t.get("owner_email") == email]
     upol = [p for p in policies if p.get("email") == email]
     utr = [t for t in trainings if t.get("email") == email]
     uit = [p for p in it_provisions if p.get("email") == email]
+    uita = [item for item in it_access_items if (item.get("email") or "").strip().lower() == email]
+    it_summary = it_access_summary_for_rows(uita)
+    it_done = bool(it_summary.get("all_confirmed")) or bool(uit)
 
     required_doc_types = required_doc_types or REQUIRED_DOCUMENT_TYPES
     required_doc_ids = [d["id"] for d in required_doc_types if not d.get("optional")]
@@ -979,7 +1241,7 @@ def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, tra
     expected_checks = [
         {"key": "policy_ack", "label": "Policies acknowledged", "done": bool(upol)},
         {"key": "training", "label": "Training completed", "done": bool(utr)},
-        {"key": "it_access", "label": "IT provisioning completed", "done": bool(uit)},
+        {"key": "it_access", "label": "IT provisioning completed", "done": it_done},
     ]
     extra_total = len(expected_checks)
     extra_done = sum(1 for item in expected_checks if item["done"])
@@ -1006,14 +1268,29 @@ def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, tra
         "tasks": {"total": task_total, "completed": task_done},
         "policies_signed": len(upol),
         "training_completed": len(utr),
-        "it_provisioned": len(uit),
+        "it_provisioned": int(it_summary.get("confirmed_count") or len(uit)),
+        "it_access": {
+            **it_summary,
+            "legacy_records": len(uit),
+        },
         "progress_percent": round(percentage, 2),
         "stage": stage,
     }
 
 
-def hydrate_hires_with_context(hires, attachments, docs, tasks, policies, trainings, it_provisions, users_by_email=None):
+def hydrate_hires_with_context(
+    hires,
+    attachments,
+    docs,
+    tasks,
+    policies,
+    trainings,
+    it_provisions,
+    it_access_items=None,
+    users_by_email=None,
+):
     users_by_email = users_by_email or {}
+    it_access_items = it_access_items or []
     att_by_hire = {}
     for att in attachments:
         att_by_hire.setdefault(att["hire_id"], []).append(att)
@@ -1036,6 +1313,7 @@ def hydrate_hires_with_context(hires, attachments, docs, tasks, policies, traini
                 policies=policies,
                 trainings=trainings,
                 it_provisions=it_provisions,
+                it_access_items=it_access_items,
                 required_doc_types=effective_required_document_types_for_email(email, employment_type),
             )
         hydrated.append(item)
@@ -1114,6 +1392,29 @@ register_hire_routes(
         "register_user_db": register_user_db,
         "enrich_document_record": enrich_document_record,
         "serialize_task_rows": serialize_task_rows,
+    },
+)
+register_it_access_routes(
+    app,
+    {
+        "login_required": login_required,
+        "require_role": require_role,
+        "ADMIN_ROLES": ADMIN_ROLES,
+        "fetch_one": fetch_one,
+        "execute": execute,
+        "append_audit": append_audit,
+        "can_view_it_access_admin": can_view_it_access_admin,
+        "can_manage_it_access_admin": can_manage_it_access_admin,
+        "ensure_it_access_rows_for_email": ensure_it_access_rows_for_email,
+        "load_it_access_items_for_email": load_it_access_items_for_email,
+        "it_access_template_items": it_access_template_items,
+        "normalize_it_access_state": normalize_it_access_state,
+        "it_access_summary_for_rows": it_access_summary_for_rows,
+        "IT_ACCESS_STATE_NOT_CONFIGURED": IT_ACCESS_STATE_NOT_CONFIGURED,
+        "IT_ACCESS_STATE_PENDING": IT_ACCESS_STATE_PENDING,
+        "IT_ACCESS_STATE_CONFIRMED": IT_ACCESS_STATE_CONFIRMED,
+        "IT_ACCESS_STATE_DECLINED": IT_ACCESS_STATE_DECLINED,
+        "IT_ACCESS_STATE_ERROR": IT_ACCESS_STATE_ERROR,
     },
 )
 register_document_routes(

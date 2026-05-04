@@ -296,7 +296,7 @@
         const items = [
           { key: "account", label: "Account Created", icon: "👤", href: null },
           { key: "documents", label: "Document Filing and Submitting", icon: "📎", href: "/upload_documents.html" },
-          { key: "it", label: "IT Access Configuration", icon: "🖥️", href: "/under_construction.html" },
+          { key: "it", label: "IT Access Configuration", icon: "🖥️", href: "/it_access.html" },
           { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: "/under_construction.html" }
         ];
         stepsEl.innerHTML = items
@@ -362,10 +362,17 @@
           progressDetail.textContent = `${progress.documents.approved}/${progress.documents.total} docs approved, ${progress.tasks.completed}/${progress.tasks.total} tasks done.`;
           renderDocs(reqs.requirements || []);
           const baseTasks = tasks.tasks || [];
+          const itAccess = progress.it_access || {};
+          let itPseudoStatus = "pending";
+          if (itAccess.all_confirmed || Number(progress.it_provisioned || 0) > 0) {
+            itPseudoStatus = "completed";
+          } else if (Number(itAccess.configured_count || 0) > 0) {
+            itPseudoStatus = "in_progress";
+          }
           const pseudoTasks = [
             { id: "policy_ack", title: "Sign company policies", description: "", status: progress.policies_signed ? "completed" : "pending" },
             { id: "training", title: "Complete onboarding training", description: "", status: progress.training_completed ? "completed" : "pending" },
-            { id: "it_provision", title: "IT provisioning checklist", description: "", status: progress.it_provisioned ? "completed" : "pending" },
+            { id: "it_provision", title: "IT provisioning checklist", description: "", status: itPseudoStatus },
           ];
           const combinedTasks = [...baseTasks, ...pseudoTasks];
           renderTasks(combinedTasks);
@@ -414,6 +421,7 @@
         const items = [];
         const emailParam = currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : "";
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/upload_documents.html${emailParam}">Upload documents</a>`);
+        items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/it_access.html${emailParam}">IT access</a>`);
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/profile.html${emailParam}">My profile</a>`);
         const role = currentRole || "employee";
         if (ADMIN_ROLES.includes(role)) {

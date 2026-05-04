@@ -101,6 +101,7 @@ def register_admin_routes(app, deps):
         policies = fetch_all("SELECT email FROM policy_ack")
         trainings = fetch_all("SELECT email FROM training_completion")
         it_provisions = fetch_all("SELECT email FROM it_provision")
+        it_access_items = fetch_all("SELECT email, access_key, state FROM it_access_item")
 
         stage_counts = {}
         status_counts = {}
@@ -128,6 +129,7 @@ def register_admin_routes(app, deps):
                 policies=policies,
                 trainings=trainings,
                 it_provisions=it_provisions,
+                it_access_items=it_access_items,
                 required_doc_types=effective_required_document_types_for_email(email, employment_type),
             )
             stage = progress.get("stage") or "Unknown"
@@ -168,6 +170,7 @@ def register_admin_routes(app, deps):
                     "policy_signatures": len(policies),
                     "training_completions": len(trainings),
                     "it_provisions": len(it_provisions),
+                    "it_access_items": len(it_access_items),
                 },
                 "distribution": {
                     "stage": stage_counts,

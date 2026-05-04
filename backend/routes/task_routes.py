@@ -147,10 +147,12 @@ def register_task_routes(app, deps):
             docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
             tasks = fetch_all("SELECT * FROM task WHERE owner_email = %s", (email,))
             it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,))
+            it_access_items = fetch_all("SELECT * FROM it_access_item WHERE email = %s", (email,))
         else:
             docs = fetch_all("SELECT * FROM document")
             tasks = fetch_all("SELECT * FROM task")
             it_provisions = fetch_all("SELECT * FROM it_provision")
+            it_access_items = fetch_all("SELECT * FROM it_access_item")
 
         def user_progress(e):
             required_doc_types = effective_required_document_types_for_email(e)
@@ -161,6 +163,7 @@ def register_task_routes(app, deps):
                 policies=fetch_all("SELECT * FROM policy_ack"),
                 trainings=fetch_all("SELECT * FROM training_completion"),
                 it_provisions=it_provisions,
+                it_access_items=it_access_items,
                 required_doc_types=required_doc_types,
             )
 

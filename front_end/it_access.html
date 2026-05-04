@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IT Access Configuration | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <link rel="stylesheet" href="/style/pages/it_access.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">I</div>
+      <div class="top-meta">
+        <div class="top-title" id="topTitle">IT Access Configuration</div>
+        <div class="top-subtitle" id="topSubtitle">Review and confirm each access item.</div>
+      </div>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel"></div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h1 class="head-title">IT Access Checklist</h1>
+        <p class="muted" id="subjectLine">Loading checklist...</p>
+        <div class="legend">
+          <span class="legend-chip"><span class="legend-dot dot-white"></span>Not configured</span>
+          <span class="legend-chip"><span class="legend-dot dot-yellow"></span>Configured by IT, awaiting confirmation</span>
+          <span class="legend-chip"><span class="legend-dot dot-green"></span>Configured and confirmed</span>
+          <span class="legend-chip"><span class="legend-dot dot-red"></span>Configured but declined/error</span>
+        </div>
+        <div class="summary-row" id="summaryRow"></div>
+      </section>
+
+      <section id="cardsGrid" class="cards-grid"></section>
+    </main>
+
+    <script>
+      const ADMIN_ROLES = new Set(["admin", "manager", "superadmin", "hr", "it", "compliance"]);
+      const STATE_CLASS = {
+        not_configured: "white",
+        configured_pending_confirmation: "yellow",
+        configured_confirmed: "green",
+        configured_declined: "red",
+        configured_error: "red",
+      };
+
+      const avatarEl = document.getElementById("avatar");
+      const topTitleEl = document.getElementById("topTitle");
+      const topSubtitleEl = document.getElementById("topSubtitle");
+      const subjectLineEl = document.getElementById("subjectLine");
+      const summaryRowEl = document.getElementById("summaryRow");
+      const cardsGridEl = document.getElementById("cardsGrid");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+
+      let csrfToken = null;
+      let sessionEmail = "";
+      let sessionRole = "";
+      let sessionDepartment = "";
+      let targetEmail = "";
+      let canManage = false;
+      let isOwner = false;
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function normalizeEmail(value) {
+        return (value || "").toString().trim().toLowerCase();
+      }
+
+      async function fetchJson(url, options) {
+        const opts = options ? { ...options } : {};
+        const method = (opts.method || "GET").toUpperCase();
+        if (method !== "GET") {
+          const token = await ensureCsrf();
+          opts.headers = { ...(opts.headers || {}), "X-CSRF-Token": token };
+        }
+        const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function renderSummary(summary) {
+        const s = summary || {};
+        summaryRowEl.innerHTML = `
+          <div class="summary-kpi"><div class="summary-label">Total items</div><div class="summary-value">${s.total_items || 0}</div></div>
+          <div class="summary-kpi"><div class="summary-label">Configured</div><div class="summary-value">${s.configured_count || 0}</div></div>
+          <div class="summary-kpi"><div class="summary-label">Awaiting confirmation</div><div class="summary-value">${s.pending_count || 0}</div></div>
+          <div class="summary-kpi"><div class="summary-label">Confirmed</div><div class="summary-value">${s.confirmed_count || 0}</div></div>
+          <div class="summary-kpi"><div class="summary-label">Issues</div><div class="summary-value">${s.issues_count || 0}</div></div>
+        `;
+      }
+
+      function stateBadge(state, label) {
+        const klass = STATE_CLASS[state] || "white";
+        return `<span class="state-badge badge-${klass}">${escapeHtml(label || state || "Not configured")}</span>`;
+      }
+
+      function renderCards(items) {
+        if (!items.length) {
+          cardsGridEl.innerHTML = `<section class="card"><p class="muted">No IT access items available for this user.</p></section>`;
+          return;
+        }
+        cardsGridEl.innerHTML = items
+          .map((item) => {
+            const key = escapeHtml(item.access_key || "");
+            const state = (item.state || "not_configured").toLowerCase();
+            const stateClass = STATE_CLASS[state] || "white";
+            const configured = !!item.configured;
+            const confirmed = !!item.confirmed;
+            const configuredAt = item.configured_at ? new Date(item.configured_at).toLocaleString() : "Not configured";
+            const responseAt = item.hire_response_at ? new Date(item.hire_response_at).toLocaleString() : "No response";
+            const portalLink = item.portal_url
+              ? `<a class="forgot-link" href="${escapeHtml(item.portal_url)}" target="_blank" rel="noopener">${escapeHtml(item.portal_url)}</a>`
+              : `<span class="hint">No portal URL set.</span>`;
+            const manageForm = canManage
+              ? `
+                <form class="it-form configure-form" data-key="${key}">
+                  <h4 class="it-form-title">IT configuration update</h4>
+                  <div class="it-field">
+                    <label>State</label>
+                    <select class="text-input" name="state">
+                      <option value="not_configured" ${state === "not_configured" ? "selected" : ""}>Not configured</option>
+                      <option value="configured_pending_confirmation" ${state === "configured_pending_confirmation" ? "selected" : ""}>Configured, waiting confirmation</option>
+                      <option value="configured_error" ${state === "configured_error" ? "selected" : ""}>Configured, access error</option>
+                    </select>
+                  </div>
+                  <div class="it-field">
+                    <label>Portal URL</label>
+                    <input class="text-input" name="portal_url" value="${escapeHtml(item.portal_url || "")}" placeholder="https://..." />
+                  </div>
+                  <div class="it-field">
+                    <label>Username / email hint</label>
+                    <input class="text-input" name="username_hint" value="${escapeHtml(item.username_hint || "")}" placeholder="user@paoli.io" />
+                  </div>
+                  <div class="it-field">
+                    <label>Access details</label>
+                    <textarea class="text-input" name="details" rows="3" placeholder="Steps, SSO notes, required actions...">${escapeHtml(item.details || "")}</textarea>
+                  </div>
+                  <div class="it-field">
+                    <label>Internal notes</label>
+                    <textarea class="text-input" name="notes" rows="2" placeholder="Support notes for IT follow-up...">${escapeHtml(item.notes || "")}</textarea>
+                  </div>
+                  <div class="actions">
+                    <button type="submit" class="submit-button" style="padding:8px 14px;">Save</button>
+                    <span class="hint">Only IT admin / superadmin can update.</span>
+                  </div>
+                </form>
+              `
+              : "";
+            const respondForm = item.can_respond
+              ? `
+                <section class="it-form card-actions">
+                  <h4 class="it-form-title">New hire response</h4>
+                  <div class="it-field">
+                    <label>Response note (optional)</label>
+                    <textarea class="text-input response-note" data-key="${key}" rows="2" placeholder="If there is any issue, explain it here..."></textarea>
+                  </div>
+                  <div class="actions">
+                    <button type="button" class="submit-button respond-btn" data-key="${key}" data-response="confirmed" style="padding:8px 12px;">Confirm access</button>
+                    <button type="button" class="submit-button respond-btn danger-btn" data-key="${key}" data-response="declined" style="padding:8px 12px;">Decline / report issue</button>
+                  </div>
+                </section>
+              `
+              : "";
+
+            return `
+              <details class="it-card is-${stateClass}">
+                <summary>
+                  <div class="card-head">
+                    <h3 class="card-title">${escapeHtml(item.access_title || item.access_key || "IT Access")}</h3>
+                    ${stateBadge(state, item.state_label)}
+                  </div>
+                  <div class="checklist-row">
+                    <span class="check-pill ${configured ? "done" : ""}">${configured ? "✓" : "○"} Configured by IT</span>
+                    <span class="check-pill ${confirmed ? "done" : ""}">${confirmed ? "✓" : "○"} Confirmed by new hire</span>
+                  </div>
+                </summary>
+                <div class="card-body">
+                  <div class="detail-grid">
+                    <div class="detail-box">
+                      <div class="detail-label">Portal</div>
+                      <div class="detail-value">${portalLink}</div>
+                    </div>
+                    <div class="detail-box">
+                      <div class="detail-label">Username hint</div>
+                      <div class="detail-value">${escapeHtml(item.username_hint || "Not provided")}</div>
+                    </div>
+                    <div class="detail-box">
+                      <div class="detail-label">Access details</div>
+                      <div class="detail-value">${escapeHtml(item.details || "No details provided yet.")}</div>
+                    </div>
+                    <div class="detail-box">
+                      <div class="detail-label">Notes</div>
+                      <div class="detail-value">${escapeHtml(item.notes || "No notes.")}</div>
+                    </div>
+                    <div class="detail-box">
+                      <div class="detail-label">Configured by</div>
+                      <div class="detail-value">${escapeHtml(item.configured_by || "Not configured")} • ${escapeHtml(configuredAt)}</div>
+                    </div>
+                    <div class="detail-box">
+                      <div class="detail-label">Hire response</div>
+                      <div class="detail-value">${escapeHtml(item.hire_response_note || "No response note.")} • ${escapeHtml(responseAt)}</div>
+                    </div>
+                  </div>
+                  ${manageForm}
+                  ${respondForm}
+                </div>
+              </details>
+            `;
+          })
+          .join("");
+      }
+
+      function buildMenu() {
+        const emailParam = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : "";
+        const profileParam = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
+        const menuItems = [
+          `<a class="menu-link" href="/dashboard.html${emailParam}">Dashboard</a>`,
+          `<a class="menu-link" href="/upload_documents.html${emailParam}">Documents</a>`,
+          `<a class="menu-link" href="/it_access.html${emailParam}">IT Access</a>`,
+          `<a class="menu-link" href="/profile.html${profileParam}">My Profile</a>`,
+        ];
+        if (ADMIN_ROLES.has(sessionRole)) {
+          menuItems.splice(1, 0, `<a class="menu-link" href="/admin_panel.html">Admin Panel</a>`);
+        }
+        menuItems.push(`<a class="menu-link" href="/log_in.html">Log Out</a>`);
+        menuPanel.innerHTML = menuItems.join("");
+      }
+
+      async function loadChecklist() {
+        const data = await fetchJson(`/api/it-access?email=${encodeURIComponent(targetEmail)}`);
+        canManage = !!data.can_manage;
+        isOwner = !!data.is_owner;
+        renderSummary(data.summary || {});
+        renderCards(data.items || []);
+        topSubtitleEl.textContent = isOwner
+          ? "Review each configured access and confirm functionality."
+          : "Admin view of this new-hire IT access checklist.";
+      }
+
+      async function resolveSessionAndTarget() {
+        const sessionData = await fetchJson("/api/session");
+        sessionEmail = normalizeEmail(sessionData.email);
+        sessionRole = (sessionData.role || "").toLowerCase();
+        sessionDepartment = (sessionData.department || "").toLowerCase();
+
+        const params = new URLSearchParams(window.location.search);
+        const requested = normalizeEmail(params.get("email"));
+        const local = normalizeEmail(localStorage.getItem("paoli_email"));
+        if (requested && (ADMIN_ROLES.has(sessionRole) || requested === sessionEmail)) {
+          targetEmail = requested;
+        } else if (local && (ADMIN_ROLES.has(sessionRole) || local === sessionEmail)) {
+          targetEmail = local;
+        } else {
+          targetEmail = sessionEmail;
+        }
+        if (targetEmail) {
+          localStorage.setItem("paoli_email", targetEmail);
+        }
+
+        avatarEl.textContent = ((sessionData.full_name || sessionEmail || "I").slice(0, 1) || "I").toUpperCase();
+        if (sessionData.avatar_url) {
+          avatarEl.innerHTML = `<img src="${escapeHtml(sessionData.avatar_url)}" alt="avatar" style="width:100%;height:100%;object-fit:cover;" />`;
+        }
+        topTitleEl.textContent = "IT Access Configuration";
+        subjectLineEl.textContent = targetEmail === sessionEmail
+          ? `Submitting confirmations as ${targetEmail}`
+          : `Viewing checklist for ${targetEmail}`;
+      }
+
+      cardsGridEl.addEventListener("submit", async (event) => {
+        const form = event.target.closest(".configure-form");
+        if (!form) return;
+        event.preventDefault();
+        const key = (form.dataset.key || "").trim().toLowerCase();
+        if (!key) return;
+        const payload = new URLSearchParams(new FormData(form));
+        payload.set("email", targetEmail);
+        await fetchJson(`/api/it-access/${encodeURIComponent(key)}/configure`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: payload,
+        });
+        await loadChecklist();
+      });
+
+      cardsGridEl.addEventListener("click", async (event) => {
+        const button = event.target.closest(".respond-btn");
+        if (!button) return;
+        const key = (button.dataset.key || "").trim().toLowerCase();
+        const response = (button.dataset.response || "").trim().toLowerCase();
+        if (!key || !response) return;
+        const card = button.closest(".it-card");
+        const noteInput = card ? card.querySelector(`.response-note[data-key="${key}"]`) : null;
+        const note = noteInput ? noteInput.value.trim() : "";
+        const payload = new URLSearchParams({ email: targetEmail, response, note });
+        await fetchJson(`/api/it-access/${encodeURIComponent(key)}/respond`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: payload,
+        });
+        await loadChecklist();
+      });
+
+      menuBtn.addEventListener("click", () => {
+        menuPanel.style.display = menuPanel.style.display === "block" ? "none" : "block";
+      });
+      document.addEventListener("click", (event) => {
+        if (!menuBtn.contains(event.target) && !menuPanel.contains(event.target)) {
+          menuPanel.style.display = "none";
+        }
+      });
+
+      (async () => {
+        try {
+          await resolveSessionAndTarget();
+          buildMenu();
+          await loadChecklist();
+        } catch (err) {
+          summaryRowEl.innerHTML = "";
+          cardsGridEl.innerHTML = `<section class="card"><p class="muted">${escapeHtml(err.message || "Unable to load IT checklist.")}</p></section>`;
+        }
+      })();
+    </script>
+  </body>
+</html>

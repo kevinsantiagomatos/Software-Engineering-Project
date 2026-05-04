@@ -1,0 +1,784 @@
+0001	[]	Department of Computer Science
+0002	[]	University of Puerto Rico at Arecibo
+0003	[]	CCOM4095
+0011	[]	Paoli Group Onboarding System
+0021	[]	Pedro M. Vazquez Gonzalez
+0022	[]	Daniel Lopez Garcia
+0023	[]	Kevin Santiago Matos
+0024	[Heading1]	Table of Contents
+0027	[Heading1]	Introduction
+0028	[]	This project presents the Paoli Group focused on improving the efficiency and effectiveness of the employee onboarding process. Paoli Group, a Puerto Rican technology firm recognized for delivering innovative software solutions, faced challenges with their hiring and onboarding system. The process of integrating new employees was inconsistent, time-consuming, and heavily reliant on manual documentation through platforms like OneDrive. This created delays of up to two weeks or more, reduced productivity, and left new hires unclear about their roles and responsibilities.
+0030	[]	To address these issues, the project proposed the development of a centralized platform designed to streamline onboarding. The solution includes creating employee profiles, combining documentation in one place, automating task assignments, and enabling efficient training and follow-up. By replacing manual processes with a structured system, the platform ensures quicker integration of employees, improved clarity in roles, and better management of sensitive information.
+0032	[]	The results of this project highlight how a customized onboarding solution can reduce inefficiencies, strengthen employee adaptation, and support Paoli Group’s commitment to quality, innovation, and excellence. Thus, this initiative positions the company to continue thriving in a competitive digital landscape while honoring its mission of fostering innovation and pride for Puerto Rico.
+0035	[Heading1]	Progress Report
+0036	[]	During this reporting period, the team completed a substantial set of functional and interface improvements to the Paoli Group onboarding platform, with emphasis on document management, workflow integrity, role-based behavior, and administrative review operations. The system has progressed from a prototype-like state into a more reliable and operationally aligned product, particularly in areas that directly affect HR and compliance execution.
+0037	[]	On the backend, we strengthened the request and authorization flow to better separate browser navigation behavior from API behavior. In practical terms, this resolved cases where API calls were receiving HTML redirect content instead of proper API responses, which had been causing frontend instability. We also improved document delivery behavior by formalizing support for view and download URLs, enabling frontend modules to access files in a consistent and secure manner. Policy acknowledgment logic was updated so signatures are now tied to authenticated session identity rather than arbitrary user-provided email inputs, reducing risk of incorrect or spoofed submissions. Progress tracking was also corrected and standardized so profile and dashboard progress values now align with backend-calculated metrics.
+0038	[]	A major logic refinement in this cycle was role-based requirement handling. Specifically, “Registro de Comerciante” was updated to apply only to contractor workflows and no longer appears as a required item for employee workflows. This change was implemented in both backend requirement computation and frontend rendering behavior, so requirement counts, missing-document indicators, and progress percentages now reflect the appropriate business rule by role. This directly addressed earlier mismatches where users could appear blocked by requirements not applicable to their employment type.
+0040	[]	On the frontend, the document submission and review experience were significantly improved. The upload page now supports clearer per-document actions and cleaner requirement presentation, while the HR/admin review view now includes direct file viewing and downloading in-context. The review queue behavior was also adjusted to display pending-review documents as a true operational queue, so items disappear from that queue after approval or rejection as expected in standard review workflows. Additionally, several dashboard and profile usability issues were corrected, including progress display consistency and interface elements that previously caused layout instability under interaction.
+0041	[]	We also completed a set of UX refinements to improve presentation quality and consistency across modules. These included structured hero headers for policy and training pages, clearer action affordances for dashboard cards, elimination of redundant navigation controls, and an under-construction placeholder for incomplete modules to prevent dead-end navigation. Cross-browser behavior, including Safari-specific failure patterns, was further stabilized through improved response handling and client-side parsing safeguards.
+0042	[]	Regarding stakeholder engagement, the team held two meetings with Paoli Group during this period. The first meeting did not succeed as a demonstration due to technical execution issues, including failure to run the application correctly in-session. The second meeting was successful; the platform was demonstrated with the latest improvements, and the client expressed positive feedback regarding progress and implementation direction. During that session, the remaining scope was reviewed in detail, including completion priorities such as SSO integration, finalization of administrative capabilities, and additional polish for production readiness.
+0043	[]	At this stage, the project is materially closer to completion, with core onboarding flows operational and significantly improved in reliability and business-rule compliance. The next phase will focus on remaining enterprise-level requirements, particularly SSO, final admin-side maturity, and end-to-end validation in preparation for final delivery.
+0045	[]	This diagram represents the structure of how we designed the onboarding process for Paoli Group. It begins with the new_hire entity which stores personal information of the new employee, which is connected to new_hire _attachment which stores all the documents assosciated with that user. Once this phase is completed, it transitions into the user_account, which permits the user to access the other systems, as well as give the administrators access to the users information. Entities like training completion, it_provision, policy_ack and task, all give the administrators access to documents the user has signed, what provisions has the it department has given and what policies has been signed and acknowledged by the user.
+0046	[Heading1]	Team Members and Roles
+0047	[]	Daniel Lopez: Front-End Developer and Data Analyst. Previous experience in PHP, Python, HTML, and Dart.
+0048	[]	Daniel’s planned role focused on designing user interfaces and ensuring a smooth and intuitive experience for new hires and system administrators. In execution, he also performed data analysis, reviewed stakeholder feedback, participated in requirement refinement, and contributed to the creation of prototypes and interface validations. His contributions ensured that the system's UI aligned with user needs and accessibility considerations.
+0049	[]	Kevin Santiago: Full Stack Developer. Previous experience in HTML, JavaScript, PHP, Python.
+0050	[]	Kevin’s planned role consisted of supporting both backend and front-end development. Throughout the project, he executed tasks related to functional requirement interpretation, UI prototype refinement, backend workflows, and system diagrams (use case, sequence, and architecture). His adaptability strengthened the cohesion between system components and documentation deliverables.
+0051	[]	Pedro Vazquez: Full Stack Developer. Previous experience in Python, Database Design.
+0052	[]	Pedro’s planned responsibility centered on database modeling and backend logic. In execution, he additionally led the creation of relational structures, defined ER models, supported data validation rules, and helped implement core onboarding workflows. His structured approach ensured data integrity, compliance alignment, and system reliability across modules.
+0054	[]	Together, the team planned their roles at the start of the project, but gradually adapted responsibilities based on technical needs, feedback, and sprint requirements. This resulted in efficient collaboration, iterative improvement, and successful execution aligned with the course rubric and professional standards.
+0055	[Heading1]	Description of the Company
+0057	[]	Paoli Group is a Puerto Rican owned technology firm delivering innovative, user-centered software solutions with a steadfast commitment to quality, reliability, and best practices in development and quality assurance. Drawing inspiration from the renowned Puerto Rican tenor Antonio Paoli, they channel his spirit of breaking barriers, elevating excellence, and representing Puerto Rico on a global stage. Just as Paoli revolutionized the world of opera with his talent, discipline, and vision, they strived to transform the technological landscape with cutting-edge solutions that foster innovation and pride for Puerto Rico.
+0058	[]	Their mission is to drive Puerto Rico's digital transformation through innovative, secure solutions aligned with the needs of citizens and institutions. Their vision is to be the most trusted technology partner in Puerto Rico, recognized for the quality of our solutions and the positive impact they generate in the public and private sectors. Paoli Group LLC has four main departments: Operations, Administration, Sales, and Compliance. Each department integrates different specialized functions (e.g., PMO, Engineering, QA, IT, HR, Finance). The organization currently consists of 10 employees, including contractors and internal staff.
+0059	[]	Their expertise is that they offer a comprehensive suite of services tailored to address the unique challenges of their clients: Custom Software Development: Delivering tailored solutions aligned with specific business objectives to drive measurable results. Quality Assurance (QA/QC): Ensuring reliability through rigorous functionality, load, and security testing that adheres to industry standards. Technical Project Management: Steering cross-functional teams with precision to guarantee successful project delivery. Research and Development (R&D): Innovating with advanced methodologies, prototyping, and technical feasibility studies to tackle complex challenges.
+0062	[]	At Paoli Group, they prioritize client-centricity and collaboration in everything they do. By deeply understanding their business needs and fostering strong partnerships, they create transformative solutions that align with your vision and exceed expectations. Their unwavering focus on transparency, quality, and excellence ensures they deliver results that not only meet the goals but also build lasting relationships. They believe in blending Puerto Rico's rich cultural heritage with a forward-thinking perspective to create solutions that honor their roots while driving progress. As Paoli Group empower organizations to thrive in an evolving digital landscape, they are proud to position Puerto Rican talent as a global leader in technology.
+0063	[]	The current problem is the process of hiring new employees and collecting their data. The process is of selecting the candidate, the on-boarding process, and then setting them up with tasks or projects for them to do. The Paoli Group wants to create profiles for each current and future employee since the current process takes up to 2 weeks or more. They use various sources like OneDrive to save all the important documents and sensitive information of each employee. They want to have it all in one place the profiles, the documentation in each profile, set individual tasks and for them to be accessible.
+0064	[]	These assigned tasks will encompass every stage of the onboarding and integration process, including document submission, policy acknowledgments, training completion, and project setup. Each employee profile will display personalized tasks generated according to their department and role, ensuring that HR, IT, and Operations can track progress in real time. By centralizing these activities within a single platform, Paoli Group will not only simplify management but also create a transparent, organized, and efficient workflow where both new hires and administrators can clearly understand responsibilities, deadlines, and completion status.
+0066	[Heading1]	Process
+0067	[]	Problem statement: The onboarding process for new employees is inconsistent, time-consuming, and sometimes leaves employees unsure of their responsibilities, and company procedures. This can lead to decreased productivity, confusion, and longer time for new hires to become fully integrated.
+0068	[]	Problem Solution:
+0069	[]	We are going to make a platform that will help them train and onboard new employees.  Making a new software custom to their needs where they can properly have the documentation, make follow ups, and have all the documents with easy access.
+0070	[]	Current activities in the onboarding process:
+0071	[ListParagraph]	Pre-Hire preparation: Since they don't have any platform for this process, it can be very long and time-consuming since they need to manually send all the documentation.
+0072	[ListParagraph]	Training Sessions: They currently don't have a way to efficiently train their employees. They have to train them one-by-one, which is not optimal.
+0073	[ListParagraph]	Documentation: They can’t receive any proper documentation in a fast manner because they have nowhere to store it efficiently and orderly.
+0074	[ListParagraph]	Follow-up: Limited check-ins occur to assess employee adaptation.
+0075	[ListParagraph]	Company resources: They want to keep track of the equipment they give their employees, as well as let the employee know their benefits such as company email, Microsoft Office and QuickBooks licenses
+0077	[]	Detailed Process Description
+0078	[ListParagraph]	It takes to approximately 2 weeks after hire
+0079	[ListParagraph]	Not consistent (meaning it different each time)
+0080	[ListParagraph]	No guidelines to follow
+0081	[ListParagraph]	Inefficient System
+0082	[ListParagraph]	Task Assignment is inefficient - They must individually find all documents by hand. Also, must get a costumed to an inefficient system
+0083	[Heading1]	Use Case Diagram
+0100	[Caption]	Figure 1: Use Case Diagram
+0102	[Heading1]	Use Case Analysis
+0103	[]	1. Log In
+0104	[]	Actor: All users (Contractor/Employee, HR, IT Administrator, Compliance Officer, Project Manager) Trigger: A user attempts to access the system. Preconditions: The user must have an existing account. Main Flow:
+0105	[]	User enters credentials.
+0106	[]	System validates login information.
+0107	[]	Users are redirected to the role-specific dashboard. Alternative Flow: A1. If credentials are invalid, the system returns an error and requests re-entry. Postconditions: A valid session is established. Non-Functional Requirements:
+0108	[]	Login must be processed in under 3 seconds.
+0109	[]	Credentials must be encrypted.
+0111	[]	2. Register Contractor/Employee
+0112	[]	Actor: Contractor/Employee Trigger: A new hire begins onboarding. Preconditions: User has access to the registration portal. Main Flow:
+0113	[]	User enters the required personal information.
+0114	[]	System validates input fields.
+0115	[]	System creates a user profile. Alternative Flow: A1. Missing fields trigger an error and re-entry prompt. Postconditions: A user profile is created for HR review. Non-Functional Requirements:
+0116	[]	Data must be encrypted.
+0117	[]	Form validation must be instant.
+0119	[]	3. View/Validate Documents
+0120	[]	Actor: HR, Compliance Officer Trigger: The employee uploads required documents. Preconditions: Documents exist in the system. Main Flow:
+0121	[]	HR or Compliance opens the document viewer.
+0122	[]	System retrieves requested documents.
+0123	[]	The reviewer approves or rejects each document. Alternative Flow: A1. Document is corrupted or missing → System displays an error. Postconditions: Document status updated. Non-Functional Requirements:
+0124	[]	The viewer loads in under 2 seconds.
+0125	[]	All actions are logged.
+0128	[]	4. Configure IT Access
+0129	[]	Actor: IT Administrator Trigger: HR completes validation of initial documents. Preconditions: Employee profiles must be active. Main Flow:
+0130	[]	IT Admin accesses the employee profile.
+0131	[]	System displays required IT resources.
+0132	[]	IT Admin assigns credentials and access permissions.
+0133	[]	System updates user account settings. Postconditions: Employee receives all required system access. Non-Functional Requirements:
+0134	[]	Provisioning must follow security protocols.
+0136	[]	5. Assign Project and Objectives
+0137	[]	Actor: Project Manager Trigger: Employee is cleared for departmental onboarding. Preconditions: HR and Compliance approvals must be completed. Main Flow:
+0138	[]	Project Manager selects the employee.
+0139	[]	System displays roles and available projects.
+0140	[]	Manager assigns objectives, tasks, and responsibilities.
+0141	[]	System stores assignments and notifies the employee. Postconditions: Employee receives project-related onboarding tasks. Non-Functional Requirements:
+0142	[]	Updates must appear instantly on the employee's dashboard.
+0144	[]	6. Approve Compliance
+0145	[]	Actor: Compliance Officer Trigger: Employee completes policy signatures and document submissions. Preconditions: All required compliance documents must be uploaded. Main Flow:
+0146	[]	Compliance Officer reviews policy acknowledgments.
+0147	[]	System displays compliance checklists.
+0148	[]	Officer approves or flags discrepancies. Postconditions: Compliance status updated. Non-Functional Requirements:
+0149	[]	Compliance actions must be logged for auditing.
+0151	[]	7. View Onboarding Progress
+0152	[]	Actor: All stakeholders (Employee, HR, IT, Compliance, Project Manager) Trigger: User requests status information. Preconditions: System must have recorded onboarding activities. Main Flow:
+0153	[]	User selects “Onboarding Progress.”
+0154	[]	The system retrieves and displays progress metrics.
+0155	[]	User views completed, pending, and upcoming tasks. Postconditions: Current onboarding stage is displayed accurately. Non-Functional Requirements:
+0156	[]	Dashboard must load in under 3 seconds.
+0158	[]	8. Generate Reports and Metrics
+0159	[]	Actor: HR, Project Manager Trigger: Reporting, auditing, or performance tracking is needed. Preconditions: Employee onboarding data must exist. Main Flow:
+0160	[]	User selects “Generate Reports.”
+0161	[]	The system compiles data across departments.
+0162	[]	The system generates and displays the report.
+0163	[]	User downloads or exports the report. Postconditions: Report is available for use in evaluations or audits. Non-Functional Requirements:
+0164	[]	Report generation must be completed within 10 seconds.
+0166	[]	9. Register Digital Signature and Access Profile
+0167	[]	Actor: Contractor/Employee Trigger: User must digitally sign onboarding acknowledgements. Preconditions: Policies must be assigned by HR. Main Flow:
+0168	[]	User reviews assigned documents.
+0169	[]	System requests digital signatures.
+0170	[]	User signs electronically. Postconditions: Signature is stored securely. Non-Functional Requirements:
+0171	[]	Digital signatures must meet compliance standards.
+0173	[]	10. Acknowledge Policy and Sign Digitally
+0174	[]	Actor: Contractor/Employee Trigger: HR assigns mandatory policy acknowledgements. Preconditions: User is logged in, and documents are available. Main Flow:
+0175	[]	User opens required policies.
+0176	[]	User signs or acknowledges them.
+0177	[]	System records compliance. Postconditions: HR and Compliance can see the acknowledgment. Non-Functional Requirements:
+0178	[]	Must support secure digital signatures.
+0180	[]	11. Access Training and Orientation Content
+0181	[]	Actor: Contractor/Employee Trigger: HR or Project Manager assigns required training modules. Preconditions: Training content must be uploaded to the system. Main Flow:
+0182	[]	User selects the training content.
+0183	[]	System displays video/materials.
+0184	[]	Completion is recorded automatically. Postconditions: Training progress contributes to onboarding completion. Non-Functional Requirements:
+0185	[]	Training materials must load smoothly with minimal delay.
+0187	[]	12. Upload Documents
+0188	[]	Actor: Contractor/Employee Trigger: HR requests documentation for onboarding. Preconditions: User must be logged in and have a validated profile. Main Flow:
+0189	[]	User selects required documents and uploads them.
+0190	[]	System validates file size and format.
+0191	[]	The system securely stores the documents.
+0192	[]	HR is notified for review. Alternative Flow: A1. Invalid file format or size leads to an error and a re-upload request. Postconditions: Documents become available for HR review and approval. Non-Functional Requirements:
+0193	[]	Upload must be complete within 5 seconds.
+0194	[]	Files must be encrypted at rest and in transit.
+0198	[Heading1]	Benchmarking (Previous Solutions)
+0200	[]	To understand how our onboarding HR software should perform, we compared other existing software systems in a process called benchmarking. This process helped us identify the main strengths, weaknesses, and unique features of our system that should have in relation to other popular HR tools like BambooHR and Workday. By analyzing what makes this software great, we can get a better understanding of how the onboarding process functions and what challenges we might face in the process of developing ours for Paoli group. We found the top software used for carrying out this process, these are BambooHR, Workday, and Jira. However, these platforms differ in purpose and scale.
+0201	[]	BambooHR is one of the most widely used HR systems for small and medium sized organizations. It is known for its clean, intuitive interface and straightforward setup, focusing on making onboarding accessible to non-technical users. The platform simplifies document management, task assignment, and communication between HR and new hires. It automates reminders and approvals, reducing manual follow-ups. However, its main limitation is its lack of deep customization. Organizations with unique workflows or specific compliance requirements often need to adapt their process to fit BambooHR’s structure. It also relies on a model based on subscription, which becomes expensive as the number of users grows, making it less viable for companies seeking a long-term and self-managed solution.
+0202	[]	Workday, on the other hand, is designed for large enterprises that require a comprehensive collection of tools for recruitment, onboarding, payroll, benefits, and analytics. It excels in automation, data integration, and compliance management. Workday’s ability to bring together employee data across departments makes it an industry standard for operations in a corporate scale. However, this power comes at a cost, its implementation requires significant technical expertise, months of configuration, and high licensing expenses. The complexity of its interface can also make it overwhelming for smaller teams or organizations without a dedicated HR technology department. Despite its challenges, Workday sets a benchmark for what a fully integrated HR ecosystem can achieve when scalability and compliance are priorities.
+0203	[]	Lastly, Jira, while not specifically an HR system, is widely used for project and workflow management due to its flexibility and customization options. Its task-tracking features can serve as a reference for structuring onboarding workflows efficiently, even though it is not open source and requires technical setup.
+0204	[]	By comparing these tools, we were able to identify valuable elements, such as automation, ease of use, and task management, that can help us guide the development to one more efficient and user-centered onboarding system for Paoli Group.
+0206	[]	BambooHR
+0208	[Caption]	Figure 2: BambooHR
+0210	[]	Workday
+0212	[Caption]	Figure 3: Workday
+0213	[]	Jira
+0215	[Caption]	Figure 4: Jira
+0218	[Heading1]	Proposed Solution to the Problem
+0220	[]	The current onboarding process at Paoli Group is inconsistent, heavily manual, and distributed across multiple platforms, causing delays, repeated work, and confusion for both new hires and HR staff. Documentation is stored across tools such as OneDrive, shared drives, and email, making it difficult to track progress, verify documents, or manage training efficiently. New employees often lack clarity regarding their responsibilities, while HR, IT, Compliance, and Project Managers struggle to coordinate tasks and approvals due to the absence of a unified system. These inefficiencies result in onboarding times of up to two weeks or more, inconsistent training, and unnecessary workload across departments. Therefore, a centralized solution is required to automate, standardize, and streamline the full onboarding cycle.
+0221	[]	The proposed solution is the development of a centralized Digital Onboarding Management System (DOMS) that consolidates all onboarding workflows, documents, tasks, and communication into a single platform. Functionally, the system supports every activity modeled in the use cases: new hires can create accounts, upload documents securely, complete self-guided training modules, sign policies digitally, and track the status of their onboarding. HR personnel can validate documents, review submissions, manage profiles, approve steps, and monitor progress through dashboards. IT administrators configure access to tools such as email, Microsoft accounts, Slack, Jira, and SharePoint, ensuring that every hire receives proper credentials. Compliance officers review legal forms, verify acknowledgments, and record approvals within the system. Project Managers can assign training tasks, define project responsibilities, and verify readiness before onboarding is marked complete. The system replaces manual email exchanges, reduces training inconsistency, and ensures each stakeholder performs their tasks in a structured, traceable, and standardized workflow.
+0222	[]	To complement the functional solution, DOMS incorporates essential non-functional requirements that ensure reliability, security, and scalability. The platform enforces data encryption for documents and personal information, ensuring compliance with privacy and labor regulations. The user interface is designed to be intuitive and requires minimal training, supporting usability for employees with varying levels of technical experience. System performance ensures quick response times even when multiple users interact simultaneously, while reliability targets high availability to prevent workflow interruptions. Audit logs and role-based access control provide accountability and controlled access to sensitive information. As Paoli Group grows, the system architecture supports scalability for additional employees, departments, and modules. These non-functional attributes guarantee that the platform not only functions correctly but also meet the quality standards required for a secure and modern digital onboarding environment.
+0226	[Heading1]	Stakeholders
+0228	[]	The primary stakeholders involved in the onboarding process include new employees, HR personnel, project managers, the IT administrator, and the compliance officer. In the current onboarding process, new employees must manually submit all required documents through email and often experience delays, uncertainty, and limited visibility regarding their onboarding status. Their role is important because they initiate the process, and any confusion or incomplete submissions immediately affect every other department. HR staff manually review, validate, and store these documents across different shared drives, which increases administrative workload and leads to inconsistencies or missing records. HR is crucial because they serve as the central point of coordination, ensuring accuracy, completeness, and proper documentation for each new hire. Project managers currently rely on external tools such as Jira to assign tasks and training steps, requiring manual cross-referencing to confirm whether the employee has completed essential onboarding actions. Their importance lies in preparing new hires for project integration and ensuring they meet the expectations and skills required for their assigned roles. Meanwhile, the IT administrator handles account creation and access setup independently of HR, causing repeated communication and delays in granting technical access. IT plays a vital role because it provides the systems, tools, and credentials that new employees need to be productive. The compliance officer manually verifies required legal documents, policy acknowledgments, and certifications, without automated tracking or audit trials. Their importance is fundamental because they protect the company from legal, regulatory, and contractual risks related to document management and employee compliance. As a result, the current onboarding process is inconsistent, slow, and heavily dependent on manual steps that make it difficult to standardize and track effectively.
+0231	[]	In the proposed system, each stakeholder’s role becomes more structured, transparent, and aligned with a centralized digital onboarding workflow. New employees will upload required documents, complete assigned tasks, review policies, and track their progress directly through the platform. Their importance increases because the system empowers them to complete onboarding more independently and reduces delays caused by miscommunication or uncertainty. HR personnel will verify documents, approve onboarding stages, monitor progress, and manage employee information through automated workflows and standardized checklists. HR’s importance is reinforced because they ensure consistency, accuracy, and compliance at every step of the onboarding lifecycle. Project managers will assign training tasks, onboarding objectives, and project specific requirements directly through the platform and will have real time visibility of each hire readiness. Their importance lies in preparing new employees to contribute effectively and ensuring they are properly integrated into team workflows. IT administrators will manage account provisioning, access permissions, device setup, and license assignments using automated notifications and predefined configuration steps. IT’s importance comes from guaranteeing that employees receive timely, secure, and functional access to all technological resources. The compliance officer will review policy acknowledgments, signed documents, legal records, and retention requirements using digital signatures, audit logs, and compliance checklists built into the system. Their importance is essential because they ensure that the organization meets all regulatory obligations, prevents legal exposure, and maintains proper documentation. By redefining and integrating the responsibilities of each stakeholder within a unified platform, the onboarding process becomes more efficient, secure, transparent, and aligned with organizational best practices directly addressing the issues present in the current workflow.
+0235	[Heading1]	Development Model
+0236	[]	For this project, we decided on the SCRUM development model due to it providing flexibility and feedback alongside the development of the project. Since we are building an HR onboarding system, SCRUM allows us to work in small components at a time and be able to test and receive feedback in an efficient and fast way. As well as being easier to organize the team and assign tasks in a productive manner. We will divide into 5 sprints, where in each we will develop a portion of the software be it database design and development, login information, document management and storage. Each sprint will consist of planning, development and feedback to ensure we can provide as much of what the client has requested to the best of our abilities. SCRUM also allows improvements to be made retroactively without compromising other aspects of the project. Although using SCRUM process will be time consuming as the frequent feedback process will take some time, as well as compromising the development schedule. However, this drawback will prove beneficial for the project since we will be acquiring the necessary feedback to create a better software.
+0237	[]	System Requirements
+0238	[Heading2]	1. Introduction
+0239	[Heading3]	1.1 Purpose
+0240	[]	This document defines the functional and non-functional requirements for the Digital Onboarding Management System (DOMS) for Paoli Group LLC. The system aims to automate and standardize the onboarding process of contractors and employees, ensuring compliance, data integrity, and efficiency across departments.
+0241	[Heading3]	1.2 Scope
+0242	[]	The proposed web-based solution will:
+0243	[ListParagraph]	Centralize all onboarding data and documents.
+0244	[ListParagraph]	Automate pre-boarding and onboarding workflows.
+0245	[ListParagraph]	Provide dashboards for HR, IT, Operations, and Compliance.
+0246	[ListParagraph]	Allow digital signatures, checklist tracking, and progress reporting.
+0247	[]	2. Functional Requirements
+0248	[]	2.1 Use Case Diagram
+0266	[Caption]	Figure 6: Functional Requirements Use Case Diagram
+0267	[]	2.2 Detailed Functional Requirements
+0269	[ListParagraph]	Figure 7: Log In Functional RequirementFigure 7: Log In Functional RequirementFR-01: Log In
+0271	[ListParagraph]	Interest Group: Any system user such as: New Hire, Project Manager, Human Resources,  IT, Compliance.
+0272	[ListParagraph]	Goal: System shall authenticate the user and route them to a role-based dashboard.
+0273	[ListParagraph]	Precondition: User account exists and is active.
+0274	[ListParagraph]	Inputs: Email/username, Password.
+0275	[ListParagraph]	Main Steps:
+0276	[ListParagraph]	Credentials will be given to User if it’s their first Log In.
+0277	[ListParagraph]	User will input username or email in "Username" field.
+0278	[ListParagraph]	User will input password in "Password" field.
+0279	[ListParagraph]	Log In button will be pressed, backend will authenticate. On success, session will be created, and role/permissions will load.
+0280	[ListParagraph]	Redirect to role-based dashboard.
+0281	[ListParagraph]	Figure 9: Unsuccessful LoginFigure 9: Unsuccessful LoginFigure 8: Successful LoginFigure 8: Successful LoginOutputs: Active session, dashboard displayed.
+0282	[ListParagraph]	Data Read/Written: user, role id, sessions.
+0284	[Caption]	Figure 10: User Entity
+0285	[ListParagraph]	FR-02: Register New Hire
+0286	[]	Figure 11: Register New Hire Form - Personal InformationFigure 11: Register New Hire Form - Personal Information
+0287	[p1]	Figure 12: Register New Hire Form - Contact InformationFigure 12: Register New Hire Form - Contact Information
+0291	[p1]	Figure 13: Register New Hire Form - Employment InformationFigure 13: Register New Hire Form - Employment Information
+0294	[p1]	Figure 14: Register New Hire Form - Password and AttachmentsFigure 14: Register New Hire Form - Password and Attachments
+0296	[p1]	Interest Group: Human Resources, IT, New Hire
+0297	[p1]	Goal: System shall digitally register a New Hire, capturing identity and employment details, assigning role and department, and setting the onboarding status to “Pending Pre-Boarding.”
+0298	[p1]	• Preconditions: HR staff is authenticated, Department and role catalogs exist and are active, New Hire has at least minimal identifiers provided by the Hiring Manager or recruiting tool.
+0299	[p1]	Inputs:
+0300	[p1]	New Hire information:
+0301	[p1]	1. First name, Middle name, Last Name
+0302	[p1]	2. Date of Birth
+0303	[p1]	3. Government ID Number
+0304	[p1]	4. Email, Phone Number
+0305	[p1]	5. Address (Street, City, State, Postal Code, Country)
+0306	[p1]	Employment:
+0307	[p1]	1. Department
+0308	[p1]	2. Role
+0309	[p1]	3. Manager
+0310	[p1]	4. Start Date
+0311	[p1]	Compliance Attachments:
+0312	[p1]	1. Offer Letter
+0313	[p1]	2. NDA
+0314	[p1]	3. W-
+0315	[p1]	System Metadata Fields:
+0316	[p1]	1. Created by (HR staff who performed registration)
+0317	[p1]	2. Created at (Timestamp auto filled by system)
+0318	[p1]	3. Notes (Any remarks HR wants to record)
+0320	[p1]	Main Steps:
+0321	[p1]	1. Human Resources staff presses Add Candidate button from dashboard.
+0322	[p1]	2. System displays empty form with required fields.
+0323	[p1]	3. HR enters identity information, employment type, department, role, start date, contact details.
+0324	[p1]	4. System validates required fields, formats, duplicates.
+0325	[p1]	5. HR submits the form.
+0326	[p1]	6. System creates records in user, employment
+0327	[p1]	7. System sets user status to Pending Pre-Boarding
+0328	[p1]	8. Returns success confirmation with summary.
+0329	[p1]	9. System raises onboarding events for IT, Compliance, Finance, as applicable.
+0330	[p1]	Outputs: Platform New Hire ID, user status changed to "Pending Pre-Boarding", Return to confirmation page with New Hire ID, summary of captured data, and links to onboarding checklist.
+0331	[ListParagraph]	Data Read From/ Written to: users, roles, sessions.
+0333	[Caption]	Figure 15: User and Address Entity
+0336	[ListParagraph]	FR-03: View/Validate Documents
+0349	[]	Figure 16: View and Validate DocumentsFigure 16: View and Validate Documents
+0351	[]	Interest Group: Human Resources Department, Compliance Department
+0352	[]	Goal: System shall allow HR and Compliance staff to securely review, validate, and approve all documentation submitted by new hires or contractors ( Driver's license, W-9 Form, Withholding tax documentation from Hacienda, ASUME Certificate, Criminal background check certificate, Tax return filing certification, Bank account certification for direct deposit, Resume, Evidence of certifications (if applicable), Signed Contract (drafted and approved by the parties involved), CRIM compliance certification, Certification from the comptroller's contractor registry). This ensures legal compliance and accurate record-keeping before onboarding tasks advance to later stages.
+0354	[]	Preconditions:
+0355	[]	The HR or Compliance user is authenticated.
+0356	[]	The new hire record exists with “Pending Document Validation” status.
+0357	[]	The employee or contractor has already uploaded their required documents via the system interface.
+0359	[]	Inputs:
+0360	[]	File uploads linked to each user (e.g., PDF, JPG, DOCX).
+0361	[]	Metadata fields (document type, upload date, user ID).
+0362	[]	Validation actions (Approve / Reject / Request Re-upload).
+0363	[]	Optional comments from HR or Compliance officer.
+0367	[]	Main Steps:
+0368	[]	HR or Compliance user navigates to the “Documents” tab from the employee’s profile.
+0369	[]	The system retrieves and lists all uploaded files with metadata (file type, size, upload date, and status).
+0370	[]	The user clicks each document to preview it within the browser.
+0371	[]	If the document is valid and complete, the user selects “Approve.”
+0372	[]	If missing or incorrect, the user selects “Reject” and writes a remark (e.g., “missing signature,” “expired certification”).
+0373	[]	The system updates the document status accordingly.
+0374	[]	Validation logs (user, timestamp, action) are stored automatically.
+0375	[]	If all documents are approved, the system changes the user’s onboarding status to “Documents Validated” and notifies IT and Operations to begin next-phase tasks.
+0376	[]	Outputs:
+0377	[]	Validation confirmation message.
+0378	[]	Error alerts if required documents are missing.
+0379	[]	Updated onboarding status in dashboard.
+0380	[]	Audit trail of all validation actions (timestamp, user, document ID).
+0381	[]	Data Read From / Written To: users, roles, sessions.
+0383	[ListParagraph]	FR-04: Configure IT Access
+0385	[Caption]	Figure 17: Prototype IT Access Configuration
+0387	[]	Interest Group: IT Administrator.
+0388	[]	Goal: System shall provision corporate accounts and entitlements for email, collaboration, and tooling; confirm activation.
+0389	[]	Preconditions:
+0390	[ListParagraph]	Candidate status ≥ Documents Validated.
+0391	[ListParagraph]	Licenses available for assigned products.
+0392	[ListParagraph]	Identity attributes exist (first/last name, email).
+0393	[]	Input:
+0394	[ListParagraph]	Contractor ID, email alias policy, product selection (M365, Slack, Jira, SharePoint, QuickBooks Time).
+0395	[ListParagraph]	Group/role mapping templates.
+0396	[]	Main Steps:
+0397	[ListParagraph]	IT opens Configure Access for the user.
+0398	[ListParagraph]	System preloads suggested usernames and license sets from role/department.
+0399	[ListParagraph]	IT confirms or edits entitlements and submits.
+0400	[ListParagraph]	System calls integrations to create accounts and assign groups.
+0401	[ListParagraph]	System records each step outcome to access_provision_log.
+0402	[ListParagraph]	On success, sets IT checklist items to Completed and posts credentials handoff task to HR.
+0403	[]	Outputs:
+0404	[ListParagraph]	Provisioning summary and per-system status.
+0405	[ListParagraph]	Credentials delivery workflow started if applicable.
+0406	[]	Data Read/Written: users, roles, sessions.
+0421	[ListParagraph]	FR-05: Assign Project and Objectives
+0422	[Caption]	Figure 18: Prototype Project Assignment
+0425	[]	Interest Group: Project Manager (Operations).
+0426	[]	Goal: System shall allow assignment of the New Hire to a project, define measurable objectives, and publish the first sprint tasks.
+0427	[]	Preconditions:
+0428	[]	Candidate status ≥ IT Access Configured.
+0429	[]	Project exists and is Active.
+0430	[]	Inputs:
+0431	[]	Contractor ID, Project ID, objectives, start date, initial tasks, mentor/lead.
+0432	[]	Main Steps:
+0433	[]	PM opens Assign Project for the user.
+0434	[]	System suggests projects by department/role.
+0435	[]	PM selects project and defines objectives and due dates.
+0436	[]	System creates assignments and initial backlog tasks.
+0437	[]	Notifications go to contractor and PM.
+0438	[]	Outputs:
+0439	[]	Assignment confirmation, visible in both PM and user dashboards.
+0440	[]	Data Read/Written: users, roles, sessions.
+0463	[ListParagraph]	FR-06: Approve Compliance
+0465	[Caption]	Figure 19: Compliance Approval
+0468	[]	Interest Group: Compliance Department.
+0469	[]	Goal: System shall allow the review and digital approvement of legal/HR policies and statutory requirements before work starts.
+0470	[]	Preconditions:
+0471	[]	Required documents present and validated.
+0472	[]	Policy acknowledgment artifacts available.
+0473	[]	Inputs:
+0474	[]	Signed policy files, e-sign evidence, reviewer notes.
+0475	[]	Main Steps:
+0476	[]	Compliance opens the candidate’s Compliance tab.
+0477	[]	System shows required compliance checklist with statuses.
+0478	[]	Reviewer opens each item, verifies signature and validity period.
+0479	[]	Approve or Request Correction with a reason.
+0480	[]	System logs approval_log entries and timestamps.
+0481	[]	If all items approved, status becomes Compliance Approved.
+0482	[]	Outputs:
+0483	[]	Approval log, timestamped record per item.
+0484	[]	Data Read/Written: users, roles, sessions.
+0485	[ListParagraph]	FR-07: View Onboarding Progress
+0487	[Caption]	Figure 20: Prototype Onboarding Progress Dashboard
+0488	[]	Interest Group: HR, Operations, Managers.
+0489	[]	Goal: System shall provide real-time visibility of each contractor’s phase completion (Pre-Boarding, Onboarding, Completed) with percentage, blockers, and due dates.
+0491	[]	Preconditions:
+0492	[]	Events from other modules are emitting status updates.
+0493	[]	Inputs:
+0494	[]	Status updates, checklist items, timestamps.
+0495	[]	Main Steps:
+0496	[]	User opens Progress dashboard.
+0497	[]	System aggregates per-candidate milestones and computes percent.
+0498	[]	Filters by department, project, date range.
+0499	[]	Highlight overdue or blocked items.
+0500	[]	Outputs:
+0501	[]	Charts, tables, and exportable lists with completion percentage.
+0502	[]	Data Read/Written: users, roles, sessions.
+0504	[ListParagraph]	FR-08: Generate Reports and Metrics
+0505	[]	Interest Group: HR, Execs, Compliance.
+0506	[]	Goal: System shall produce operational and compliance reports by date, role, project, and status; export for audits.
+0507	[]	Preconditions:
+0508	[]	Data exists across modules.
+0509	[]	Inputs:
+0510	[]	Filters: date range, department, manager, project, status, document type.
+0511	[]	Main Steps:
+0512	[]	User selects a report template or builds custom.
+0513	[]	System validates filters and composes query.
+0514	[]	Preview generates with pagination.
+0515	[]	User exports to CSV/PDF.
+0516	[]	Outputs:
+0517	[]	Summary and detail reports; audit-ready extracts.
+0518	[]	Data Read/Written: users, roles, sessions.
+0519	[ListParagraph]	FR-09: Complete/View Profile
+0521	[]	Interest Group: Employee/Contractor.
+0522	[]	Goal: System shall let the user complete personal profile details, review HR-entered registration data, and request corrections when needed.
+0524	[]	Preconditions:
+0525	[]	User account provisioned; self-service enabled.
+0526	[]	Inputs:
+0527	[]	Personal, contact, emergency contact, bank info for direct deposit, optional demographics (if collected), avatar.
+0528	[]	Main Steps:
+0529	[]	User opens Profile.
+0530	[]	System displays read-only HR entries and editable self-service fields.
+0531	[]	User edits, saves; system validates format (IBAN/routing, phone, address).
+0532	[]	Changes queued for HR review if policy requires approval.
+0533	[]	Audit entry created.
+0534	[]	Outputs:
+0535	[]	Saved profile, pending-change badge if approval needed.
+0536	[]	Data Read/Written: users, roles, sessions.
+0540	[Caption]	FR-10: Acknowledge Policy and Sign Digitally
+0556	[Caption]	Figure 21: Policy Acknowledgement and Signing
+0558	[]	Interest Group: Employee/Contractor.
+0559	[]	Goal: System shall capture legal acknowledgment of policies and terms with verifiable digital signatures.
+0560	[]	Preconditions:
+0561	[]	Policies assigned to the user.
+0563	[]	Inputs:
+0564	[]	Policy files, summary statements, signature prompts, device fingerprint/IP for evidence.
+0566	[]	Main Steps:
+0567	[]	User opens Policies card.
+0568	[]	System displays assigned policies and requires scrolling/reading step if configured.
+0569	[]	User accepts and signs; system records a signature event with hash, signer, timestamp, IP.
+0570	[]	If decline, user must provide reason; system flags HR.
+0571	[]	Alternate/Exception:
+0572	[]	Signature mismatch or tampering detected: block submit, request retry.
+0573	[]	Outputs:
+0574	[]	Acknowledgment receipt; status per policy.
+0575	[]	Data Read/Written: users, roles, sessions.
+0577	[ListParagraph]	FR-11: Access Training and Orientation Content
+0578	[]	Interest Group: Employee/Contractor.
+0579	[]	Goal: System shall deliver required courses, track completion and scores, and gate onboarding progress based on mandatory curricula.
+0580	[]	Preconditions:
+0581	[]	Curriculum assigned based on role/department.
+0582	[]	Inputs:
+0583	[]	Module list, SCORM/xAPI packages or URLs, due dates.
+0584	[]	Main Steps:
+0585	[]	User opens Training.
+0586	[]	System lists modules with due dates and estimated times.
+0587	[]	Launch course, track progress and quiz scores.
+0588	[]	On completion, write attempt record and compute pass/fail.
+0589	[]	If all required modules complete, mark Training Complete milestone.
+0590	[]	Outputs:
+0591	[]	Completion records, scores, overdue alerts.
+0592	[]	Data Read/Written: users, roles, sessions.
+0599	[ListParagraph]	FR-12: Upload Documents
+0602	[Caption]	Figure 22: Prototype of Document Upload
+0604	[]	Interest Group: Employee/Contractor.
+0605	[]	Goal: System shall allow to securely upload required files mapped to document types, with virus scan, metadata capture, and initial status Pending Validation.
+0607	[]	Preconditions:
+0608	[]	Upload window open; required document types assigned.
+0609	[]	Inputs:
+0610	[]	Files (PDF/JPG/PNG/DOCX), selected doc type, optional expiration date.
+0611	[]	Main Steps:
+0612	[]	User opens Uploads for their profile.
+0613	[]	System shows required and optional document types and status.
+0614	[]	User selects type, picks file, and submits.
+0615	[]	System scans for malware, validates size/format, extracts metadata.
+0616	[]	Writes file to storage, creates documents record with status Pending Validation.
+0617	[]	Notifies HR/Compliance queue.
+0618	[]	Alternate/Exception:
+0619	[]	Invalid type/size/format: show error and block until fixed.
+0620	[]	Outputs:
+0621	[]	Figure 23: Document Submission OutputFigure 23: Document Submission Output
+0623	[]	Upload confirmation; status chip shows Pending Validation.
+0624	[]	If replacement, supersede previous version and retain history.
+0626	[]	Data Read/Written: users, roles, sessions.
+0644	[]	SUMMARY OF FUNCTIONAL REQUIREMENTS
+0647	[]	3. System Interface
+0648	[]	A web application interface will be implemented with:
+0649	[ListParagraph]	Login and authentication page.
+0650	[ListParagraph]	HR Dashboard (contractor list, progress bar).
+0651	[ListParagraph]	Contractor form for data entry.
+0652	[ListParagraph]	Document upload section.
+0653	[ListParagraph]	Checklists for IT and Compliance.
+0654	[ListParagraph]	Reporting view with export options.
+0660	[]	4. Database Model
+0661	[]	4.1 E-R Relational
+0666	[]	Entities
+0667	[]	4.2 New_hire Entity
+0668	[]	New_hire entity stores the personal data for soon to be employees but are not yet activated as system users. This includes name, email, phone, date of birth, and complete address data, as well as job-related fields such as the department, role, assigned manager, and projected start date.
+0670	[]	4.3 New Hire Attchment Entity
+0671	[]	The New_Hire_attachment entity stores documents that have been uploaded for the new hire; it stores the original name, stored name, URL, document Id and type. It has a one to many relationship with New_hire, with hire_id being the foreign key. A single document belongs to one user, but a user can have many distinct documents.
+0674	[]	4.4 UserEntity
+0675	[]	The user entity stores the information of individuals are active accounts. This includes their email address, full name, hashed password, role, department, account status, profile image, and the timestamp indicating when their account was created. It has a one-to-many relationship with Task, as it has one owner and can have many employees. It also has a many-to-many relationship with Training_Module, implemented through the Training_Completion table. Additionally, the User entity links to Policy_Ack in another many-to-many relationship with Policy, capturing digital acknowledgments and compliance confirmations. The User entity also forms a one-to-many relationship with Document, records all the files uploaded by that user, as well as a one-to-many relationship with IT_Provision, which stores any IT resources, accounts, or equipment issued to the User. Finally, the User entity participates in a one-to-many relationship with Audit_Log, representing every action the user performs on the system for accountability and historical tracking.
+0677	[]	4.5 Address Entity
+0678	[]	It provides a structured way to record and identify each user’s full address, allowing other entities to link to it through the address_id field. This table connects to the User table, meaning it stores the address information that belongs to each user created.
+0680	[]	4.6  Task Relation
+0681	[]	The Task entity contains all onboarding-related tasks assigned to a user. Include an Id of the task, title, description, email of the supervisor, and who assigned it, as well as the category of a task. Also shows the dates of when it was created, updated and its due date.
+0683	[]	4.7  Document relation
+0684	[]	The Document table stores the documents submitted by the User, the stored name, the name and email of the uploader, and whether the document is accepted or rejected. A user can submit multiple documents, but each document is tied to a single User.
+0688	[]	4.8 Training_completion entity
+0689	[]	The Training_compleiton entity has which training module the User has completed. It includes the completion timestamp and the id from training_module as well as the email of the supervisor.
+0691	[]	.9 Training_module entity
+0692	[]	The training_module entity stores the information of the modules that are assigned to the user, such as the module Id, title, and description. It has a many to one relation with User as there can be many training modules assigned to one User.
+0694	[]	4.10 It_provision entity
+0695	[]	I-T provision entity houses the Id of the provision and when it was assigned to the User. It has a many to one relation with the user, since the User can have many provisions assigned.
+0698	[]	4.11 Policy_ack entity
+0699	[]	Policy_ack houses the policy that was acknowledged to the users, as well as the user email, acknowledgement, signature and timestamp of the signature. This entity is a one to many relationship with the user as a user can acknowledge many policies as part of the onboarding process.
+0701	[]	4.12 Audit log relation
+0702	[]	The audit_log entity stores the actions made by the user. It includes the type of action done, the user_id and timestamp of when it was done.
+0706	[]	5.Web Navigation Tree
+0707	[]	5.1 web navigation tree
+0715	[]	1.Log-In
+0716	[ListParagraph]	Authentication page for users.
+0717	[ListParagraph]	Enter the web page.
+0718	[]	2. Home
+0719	[ListParagraph]	The landing or welcome screen of the onboarding system.
+0720	[ListParagraph]	Company Policies - official rules, guidelines, and procedures
+0721	[ListParagraph]	Account – personal information
+0722	[ListParagraph]	New Hire Process – Document Filing, IT Access , Training, Tasks
+0725	[]	3. Document Filing
+0726	[ListParagraph]	Here you upload all of your personal info and wait for validation.
+0727	[]	4. IT Access
+0728	[ListParagraph]	Here help with hardware and access to all programs.
+0729	[]	5. Training
+0730	[ListParagraph]	They show you how to use the systems and how they work.
+0731	[]	6. Task
+0732	[ListParagraph]	They tell you what to do
+0733	[]	7. Profile
+0734	[ListParagraph]	Here yo see all of your personal information.
+0735	[]	6. Non-Functional Requirements
+0736	[]	Performance & Capacity
+0737	[ListParagraph]	Throughput / Concurrency: Sustain ≥ 500 concurrent users with p95 response ≤ 300 ms and p99 ≤ 1 s for core pages; background jobs may be p95 ≤ 2 s.
+0738	[ListParagraph]	API Rate Limits: Default 100 requests/min per user; burst 300/min; return 429 with retry-after.
+0739	[ListParagraph]	Search/Reports: p95 ≤ 2 s for queries over ≤ 50k records.
+0740	[Heading2]	Reliability & Availability
+0741	[ListParagraph]	Uptime (SLA): ≥ 99.5% monthly (≤ 3h 39m downtime/month).
+0742	[ListParagraph]	MTTR: Mean time to recover ≤ 30 min.
+0743	[ListParagraph]	Planned Maintenance: ≤ 1 hr/month, announced ≥ 72 h in advance.
+0744	[Heading2]	Usability & Accessibility
+0745	[ListParagraph]	Learnability: Typical user completes onboarding tutorial in < 2 hours total.
+0746	[ListParagraph]	Accessibility: Conform to WCAG 2.1 AA; keyboard-only navigation, contrast, ARIA roles.
+0747	[ListParagraph]	Localization: English & Spanish (PR) UI; all user-facing emails available in both.
+0748	[Heading2]	Security & Privacy
+0749	[ListParagraph]	Transport: TLS 1.2+ everywhere; HSTS enabled.
+0750	[ListParagraph]	At Rest: AES-256 encryption for DB, backups, and object storage.
+0751	[ListParagraph]	Auth: MFA optional (recommended for admins); password hashing argon2id (or bcrypt cost ≥ 12).
+0752	[ListParagraph]	Session: HttpOnly, Secure, SameSite=Lax cookies; idle timeout 30 min, absolute timeout 12 h.
+0753	[ListParagraph]	RBAC: Role-based access enforced server-side; least-privilege defaults.
+0754	[ListParagraph]	Secrets: Managed via KMS/secret manager; rotation 90 days.
+0755	[ListParagraph]	Vulnerability Mgmt: Quarterly OWASP ASVS review + dependency scanning on CI; critical CVEs patched ≤ 7 days.
+0756	[ListParagraph]	PII Masking: Logs must never store plaintext PII; use redaction.
+0757	[Heading2]	Maintainability & Supportability
+0758	[ListParagraph]	Downtime per Release: ≤ 1 hr (blue/green or rolling preferred).
+0759	[ListParagraph]	Code Quality: Unit test coverage ≥ 80% of business logic; linting enforced on CI.
+0760	[ListParagraph]	Observability: Central logging, metrics, and traces; alert on 5xx rate > 1% (5 min).
+0761	[ListParagraph]	Config: 12-factor style; no secrets in code.
+0762	[Heading2]	Portability & Compatibility
+0763	[ListParagraph]	Browsers: Latest + previous majors of Chrome, Firefox, Edge, Safari; responsive on ≥ 360px width.
+0764	[ListParagraph]	Cloud-agnostic: Containerized (OCI); deployable to Kubernetes-compatible runtime.
+0765	[Heading2]	Scalability
+0766	[ListParagraph]	Org Size (initial): Support ≥ 5 departments & 30 employees today.
+0767	[ListParagraph]	Headroom: Architecture must scale 10× (50 depts / 300 employees) without redesign; horizontal scale of web/API tier.
+0768	[Heading2]	Legal & Compliance
+0769	[ListParagraph]	GDPR: Comply with Reg (EU) 2016/679 (lawful basis, DSRs, records, DPIA when needed, SCCs for transfers).
+0770	[ListParagraph]	Puerto Rico: Comply with Citizen Information of Data Banks Security Act (10 L.P.R.A. §4051–4055) and emerging Consumer Data and Personal Information Protection Act (when enacted).
+0771	[ListParagraph]	Breach Notification: Detect, assess, and notify per PR statute; internal SLA to issue notice draft ≤ 72 h from confirmation.
+0772	[ListParagraph]	Data Retention: Define schedule; default delete/anon 24 months after employment end unless legal hold.
+0773	[ListParagraph]	Consent & Notices: Clear bilingual privacy notice; consent records stored with timestamp, user, IP.
+0774	[Heading2]	Auditability
+0775	[ListParagraph]	Audit Log: Every create/update/delete & auth event logs user ID, role, action, object type/id, timestamp (UTC), IP, UA.
+0776	[ListParagraph]	Tamper-evident: Write-ahead + immutability (WORM or signed logs); retention ≥ 2 years.
+0777	[ListParagraph]	Access Reviews: Quarterly admin/privileged access recertification.
+0778	[Heading2]	Backup & Disaster Recovery
+0779	[ListParagraph]	Backups: Encrypted full daily + point-in-time where supported; retention 30 days.
+0780	[ListParagraph]	RPO / RTO: RPO ≤ 15 min, RTO ≤ 4 h; run restore drill 2×/year.
+0781	[ListParagraph]	Interoperability & APIs
+0782	[ListParagraph]	API Style: REST/JSON (UTF-8); versioned /v1; OpenAPI spec maintained.
+0783	[ListParagraph]	Webhooks: Signed (HMAC-SHA256); retries with exponential backoff.
+0786	[]	Style
+0789	[Heading1]	Cost
+0790	[]	During the development of this project, we have tried to maintain low operational costs for ourselves and Paoli Group. Only incurring in a 20$ charge for google cloud which lets us host our database in a manner that’s efficient and structured. Not only for us, but to ease the client’s infrastructure as well as provide space for the software. Development of the project for Paoli Group is being handled in mostly open-source environments and software. This is being done to alleviate operational costs as well as not incurring charges to the company. Since this software will be used on Paoli Groups hardware, this comes at no extra costs for the project.
+0791	[Heading1]	Time
+0792	[]	The development timeline for this project consists of about 3 months, which will be divided into the following schedule. 2 weeks structuring the needs of the company, 3 weeks spent hardening security and form management, 3 weeks setting up the database as well as integrating Paoli Groups data, 1 week managing error messages and codes, 3 weeks debugging the software and running the proper checks. This is being done to ensure we have plenty of time to be able to handle whatever problems may arise while programming and be able to fix them with the appropriate time allocated. With most of the time, converting our prototype to be a fully functional software.
+0793	[Heading1]	Resources
+0795	[]	Documentation:
+0796	[ListParagraph]	Document from Human Resources: Standard Operating Procedure (SOP) for the Contracting of Professional Services in Puerto Rico.
+0797	[ListParagraph]	Current copy of official identification (driver's license or passport).
+0798	[ListParagraph]	Merchant Registration, issued by the Puerto Rico Department of the Treasury.
+0799	[ListParagraph]	Form W-9, for tax and fiscal purposes.
+0800	[ListParagraph]	Tax Return Filing Certification, issued by the Department of the Treasury.
+0801	[ListParagraph]	Certification of Compliance with ASUME (Tax Administration Service).
+0802	[ListParagraph]	Criminal Record Certificate.
+0803	[ListParagraph]	Bank Account Certification, for direct deposit.
+0804	[ListParagraph]	Resume or curriculum vitae.
+0805	[ListParagraph]	Evidence of professional certifications, if applicable.
+0807	[]	Key people involved for the onboarding process:
+0808	[ListParagraph]	(Vianca) Human Resources: Process coordination, documents, and policies.
+0809	[ListParagraph]	(Bryan) IT: Access configuration and technical support.
+0810	[ListParagraph]	(Doris) Project Manager: Task and objective assignment, introduction to the agile environment.
+0811	[ListParagraph]	(Elliot) Compliance Officer: Contract drafting and review.
+0813	[]	Resources for an implementation of a new system:
+0814	[ListParagraph]	Software: Jira, Confluence, corporate email, cloud tools.
+0815	[ListParagraph]	Hardware: Laptops and contractor equipment.
+0816	[ListParagraph]	Personnel: HR, IT, Operations, and Compliance.
+0818	[]	Onboarding:
+0820	[ListParagraph]	Human Resources: Signing of Company Policies, Signing of the Medical Plan Policy and Orientation on the Billing Manual.
+0821	[ListParagraph]	Laptop Setup: Intune and the necessary applications for the job are installed. The device is connected to the new contractor's corporate account.
+0822	[ListParagraph]	Microsoft Access: A new user account with the corresponding license is created. Access is shared via email. Access to the Microsoft suite is verified, including email, Teams, and calendar. Confirm the correct "Out of Office" status setting.
+0823	[ListParagraph]	QuickBooks Access: The contractor will receive an invitation from their @paoli.io email to access QuickBooks Time. They must create their account using that email (the platform does not allow SSO). Validate access to create and manage timesheets, following the established rules of use.
+0824	[ListParagraph]	Slack Access: Go to https://paoli-group.slack.com. Log in via SSO with the @paoli.io account. Confirm access, channels, and ability to send messages.
+0825	[ListParagraph]	Atlassian Access: Access Paoli's Atlassian. Log in with the @paoli.io email. Complete SSO access. Confirm access to Jira and Confluence.
+0826	[ListParagraph]	Clients Access: Access permissions will be configured based on the assigned project or client. The contractor must validate their access and confirm functionality.
+0830	[Heading1]	Ethics
+0832	[]	The ethical implications of developing the Digital Onboarding Management System (DOMS) for Paoli Group LLC were evaluated throughout the project using the ACM/IEEE Software Engineering Code of Ethics. Because DOMS processes sensitive legal and personal data, the team analyzed each ethical principle alongside the specific risks related to onboarding, document handling, access configuration, and compliance processes. The following sections map each principle to the real risks involved in DOMS and explain how the project mitigated them through design, decision-making, and responsible engineering behavior.
+0834	[Heading3]	1. Public Interest
+0835	[]	DOMS impacts public interest by protecting individuals’ sensitive information while supporting efficient organizational operations. The primary risk in this category was exposing private documents or allowing unauthorized access due to poor implementation. To mitigate this, the team implemented encryption, access control, audit trails, and restricted visibility based on role permissions.
+0836	[]	Another major risk involved accessibility barriers, which could unfairly limit new employees’ ability to complete onboarding. To reduce this, the interface was designed with simple navigation, readable layout choices, and consistent structure, ensuring equal usability regardless of digital experience. By reducing confusion, centralizing onboarding tasks, and avoiding unnecessary data collection, DOMS upholds the ethical obligation to protect individuals and support the public’s interest in secure and fair digital transformation.
+0840	[Heading3]	2. Client and Employer
+0841	[]	The ethical challenge for this principle involved balancing loyalty to Paoli Group with honesty and transparency. The risk identified here was overpromising system capabilities or hiding technical limitations. The team addressed this by communicating realistic timelines, security constraints, and what features could or could not be automated for example; legal approvals remained intentionally manual to avoid errors that could create contractual issues.
+0842	[]	A second risk involved mismanaging confidential company data. Ethical responsibility guided decisions such as encrypting stored files, hashing passwords, and applying strict role-based access. These measures ensured not only client satisfaction but also adherence to legal and moral obligations regarding data confidentiality and organizational trust.
+0844	[Heading3]	3. Product
+0845	[]	For the product principle, the dominant risks included system failure, data loss, non-compliance with cybersecurity standards, and incorrect onboarding information adversely affecting payroll, access, or employment status. To address these, the team prioritized reliability, safe database operations, redundancy in storage, and clear validation rules.
+0846	[]	Designing privacy regulations applicable in Puerto Rico and GDPR-inspired practices reduces legal exposure and institutional risk. Ethical responsibility shaped decisions about maintaining code quality, reducing shortcuts, avoiding dangerous assumptions, and ensuring that system behavior remained predictable even as the organization grew. Poor quality software could cause harm, so risk reduction directly shaped implementation priorities.
+0850	[Heading3]	4. Judgment
+0851	[]	Ethical judgment was essential to avoid bias, guesswork, and unsafe assumptions. The primary risk was making design decisions without confirming requirements, which could lead to misleading functionality or unfair outcomes for employees. To mitigate this, the team gathered validated requirements through structured conversations rather than assumptions.
+0852	[]	Another risk involved automating processes that should remain human-governed, such as compliance checks or legal approvals. The team exercised ethical judgment by deliberately leaving those steps manual to prevent automated errors from creating contractual issues. SCRUM practices reduced misunderstandings, ensured transparency, and enabled decisions to be traceable and reviewable.
+0854	[Heading3]	5. Management
+0855	[]	Management ethics were applied to ensure fair division of labor, shared responsibility, and transparency in workflow decisions. The risks here included unbalanced workload distribution, loss of accountability, and poor version control, which could create conflict or code corruption.
+0856	[]	To mitigate these, the team used consistent branching practices, documented changes, assigned tasks based on strengths, and maintained regular communication. Peer review, meeting records, and clear task ownership prevented misunderstandings. Ethical management resulted in a stable workflow and visible accountability for all decisions.
+0860	[Heading3]	6. Profession
+0861	[]	The risk in this category involved misrepresenting work, plagiarizing external resources, or producing low-quality documentation that could harm the professional reputation of the team and university. Ethical responsibility requires proper citation of frameworks, libraries, and diagrams, as well as creating original content that aligns with academic and industry standards.
+0862	[]	By adhering to professional expectations, maintaining clean documentation, respecting intellectual property, and producing work suitable for public reference the project contributes positively to the discipline and reinforces trust in engineering standards.
+0864	[Heading3]	7. Colleagues
+0865	[]	The ethical risk within team collaboration involved hidden work, blame shifting, or personal conflicts influencing technical decisions. To address this, the group maintained shared documentation, consistent terminology, constructive feedback practices, and transparent communication through meetings and message logs.
+0866	[]	Respecting each member’s expertise prevented ego-driven decisions, while clear communication ensured everyone stayed informed. These practices strengthened the project’s overall coherence in design, interface consistency, and documentation quality.
+0868	[Heading3]	8. Self
+0869	[]	Each member carries personal responsibility for producing safe, secure, and correct work. The key risk in this principle was negligence such as ignoring errors, rushing through tasks, or mishandling private data. Team members practiced self-awareness by recognizing their limitations, seeking help when needed, and double-checking their contributions to protect user data and ensure accuracy.
+0870	[]	Ethical self-management supports professional growth, careful validation, and a shared understanding that technical success is tied to moral responsibility.
+0872	[Heading3]	Ethical Impact Summary
+0873	[]	Integrating ethical reflection with risk analysis transformed DOMS from a functional onboarding tool into a responsible system that protects individuals’ data and supports fair and transparent onboarding practices. Considering the risks associated with privacy, workflow automation, role responsibility, and system reliability shaped every design decision. This approach ensured that the project met academic expectations while demonstrating the core values of software engineering: safeguarding users, respecting the client, and delivering trustworthy, ethically grounded technology.
+0877	[Heading1]	Risk analysis
+0878	[ListParagraph]	Introduction
+0879	[ListParagraph]	During stakeholder interviews conducted with Paoli Group LLC, several risks and concerns were explicitly identified regarding the adoption of a Digital Onboarding Management System (DOMS). Their main apprehensions centered on resistance to change, the learning curve of new technology, and the potential failure of the project if adoption, support, or usability were inadequate.
+0880	[]	Building on these stakeholder concerns, the project team conducted a comprehensive risk assessment covering technical, organizational, human, and external domains. The following section integrates both the risks mentioned by Paoli Group and those identified through engineering analysis, providing a clear basis for mitigation strategies.
+0881	[ListParagraph]	Risks and Concerns Identified by Paoli Group LLC
+0882	[ListParagraph]	Resistance to change: Employees and contractors may be reluctant to adopt a digital platform after relying on manual methods.
+0883	[ListParagraph]	Learning curve: Staff will require time and support to learn how to use the system effectively.
+0884	[ListParagraph]	Lack of adoption by responsible staff: If the intended users: HR, IT or Compliance do not consistently use the platform, the project could fail.
+0885	[ListParagraph]	Lack of continuous technical support: Unresolved bugs or user issues could undermine trust in the system.
+0886	[ListParagraph]	Unnecessary complex interface: If the system feels more complicated than the current manual process, users may abandon it.
+0891	[ListParagraph]	Potential Risks
+0893	[ListParagraph]	3.1 Technical Risks
+0895	[ListParagraph]	Integration Failures: The system must interoperate with Paoli’s existing tools for communication, email, task management, and digital signatures. Each integration introduces potential points of failure.
+0897	[]	Mitigation: The project team will conduct staged integration tests before rollout.       Development will rely exclusively on official APIs to reduce incompatibility.       Additionally, updated technical documentation will be maintained to quickly       resolve issues if they arise.
+0899	[ListParagraph]	Lack of continuous technical support: Paoli Group highlighted that without continuous technical support, unresolved bugs or user issues could undermine confidence in DOMS and discourage use.
+0901	[]	Mitigation: A dedicated support structure will be established with defined response times (internal SLA). A ticketing/help desk system will be available so staff can report issues which will be prioritized and resolved promptly.
+0907	[ListParagraph]	2.2 Organizational Risks
+0909	[ListParagraph]	User Resistance to adopting the Digital Onboarding Management System: Staff are accustomed to manual processes; they may willingly prefer existing manual processes over learning a new system out of habit. Transitioning to a new platform may result in reluctance or slow adoption to the system.
+0911	[]	Mitigation: A structured change management program will be implemented, where user training sessions, accessible manuals and regular feedback opportunities will be implemented.
+0913	[ListParagraph]	Lack of adoption by responsible staff (HR, IT, Compliance): Even if users accept the new system initially, there is a risk that the core departments responsible for onboarding (HR, IT, Compliance) will fail to consistently record their activities in DOMS. For example, IT might set up Microsoft 365 accounts without updating the system, or Compliance might approve documents without logging it digitally. If these steps bypass DOMS, the system loses credibility, and the project may fail.
+0915	[]	Mitigation: Adoption will be enforced through process and policy alignment. DOMS will be designated as the official tool for onboarding. Department heads will be responsible for monitoring usage via system dashboards, and compliance will be reinforced through performance metrics and periodic audits.
+0918	[ListParagraph]	2.3 Human Risks
+0920	[ListParagraph]	Learning curves and training needs: Paoli Group highlighted that staff and contractors are accustomed to handling onboarding through emails, shared folders, and paper documentation. Moving to a structured digital system will require users to change habits and understand new workflows. Even willing users may struggle with document uploads, electronic signatures, or dashboards if training is inadequate.
+0922	[]	Mitigation: The system will use intuitive forms with automatic field and
+0923	[]	information validation, display clear error messages when mistakes occur, and
+0924	[]	allow users to resubmit corrected files without administrative delays. In addition,
+0925	[]	guided training sessions and quick-reference user guides will be provided,
+0926	[]	ensuring that all staff can become proficient without excessive time investment.
+0928	[ListParagraph]	Unnecessarily complex interface: Paoli Group expressed concern that if DOMS feels more complicated than current manual methods, users will abandon it.
+0930	[ListParagraph]	Mitigation: The user interface will be designed following usability standards.
+0931	[ListParagraph]	Real staff will test the system before release, and the design will
+0932	[ListParagraph]	be iteratively improved based on feedback to ensure simplicity and ease of use.
+0937	[ListParagraph]	User errors in uploading documents or forms: With the implementation of the DOMS, employees will now be able to upload documents and fill out forms digitally, instead of sending them by email.  This freedom may make mistakes, like uploading the wrong file or submitting the wrong information, very likely.
+0939	[]	Mitigation: The system will use intuitive forms with automatic field and
+0940	[]	information validation, display clear error messages when mistakes occur, and
+0941	[]	allow users to resubmit corrected files without administrative delays.
+0943	[ListParagraph]	2.4 Legal and External Risks
+0944	[ListParagraph]	Non-compliance with Puerto Rico labor regulations: Even with the implementation of the Digital Onboarding Management System, there remains a risk of non-compliance with Puerto Rico’s labor regulations like ASUME clearance, Hacienda tax documentation, professional certifications, and other legally mandated requirements. If DOMS is not properly configured to enforce these obligations, or if staff fail to consistently use the platform as intended, required documentation may be overlooked. This could expose Paoli Group to legal penalties, government fines, or reputational harm.
+0947	[ListParagraph]	Mitigation: DOMS will integrate mandatory compliance checklists that prevent onboarding from progressing until all required documents are uploaded and validated. The system will also provide automated reminders for expiring certifications and generate compliance reports for HR and legal audits. Regular system reviews and staff training will ensure that compliance features are consistently applied and updated in line with evolving regulations.
+0951	[Heading1]	System Modeling
+0952	[]	Modeling approach and scope
+0953	[ListParagraph]	Notation: UML-style textual specifications (use case bullets, sequence of flow steps, class/association lists, state definitions).
+0954	[ListParagraph]	Scope: Core onboarding workflow (pre-boarding, document validation/collection, policy acknowledgement, IT provisioning, project assignment_, security and reporting.
+0955	[ListParagraph]	Out Of Scope: Payroll processing, performance review scoring logic, client specific SSO beyond account creation events.
+0959	[]	Interaction Perspective: Sequence Diagram
+0962	[]	This sequence diagram shows the onboarding lifecycle from the moment a new hire profile is created in the system to the final process to begin working in Paoli Group. It begins with the Human Resources department registering the new employee in the system, which triggers the workflow that prepares the onboarding checklist and gathers essential information of the employee. Next, the new hire interacts with the platform by uploading required documents, such as identification and tax forms. The system then notifies the Compliance officer to validate these submissions, and only upon approval does the onboarding process advance to IT. This stage involves the provisioning of corporate access accounts, including Microsoft 365, Slack, Jira, and QuickBooks, which are vital tools for working within Paoli Group’s ecosystem. Once IT completes access setup, the Project Manager assigns the contractor to a project and defines their initial tasks and learning objectives. The process concludes with the employee completing required training modules and the system confirming that all onboarding steps are fulfilled.
+0966	[]	Behavioral Perspective: State Machine
+0970	[]	The onboarding begins with the "Registered" state, initiated by HR when a new employee profile is created within DOMS. From this point, the system automatically transitions the record into the "Pending Document Submission" state, waiting for the new hire to upload required forms, identifications, and certifications. This stage reflects the system’s role in monitoring user actions and maintaining status based on completion of required tasks. Once the new hire submits their documents, the system transitions to the "Under Review" state, where Compliance and HR officials validate the submissions. Here, the behavioral perspective highlights conditional logic: if documents are approved, the record advances to the "Approved for IT Setup" state; however, if any files are incomplete or invalid, the system moves back to a "Correction Required" state, prompting the new hire to re-upload corrected documentation. This dynamic looping behavior ensures that no employee can proceed without meeting legal and organizational compliance requirements, reflecting the importance of regulated process control. After the documents are approved, the system enters the "IT Provisioning" state, where the IT department assigns software licenses, access credentials, and system permissions across platforms like Microsoft 365, and QuickBooks. Once this stage is completed, the state transitions again to "Project Assignment," where managers assign tasks, mentors, and onboarding objectives. Finally, the employee enters the "Training and Orientation" state, during which they complete assigned training modules and tasks. The process culminates in the "Completed" state once all onboarding steps are successfully fulfilled.
+0977	[Heading1]	Architectural Design
+0978	[]	Architectural Approach
+0979	[]	The architectural design of the Digital Onboarding Management System (DOMS) is based on a hybrid approach that combines Layered Architecture, Model-View-Controller (MVC), and the Client–Server model. This structure improves modularity, maintainability, and scalability by separating data management, business logic, and user interface components while supporting a distributed and secure operational model.
+0980	[]	At the core of the system is the Layered Architecture, which organizes DOMS into four primary layers:
+0981	[]	Presentation Layer: This layer contains the front-end interface used by New Hires, HR, IT, Compliance, and Project Managers. It includes dashboards, document upload screens, training pages, and progress views, ensuring user accessibility and clarity.
+0982	[]	Application (Business Logic) Layer: Responsible for implementing onboarding workflows such as document validation, IT access configuration, compliance reviews, and project assignment. This layer ensures the system enforces the correct rules and processes at each stage.
+0983	[]	Service/Integration Layer: Manages communication with external services such as digital signatures, email notifications, and identity validation. It prepares the system for future integrations and expansions.
+0984	[]	Data Layer: Contains the relational database that stores user profiles, documents, onboarding statuses, approval logs, and event history. Centralizing the data ensures consistency, security, and auditability.
+0987	[]	The system also utilizes the Model-View-Controller (MVC) pattern, which aligns with modern web application development.
+0988	[]	The Model represents all application data such as users, roles, documents, tasks, and onboarding progress.
+0989	[]	The View provides the interface components that present information to each stakeholder.
+0990	[]	The Controller manages operations including login, document processing, task assignment, compliance approval, and workflow transitions.
+0991	[]	Using MVC ensures that updates to the interface, database, or logic can occur independently without affecting other components, improving system flexibility.
+0992	[]	Because DOMS operates as a web-based platform, it also incorporates a Client–Server Architecture. The client (web browser) handles user interactions, while the server processes the business rules, manages workflows, and communicates with the database. This model increases reliability, supports multiple concurrent users, and ensures all operations are performed securely and consistently.
+0995	[Heading1]	Glossary
+0997	[ListParagraph]	Antonio Paoli: was a Puerto Rican tenor. At the height of his fame, he was known as “The King of Tenors and The Tenor of Kings.” He is considered to be the first Puerto Rican to reach international fame in the musical arts.
+0998	[ListParagraph]	Quality Assurance (QA/QC): is any systematic process of determining whether a product or service meets specified requirements. QA establishes and maintains set requirements for developing or manufacturing reliable products.
+0999	[ListParagraph]	QuickBooks: is an easy-to-use accounting software that can help you automate tasks such as bookkeeping, invoicing, expense tracking, inventory management and more. They have been an industry leader for 40 years and are trusted by over 7 million customers globally.
+1000	[ListParagraph]	Slack: manage projects and move forward faster. Prioritize tasks, share ideas, and stay aligned.
+1001	[ListParagraph]	Atlassian: connects teams with all the curated data, context, and goals they need as they work across Atlassian and third-party application.
+1004	[Heading1]	Non-Functional Prototype of the Proposed Solution
+1005	[]	Digital Onboarding Management System Prototype that covers the functional requirements.
+1007	[ListParagraph]	Log In
+1008	[]	Figure 6.1: Login Page
+1010	[ListParagraph]	View Onboarding Progress
+1011	[ListParagraph]	Employee/Contractor View
+1012	[]	Figure 6.2 Employee View
+1018	[]	Figure 6.3 Employer view
+1021	[]	3. Upload Documents
+1022	[ListParagraph]	Figure 6.4: Document upload and view page
+1025	[ListParagraph]	Employee confirmation page
+1026	[ListParagraph]	6.5 Employee confirmation page
+1033	[ListParagraph]	View/Validate Documents (Admin View)
+1034	[]	Figure 6.6: Employer Document Overview page
+1037	[ListParagraph]	Employer Approval Page
+1038	[ListParagraph]	Figure 6.7: Employer Approval/Denial page
+1041	[Heading1]	Testing: Verification and Validation
+1043	[]	The testing process for the Digital Onboarding Management System (DOMS) is focused on verifying that each functional requirement was implemented correctly and validating that the system supported a complete and realistic onboarding workflow. A traceability approach was followed, in which every requirement such as user registration, document upload, role-based access, compliance approval, and onboarding progress tracking was linked to one or more test cases. This ensured that verification covered all expected behaviors.
+1044	[]	Verification
+1045	[]	Verification activities consisted of requirement- based tests designed to confirm that the implemented features matched their specifications. For example, the “Upload Documents” requirement was verified through tests that checked acceptable file formats, maximum upload size, proper error messages, and the visibility of submitted files to HR. The Configure IT Access requirement was verified by validating that IT administrators could assign system credentials and that these permissions updated correctly in the user profile. Interface functionality, access restrictions, and dashboard updates were each verified through systematic checks aligned with the use cases.
+1046	[]	Validation
+1047	[]	Validation ensured that DOMS behaved correctly when used in real onboarding scenarios. The team simulated a complete contractor onboarding process: account registration, login, document submission, digital policy acknowledgment, training access, IT configuration, compliance approval, and project assignment. Each step was validated using realistic sample data to confirm that workflows, notifications, and progress indicators behaved as expected. Validation also ensured that different roles: Employee, HR, IT, Compliance, Project Manager only accessed the functions appropriate to their permissions.
+1049	[]	Testing Units and Scenarios
+1050	[]	Although the prototype remains in an early stage, several test units and scenarios were defined:
+1051	[ListParagraph]	Unit Tests (planned for next iteration):
+1053	[ListParagraph]	Authentication logic
+1054	[ListParagraph]	Permission and role validation
+1055	[ListParagraph]	Document processing and file validation
+1056	[ListParagraph]	Progress calculation functions
+1058	[ListParagraph]	Functional Test Scenarios (executed manually):
+1060	[]	Successful user registration and login
+1061	[ListParagraph]	Uploading valid/invalid documents
+1062	[ListParagraph]	HR rejecting and approving documents
+1063	[ListParagraph]	Compliance validating signed policies
+1064	[ListParagraph]	IT assigns and updates access credentials
+1065	[ListParagraph]	Project Manager assigning objectives
+1066	[ListParagraph]	Tracking full onboarding progress
+1067	[]	Through verification and validation, DOMS demonstrated functional correctness for its core features and realistic behavior during simulated onboarding. These processes helped identify inconsistencies early and guided improvements for future development iterations.
+1073	[Heading1]	Host-Target Development
+1075	[Heading2]	Challenges and Difficulties When Uploading the Prototype to a Test Server
+1076	[]	During development, the prototype was created and tested on local machines with full control over the environment, database, file system, and configurations. However, when the project was moved to an external test server (such as Google Cloud), several challenges emerged due to differences between the development environment (host) and the deployment environment (target). The following sections explain these difficulties and the changes required to make the prototype work.
+1077	[Heading2]	1. Differences Between the Local Environment and the Server Environment
+1078	[]	In the local setup, the prototype relies on:
+1079	[ListParagraph]	localhost routing
+1080	[ListParagraph]	local ports
+1081	[ListParagraph]	local database credentials
+1082	[ListParagraph]	local file paths
+1083	[]	When uploaded to Google Cloud, these assumptions no longer apply. The server:
+1084	[ListParagraph]	Has a public IP address
+1085	[ListParagraph]	Uses different ports and firewall rules
+1086	[ListParagraph]	Does not allow unrestricted database access
+1087	[ListParagraph]	Organizes files and directories differently
+1088	[]	Because of this, several configuration values had to be changed so the prototype could run outside the developers’ machines.
+1090	[Heading2]	2. Database Configuration Challenges
+1091	[]	A major difficulty was connecting the prototype to a remote database.
+1092	[]	On local development environments, developers typically use:
+1093	[]	host = localhost
+1094	[]	user = root
+1095	[]	password = (local)
+1096	[]	database = palogroup
+1097	[]	But in a test server:
+1098	[ListParagraph]	The root user is blocked for external use.
+1099	[ListParagraph]	The database runs on a different machine or service.
+1100	[ListParagraph]	The prototype needs a new endpoint such as:
+1101	[ListParagraph]	DB_HOST = "34.xx.xx.xx"
+1102	[ListParagraph]	DB_USER = "admin"
+1103	[ListParagraph]	DB_PASSWORD = "secure-pass"
+1105	[Heading2]	4. Environment Variables
+1106	[]	The prototype initially had sensitive configurations hard-coded inside the source code. This is unsafe and incompatible with server deployments.
+1107	[]	In the test server, the system was modified to use environment variables:
+1108	[ListParagraph]	HOST = os.getenv("HOST", "0.0.0.0") DB_PASSWORD = os.getenv("DB_PASSWORD")
+1109	[Heading2]	5. Dependency and Library Issues
+1110	[]	Locally, all required packages were already installed on the developer's machine. On the server, it was necessary to:
+1111	[ListParagraph]	Install all dependencies using requirements.txt
+1112	[ListParagraph]	Ensure versions were compatible with Google Cloud’s Python runtime
+1113	[ListParagraph]	Adjust code that behaved differently in production versions of Flask or MySQL drivers
+1115	[Heading2]	6. Web Server Configuration
+1116	[]	Running the prototype locally only required:
+1117	[]	python app.py
+1118	[]	But a cloud server must use production-level tools. Therefore, the following components had to be configured:
+1119	[ListParagraph]	Gunicorn or uWSGI to serve the Flask application
+1120	[ListParagraph]	Nginx as a reverse proxy
+1121	[ListParagraph]	Routing for static files
+1122	[ListParagraph]	Correct permissions for server directories
+1123	[]	This setup significantly differs from a simple local execution and required additional adjustments.
+1124	[Heading2]	7. Security and Permission Adjustments
+1125	[]	Once the prototype was exposed to the internet, several security changes became necessary:
+1126	[ListParagraph]	Disable debug mode
+1127	[ListParagraph]	Enforce HTTPS
+1128	[ListParagraph]	Secure session cookies
+1129	[ListParagraph]	Restrict database access
+1130	[ListParagraph]	Validate user-uploaded file
+1131	[Heading1]	Server Information
+1132	[]	The test server for the prototype can be accessed at http://127.0.0.1:5000/log_in.html, where several user accounts have been created to represent different system roles. These include admin@gmail.com (Admin), comp@gmail.com (Compliance), email2@gmail.com (IT), and testuser@gmail.com (Employee). Each of these accounts uses the same password, Password, to simplify access during testing. These test credentials allow reviewers to log in under different roles and evaluate the system’s role-based permissions, navigation, and functionality.
+1135	[Heading1]	Configuration Management
+1137	[]	Our team implemented a structured configuration management process to ensure that all members could work on the system simultaneously while maintaining control over versions, preventing conflicts, and guaranteeing smooth integration. To achieve this, we used GitHub as our primary tools for version control, collaboration, and source code management.
+1138	[]	Version Handling
+1139	[]	Everyone worked on their own independent branch later implementing it to the main code.  This was done because we did not want to destabilize the main code.
+1140	[]	Workflow
+1141	[ListParagraph]	Pull any committed changes by colleagues. (git pull)
+1142	[ListParagraph]	Create the branch you were going to work on. Example feature-uploaders (git branch uploaders).
+1143	[ListParagraph]	Constantly committing working changes with descriptions, to keep colleagues informed. (git checkout feature-uploaders) Also adding changes that were made (git add.).
+1144	[ListParagraph]	Then pushing the branch to the repository (git push)
+1145	[ListParagraph]	Then doing a pull to check that it was uploaded correctly (git pull)
+1146	[ListParagraph]	Revising branch to ensure quality and detect issues early.
+1147	[ListParagraph]	Then committing to the main branch.
+1148	[Heading2]	System Integration
+1149	[]	Integration was performed incrementally. Once a component was completed and merged into the development branch, the creator did a testing alone or with the help of colleagues.
+1150	[ListParagraph]	Extendedly doing functional testing with all types of data and inputs to see if we could break the program.
+1151	[ListParagraph]	Database integration checks to ensure schema compatibility and avoid breaking the application.
+1152	[]	After confirming stability, the new version would be merged into the main branch as a stable release.
+1153	[]	Challenges and Difficulties Faced
+1154	[ListParagraph]	Merge Conflicts - When multiple people edited the same file or section, git produced merge conflicts that required manual resolution.
+1155	[ListParagraph]	Inconsistent Commit Practices - Not all commits followed the same naming format, making the commit history harder to read and track.
+1156	[ListParagraph]	Database Versioning - Changes in table structures caused mismatches between local development environments, requiring the team to standardize migration files or SQL dumps.
+1157	[ListParagraph]	Database Connections – Since we all had our own separate database, there were errors each time we were going to connect with passwords, name, etc.
+1158	[]	What We Would Improve in a Future Group Project
+1159	[ListParagraph]	Creating a shared database – this will solve two of our problems. One being the database versioning, this would not happen because we shared the same database. Another one would be the connections to the database; this would not happen because we all have the same db.
+1160	[ListParagraph]	Commit message standards - having a standard, so we don't lose track of the changes and actually know what was being changed.
+1161	[ListParagraph]	Scheduled integration sessions - Meeting specifically to merge features and test the system together.
+1162	[ListParagraph]	Doing more testing – we would try doing some TTD to further improve the quality of our software.
+1163	[Heading1]	Meeting Log
+1173	[Heading1]	Conclusion
+1175	[]	The development of this project for Paoli Group demonstrated how an organization can significantly benefit from the modernization of its internal processes, particularly in the area of employee onboarding. By carefully analyzing the current challenges, such as delays in documentation, inconsistent training methods, and lack of centralized information, we identified that these issues were directly impacting productivity and the successful adaptation of new employees.
+1177	[]	The proposed solution, a customized onboarding platform, aims to streamline these processes by consolidating employee profiles, automating task assignments, and providing accessible training resources. Beyond addressing immediate inefficiencies, the platform sets the foundation for long-term improvements in organizational culture, efficiency, and transparency. This platform will cut down onboarding time, clarify job roles and duties, increase employee involvement, and enable the company to grow smoothly by automating and centralizing onboarding tasks.
+1179	[]	In the broader context, this project highlights the importance of aligning technology with human resource practices to cultivate smoother integration, greater employee satisfaction, and sustainable growth. Ultimately, the initiative reinforces Paoli Group’s mission of innovation and positions the company as a forward-thinking organization committed to excellence and to showcasing Puerto Rican talent on the global stage.
+1182	[Heading1]	Bibliographic Resources
+1184	[ListParagraph]	“Paoli Group | LinkedIn,” Linkedin.com, 2025. https://pr.linkedin.com/company/paoligroup?trk=public_jobs_topcard_logo (accessed Aug. 28, 2025).
+1185	[ListParagraph]	“Paoli Group - Coming Soon,” Paoli.io, 2025. https://www.paoli.io (accessed Aug. 28, 2025).
+1186	[ListParagraph]	“Puerto Rican opera singer (1871–1946),” Wikipedia.org, Sep. 14, 2004. https://en.m.wikipedia.org/wiki/Antonio_Paoli (accessed Aug. 28, 2025).
+1187	[ListParagraph]	“Accounting Software for Small Business 2021 | QuickBooks Global,” quickbooks.intuit.com. https://quickbooks.intuit.com/global
+1188	[ListParagraph]	Slack, “Where work happens,” Slack, 2019. https://slack.com
+1189	[ListParagraph]	Atlassian, “Atlassian’s platform,” Atlassian. https://www.atlassian.com/platform
+1190	[ListParagraph]	“Home,” Pr.gov, 2025. https://www.ogp.pr.gov
+1191	[ListParagraph]	‌”Ley Núm. 100 de 30 de Junio de 1959, según enmendada...”, https://bvirtualogp.pr.gov/ogp/Bvirtual/leyesreferencia/PDF/2-ingles/100-1959.pdf (accessed Nov. 6, 2025)
+1192	[Heading1]	Evidence
