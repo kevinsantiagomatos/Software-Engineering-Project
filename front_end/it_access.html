@@ -234,12 +234,15 @@
       function buildMenu() {
         const emailParam = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : "";
         const profileParam = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
+        const isItAdmin = sessionRole === "it" || (sessionRole === "admin" && sessionDepartment === "it");
         const menuItems = [
           `<a class="menu-link" href="/dashboard.html${emailParam}">Dashboard</a>`,
-          `<a class="menu-link" href="/upload_documents.html${emailParam}">Documents</a>`,
           `<a class="menu-link" href="/it_access.html${emailParam}">IT Access</a>`,
           `<a class="menu-link" href="/profile.html${profileParam}">My Profile</a>`,
         ];
+        if (!isItAdmin) {
+          menuItems.splice(1, 0, `<a class="menu-link" href="/upload_documents.html${emailParam}">Documents</a>`);
+        }
         if (ADMIN_ROLES.has(sessionRole)) {
           menuItems.splice(1, 0, `<a class="menu-link" href="/admin_panel.html">Admin Panel</a>`);
         }

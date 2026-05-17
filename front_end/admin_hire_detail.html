@@ -140,12 +140,12 @@
 
         <section class="right-workspace">
           <div class="tabs">
-            <button type="button" class="tab-btn active" data-tab="documents">Documents</button>
-            <button type="button" class="tab-btn" data-tab="tasks">Tasks</button>
-            <button type="button" class="tab-btn" data-tab="overview">Overview</button>
+            <button type="button" class="tab-btn active" data-tab="documents" id="tabDocumentsBtn">Documents</button>
+            <button type="button" class="tab-btn" data-tab="tasks" id="tabTasksBtn">Tasks</button>
+            <button type="button" class="tab-btn" data-tab="overview" id="tabOverviewBtn">Overview</button>
           </div>
 
-          <section class="tab-pane active" data-tab-pane="documents">
+          <section class="tab-pane active" data-tab-pane="documents" id="documentsPane">
             <section class="card">
               <div class="pane-head">
                 <div>
@@ -176,7 +176,7 @@
             </section>
           </section>
 
-          <section class="tab-pane" data-tab-pane="tasks">
+          <section class="tab-pane" data-tab-pane="tasks" id="tasksPane">
             <section class="card">
               <div class="pane-head">
                 <div>
@@ -219,15 +219,19 @@
             </section>
           </section>
 
-          <section class="tab-pane" data-tab-pane="overview">
+          <section class="tab-pane" data-tab-pane="overview" id="overviewPane">
             <section class="card">
               <div class="pane-head">
                 <div>
-                  <h3 class="title">Overview</h3>
-                  <p class="pane-subtitle">Snapshot of policy acknowledgments, training progress, and IT provisioning.</p>
+                  <h3 class="title" id="overviewTitle">Overview</h3>
+                  <p class="pane-subtitle" id="overviewSubtitle">Snapshot of policy acknowledgments, training progress, and IT provisioning.</p>
                 </div>
               </div>
               <ul id="extraList" class="list pretty-list" style="margin-top:8px;"></ul>
+              <div id="complianceSection" style="margin-top:14px;">
+                <h4 style="margin:0 0 8px; color:#0f172a;">Compliance Checklist</h4>
+                <ul id="complianceList" class="list pretty-list"></ul>
+              </div>
             </section>
           </section>
         </section>
@@ -250,6 +254,8 @@
       const taskCategorySelect = document.getElementById("taskCategorySelect");
       const taskCreateState = document.getElementById("taskCreateState");
       const extraList = document.getElementById("extraList");
+      const complianceSection = document.getElementById("complianceSection");
+      const complianceList = document.getElementById("complianceList");
       const kpis = document.getElementById("kpis");
       const backBtn = document.getElementById("backBtn");
       const menuBtn = document.getElementById("menuBtn");
@@ -266,6 +272,14 @@
       const createJobTitleBtn = document.getElementById("createJobTitleBtn");
       const newJobTitleInput = document.getElementById("newJobTitleInput");
       const titleCreateState = document.getElementById("titleCreateState");
+      const tabDocumentsBtn = document.getElementById("tabDocumentsBtn");
+      const tabTasksBtn = document.getElementById("tabTasksBtn");
+      const tabOverviewBtn = document.getElementById("tabOverviewBtn");
+      const documentsPane = document.getElementById("documentsPane");
+      const tasksPane = document.getElementById("tasksPane");
+      const overviewPane = document.getElementById("overviewPane");
+      const overviewTitle = document.getElementById("overviewTitle");
+      const overviewSubtitle = document.getElementById("overviewSubtitle");
       const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
       const tabPanes = Array.from(document.querySelectorAll(".tab-pane"));
       const docTypeLabels = {
@@ -293,12 +307,52 @@
       let canReviewDocs = false;
       let canManageDocSlots = false;
       let canCreateTasks = false;
+      let canViewCompliance = false;
+      let canManageCompliance = false;
       let orgDepartments = [];
       let dynamicDocLabels = {};
+      let itAdminTabLayout = false;
+      let currentComplianceItems = [];
 
       function setActiveTab(tab) {
         tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
         tabPanes.forEach((pane) => pane.classList.toggle("active", pane.dataset.tabPane === tab));
+      }
+
+      function sessionIsItAdmin() {
+        return sessionRole === "it" || (sessionRole === "admin" && sessionDepartment === "it");
+      }
+
+      function setTabVisibility(buttonEl, paneEl, visible) {
+        if (buttonEl) buttonEl.style.display = visible ? "" : "none";
+        if (paneEl) paneEl.style.display = visible ? "" : "none";
+      }
+
+      function configureTabsForSession() {
+        itAdminTabLayout = sessionIsItAdmin();
+
+        if (itAdminTabLayout) {
+          setTabVisibility(tabDocumentsBtn, documentsPane, false);
+          setTabVisibility(tabTasksBtn, tasksPane, true);
+          setTabVisibility(tabOverviewBtn, overviewPane, true);
+          tabOverviewBtn.textContent = "IT Access Checklist";
+          tabOverviewBtn.style.order = "0";
+          tabTasksBtn.style.order = "1";
+          overviewTitle.textContent = "IT Access Checklist";
+          overviewSubtitle.textContent = "Track IT access setup and open checklist details for this hire.";
+          setActiveTab("overview");
+          return;
+        }
+
+        setTabVisibility(tabDocumentsBtn, documentsPane, true);
+        setTabVisibility(tabTasksBtn, tasksPane, true);
+        setTabVisibility(tabOverviewBtn, overviewPane, true);
+        tabOverviewBtn.textContent = "Overview";
+        tabOverviewBtn.style.order = "";
+        tabTasksBtn.style.order = "";
+        overviewTitle.textContent = "Overview";
+        overviewSubtitle.textContent = "Snapshot of policy acknowledgments, training progress, and IT provisioning.";
+        setActiveTab("documents");
       }
 
       function docActions(d) {
@@ -317,6 +371,63 @@
           return `<button class="doc-btn" data-doc-id="${d.id}" data-doc-status="pending_review">Re-evaluate</button>`;
         }
         return "";
+      }
+
+      function complianceStateBadge(state) {
+        const s = (state || "pending_review").toLowerCase();
+        const bg = s === "approved" ? "#d1fae5" : s === "flagged" ? "#fee2e2" : "#fef3c7";
+        const fg = s === "approved" ? "#065f46" : s === "flagged" ? "#991b1b" : "#92400e";
+        return `<span class="badge" style="background:${bg}; color:${fg};">${s.replace(/_/g, " ")}</span>`;
+      }
+
+      function complianceActions(item) {
+        if (!canManageCompliance) return "";
+        const state = (item.state || "pending_review").toLowerCase();
+        const key = item.check_key || "";
+        const actions = [];
+        if (state !== "approved") actions.push(`<button class="doc-btn approve" data-compliance-key="${key}" data-compliance-state="approved">Approve</button>`);
+        if (state !== "flagged") actions.push(`<button class="doc-btn reject" data-compliance-key="${key}" data-compliance-state="flagged">Flag</button>`);
+        if (state !== "pending_review") actions.push(`<button class="doc-btn" data-compliance-key="${key}" data-compliance-state="pending_review">Re-open</button>`);
+        return actions.join("");
+      }
+
+      function renderComplianceSection(compliancePayload) {
+        if (itAdminTabLayout || !canViewCompliance) {
+          complianceSection.style.display = "none";
+          currentComplianceItems = [];
+          return;
+        }
+        complianceSection.style.display = "";
+        const payload = compliancePayload || {};
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        const summary = payload.summary || {};
+        currentComplianceItems = items;
+        const summaryRow = `
+          <li>
+            <div>
+              <strong>Compliance status</strong><br/>
+              <small>Approved ${summary.approved_count || 0}/${summary.total_items || 0} • Pending ${summary.pending_count || 0} • Flagged ${summary.flagged_count || 0}</small>
+            </div>
+            <div class="actions">${complianceStateBadge(summary.overall_status || "pending_review")}</div>
+          </li>
+        `;
+        const itemRows = items.map((item) => {
+          const note = (item.reviewer_note || "").trim();
+          return `
+            <li>
+              <div>
+                <strong>${item.check_label || item.check_key || "Compliance check"}</strong>
+                ${note ? `<br/><small>${note}</small>` : ""}
+              </div>
+              <div class="actions">
+                ${complianceStateBadge(item.state || "pending_review")}
+                ${complianceActions(item)}
+              </div>
+            </li>
+          `;
+        }).join("");
+
+        complianceList.innerHTML = summaryRow + (itemRows || '<li>No compliance checklist items configured.</li>');
       }
 
       function showAlert(msg, isError=false) {
@@ -465,14 +576,28 @@
         const itSummary = h.progress?.it_access || {};
         const itConfirmed = Number(itSummary.confirmed_count || 0);
         const itTotal = Number(itSummary.total_items || 0);
+        const itPending = Number(itSummary.pending_count || 0);
+        const itIssues = Number(itSummary.issues_count || 0);
         const itp = (h.it_provisions || []).length;
         const itLink = h.email ? `/it_access.html?email=${encodeURIComponent(h.email)}` : "/it_access.html";
+        const compliancePayload = h.compliance || {};
+        if (itAdminTabLayout) {
+          extraList.innerHTML = `
+            <li><div>IT access checklist</div><div class="actions"><span class="badge">${itConfirmed}/${itTotal || 0}</span><a class="doc-btn" href="${itLink}">Open checklist</a></div></li>
+            <li><div>Awaiting confirmation</div><div class="actions"><span class="badge">${itPending}</span></div></li>
+            <li><div>Issues reported</div><div class="actions"><span class="badge">${itIssues}</span></div></li>
+            <li><div>Legacy IT provision records</div><div class="actions"><span class="badge">${itp}</span></div></li>
+          `;
+          renderComplianceSection(compliancePayload);
+          return;
+        }
         extraList.innerHTML = `
           <li><div>Policy signatures</div><div class="actions"><span class="badge">${policies}</span></div></li>
           <li><div>Training completions</div><div class="actions"><span class="badge">${trainings}</span></div></li>
           <li><div>IT access checklist</div><div class="actions"><span class="badge">${itConfirmed}/${itTotal || 0}</span><a class="doc-btn" href="${itLink}">Open</a></div></li>
           <li><div>Legacy IT provision records</div><div class="actions"><span class="badge">${itp}</span></div></li>
         `;
+        renderComplianceSection(compliancePayload);
       }
 
       async function loadHire() {
@@ -517,9 +642,12 @@
           canReviewDocs = sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment)) || ["hr", "compliance"].includes(sessionRole);
           canManageDocSlots = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "hr") || sessionRole === "hr";
           canCreateTasks = ["admin", "manager", "superadmin", "hr", "it", "compliance"].includes(sessionRole);
+          canViewCompliance = sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment)) || ["hr", "compliance"].includes(sessionRole);
+          canManageCompliance = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "compliance") || sessionRole === "compliance";
           menuProfile.href = sessionEmail ? `/profile.html?email=${encodeURIComponent(sessionEmail)}` : "/profile.html";
           menuSuperDashboard.style.display = sessionRole === "superadmin" ? "block" : "none";
           menuRegisterHire.style.display = (sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && sessionDepartment === "hr") || sessionRole === "hr") ? "block" : "none";
+          configureTabsForSession();
           docCreateForm.style.display = canManageDocSlots ? "block" : "none";
           taskCreateForm.style.display = canCreateTasks ? "block" : "none";
           if (sessionRole && taskCategorySelect) {
@@ -673,6 +801,40 @@
           await loadHire();
         } catch (err) {
           showAlert(err.message, true);
+        }
+      });
+
+      complianceList.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-compliance-key]");
+        if (!btn) return;
+        if (!canManageCompliance || !hireEmail) return;
+        const key = (btn.dataset.complianceKey || "").trim();
+        const status = (btn.dataset.complianceState || "").trim().toLowerCase();
+        if (!key || !status) return;
+        let note = "";
+        if (status === "flagged") {
+          note = (window.prompt("Add a note for this flagged compliance item:", "") || "").trim();
+          if (!note) {
+            showAlert("A note is required when flagging a compliance item.", true);
+            return;
+          }
+        } else {
+          note = (window.prompt("Optional reviewer note:", "") || "").trim();
+        }
+        try {
+          await fetchJson(`/api/compliance/checklist/${encodeURIComponent(key)}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              email: hireEmail,
+              status,
+              note,
+            }),
+          });
+          await loadHire();
+          showAlert("Compliance checklist updated.");
+        } catch (err) {
+          showAlert(err.message || "Unable to update compliance checklist item.", true);
         }
       });
 

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Assignment and Orientation | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <link rel="stylesheet" href="/style/pages/project_assignment.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">P</div>
+      <div class="meta">
+        <div class="title">Project Assignment and Orientation</div>
+        <div class="subtitle" id="subtitle">Loading project assignment details...</div>
+      </div>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel"></div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h1 class="section-title">Project Readiness</h1>
+        <p class="muted" id="subjectLine">Loading user context...</p>
+        <div class="kpis" id="kpis"></div>
+        <div class="quick-links">
+          <a id="trainingLink" class="doc-btn" href="/training.html">Open training modules</a>
+          <a id="dashboardLink" class="doc-btn" href="/dashboard.html">Back to dashboard</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="list-head">
+          <h2>Manager / Project Tasks</h2>
+          <span class="muted">Category: manager</span>
+        </div>
+        <ul id="taskList" class="task-list"></ul>
+      </section>
+    </main>
+
+    <script>
+      const ADMIN_ROLES = new Set(["admin", "manager", "superadmin", "hr", "it", "compliance"]);
+      const TASK_STATUSES = ["pending", "in_progress", "completed", "blocked"];
+      const avatarEl = document.getElementById("avatar");
+      const subtitleEl = document.getElementById("subtitle");
+      const subjectLineEl = document.getElementById("subjectLine");
+      const kpisEl = document.getElementById("kpis");
+      const taskListEl = document.getElementById("taskList");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+      const trainingLink = document.getElementById("trainingLink");
+      const dashboardLink = document.getElementById("dashboardLink");
+
+      let csrfToken = null;
+      let sessionEmail = "";
+      let sessionRole = "";
+      let targetEmail = "";
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function normalizeEmail(value) {
+        return (value || "").toString().trim().toLowerCase();
+      }
+
+      function statusBadge(status) {
+        const s = (status || "pending").toLowerCase();
+        const klass = s === "completed" ? "ok" : s === "in_progress" ? "warn" : s === "blocked" ? "err" : "muted";
+        return `<span class="badge ${klass}">${escapeHtml(s.replaceAll("_", " "))}</span>`;
+      }
+
+      async function fetchJson(url, options) {
+        const opts = options ? { ...options } : {};
+        const method = (opts.method || "GET").toUpperCase();
+        if (method !== "GET") {
+          const token = await ensureCsrf();
+          opts.headers = { ...(opts.headers || {}), "X-CSRF-Token": token };
+        }
+        const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function canUpdateTask() {
+        return targetEmail === sessionEmail || ADMIN_ROLES.has(sessionRole);
+      }
+
+      function renderTaskList(tasks) {
+        if (!tasks.length) {
+          taskListEl.innerHTML = `<li class="empty">No project assignment tasks yet. Ask your manager to assign onboarding project tasks.</li>`;
+          return;
+        }
+
+        taskListEl.innerHTML = tasks
+          .map((task) => {
+            const id = escapeHtml(task.id || "");
+            const title = escapeHtml(task.title || "Untitled task");
+            const desc = escapeHtml(task.description || "No description provided.");
+            const due = task.due_date ? new Date(task.due_date).toLocaleDateString() : "No due date";
+            const actions = canUpdateTask()
+              ? TASK_STATUSES
+                  .filter((status) => status !== (task.status || "").toLowerCase())
+                  .map(
+                    (status) =>
+                      `<button type="button" class="doc-btn status-btn" data-task-id="${id}" data-status="${status}">${escapeHtml(
+                        status.replaceAll("_", " ")
+                      )}</button>`
+                  )
+                  .join("")
+              : "";
+
+            return `
+              <li class="task-item">
+                <div class="task-main">
+                  <div class="task-title-row">
+                    <h3>${title}</h3>
+                    ${statusBadge(task.status)}
+                  </div>
+                  <p class="task-desc">${desc}</p>
+                  <div class="task-meta">
+                    <span><strong>Assigned by:</strong> ${escapeHtml(task.assigned_by || "N/A")}</span>
+                    <span><strong>Due:</strong> ${escapeHtml(due)}</span>
+                  </div>
+                </div>
+                <div class="task-actions">${actions}</div>
+              </li>
+            `;
+          })
+          .join("");
+      }
+
+      function renderKpis(progress, tasks) {
+        const completed = tasks.filter((task) => (task.status || "").toLowerCase() === "completed").length;
+        const inProgress = tasks.filter((task) => (task.status || "").toLowerCase() === "in_progress").length;
+        const blocked = tasks.filter((task) => (task.status || "").toLowerCase() === "blocked").length;
+        const p = progress || {};
+        kpisEl.innerHTML = `
+          <div class="kpi"><div class="kpi-label">Project tasks completed</div><div class="kpi-value">${completed}/${tasks.length}</div></div>
+          <div class="kpi"><div class="kpi-label">In progress</div><div class="kpi-value">${inProgress}</div></div>
+          <div class="kpi"><div class="kpi-label">Blocked</div><div class="kpi-value">${blocked}</div></div>
+          <div class="kpi"><div class="kpi-label">Overall stage</div><div class="kpi-value">${escapeHtml(p.stage || "Pending")}</div></div>
+        `;
+      }
+
+      function buildMenu() {
+        const emailParam = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : "";
+        const profileParam = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
+        const items = [
+          `<a class="menu-link" href="/dashboard.html${emailParam}">Dashboard</a>`,
+          `<a class="menu-link" href="/upload_documents.html${emailParam}">Documents</a>`,
+          `<a class="menu-link" href="/it_access.html${emailParam}">IT Access</a>`,
+          `<a class="menu-link" href="/project_assignment.html${emailParam}">Project Assignment</a>`,
+          `<a class="menu-link" href="/training.html${emailParam}">Training</a>`,
+          `<a class="menu-link" href="/profile.html${profileParam}">My Profile</a>`,
+        ];
+        if (ADMIN_ROLES.has(sessionRole)) {
+          items.splice(1, 0, `<a class="menu-link" href="/admin_panel.html">Admin Panel</a>`);
+        }
+        items.push(`<a class="menu-link" href="/log_in.html">Log Out</a>`);
+        menuPanel.innerHTML = items.join("");
+      }
+
+      async function resolveSessionAndTarget() {
+        const sessionData = await fetchJson("/api/session");
+        sessionEmail = normalizeEmail(sessionData.email);
+        sessionRole = (sessionData.role || "").toLowerCase();
+        const requested = normalizeEmail(new URLSearchParams(window.location.search).get("email"));
+        targetEmail = requested && (requested === sessionEmail || ADMIN_ROLES.has(sessionRole)) ? requested : sessionEmail;
+        if (targetEmail) localStorage.setItem("paoli_email", targetEmail);
+
+        avatarEl.textContent = ((sessionData.full_name || sessionEmail || "P").slice(0, 1) || "P").toUpperCase();
+        if (sessionData.avatar_url) {
+          avatarEl.innerHTML = `<img src="${escapeHtml(sessionData.avatar_url)}" alt="avatar" style="width:100%;height:100%;object-fit:cover;" />`;
+        }
+
+        subjectLineEl.textContent = targetEmail === sessionEmail ? `Viewing your project tasks for ${targetEmail}` : `Viewing project tasks for ${targetEmail}`;
+        subtitleEl.textContent = "Review manager-assigned tasks and orientation progress.";
+        trainingLink.href = `/training.html?email=${encodeURIComponent(targetEmail)}`;
+        dashboardLink.href = `/dashboard.html?email=${encodeURIComponent(targetEmail)}`;
+      }
+
+      async function loadProjectAssignment() {
+        const [tasksData, progress] = await Promise.all([
+          fetchJson(`/api/tasks?email=${encodeURIComponent(targetEmail)}&category=manager`),
+          fetchJson(`/api/progress?email=${encodeURIComponent(targetEmail)}`),
+        ]);
+        const managerTasks = (tasksData.tasks || []).filter((task) => (task.category || "").toLowerCase() === "manager");
+        renderKpis(progress, managerTasks);
+        renderTaskList(managerTasks);
+      }
+
+      taskListEl.addEventListener("click", async (event) => {
+        const button = event.target.closest(".status-btn");
+        if (!button) return;
+        const taskId = (button.dataset.taskId || "").trim();
+        const status = (button.dataset.status || "").trim().toLowerCase();
+        if (!taskId || !TASK_STATUSES.includes(status)) return;
+
+        await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ status }),
+        });
+        await loadProjectAssignment();
+      });
+
+      menuBtn.addEventListener("click", () => {
+        menuPanel.style.display = menuPanel.style.display === "block" ? "none" : "block";
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!menuBtn.contains(event.target) && !menuPanel.contains(event.target)) {
+          menuPanel.style.display = "none";
+        }
+      });
+
+      (async () => {
+        try {
+          await resolveSessionAndTarget();
+          buildMenu();
+          await loadProjectAssignment();
+        } catch (err) {
+          kpisEl.innerHTML = "";
+          taskListEl.innerHTML = `<li class="empty">${escapeHtml(err.message || "Unable to load project assignment page.")}</li>`;
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -52,47 +52,52 @@ This project demonstrates:
 
 ---
 
-##  Running the Project
+## Running the Project
 
 ### Clone
 ```bash
 git clone https://github.com/kevinsantiagomatos/Software-Engineering-Project.git
 cd Software-Engineering-Project
-
-## Backend Setup
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python app.py
-
-**Database**
-
-The canonical schema is at `backend/sql/schema.sql`.
-
-You can initialize manually:
-
-```bash
-mysql -u root -p palogroup < backend/sql/schema.sql
 ```
 
-Or let the app auto-initialize missing tables on startup (default behavior).  
-To disable auto-initialization:
+### Backend Setup
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
+### Database
+Canonical bootstrap schema:
+
+`backend/sql/paolischema.sql`
+
+Manual import:
+```bash
+mysql -u root -p palogroup < backend/sql/paolischema.sql
+```
+
+If upgrading an older snapshot, apply migrations in order:
+
+- `backend/sql/migrations/20260421_role_department_model.sql`
+- `backend/sql/migrations/20260422_it_access_checklist.sql`
+- `backend/sql/migrations/20260511_compliance_review_workflow.sql`
+
+The backend can also auto-initialize missing tables on startup.  
+To disable auto-init:
 ```bash
 export DB_AUTO_INIT=false
-
-After importing or upgrading older DB snapshots, run hardening migration:
-
-```sql
-USE palogroup;
--- Open and execute:
--- backend/sql/migrations/20260418_schema_hardening.sql
-```
 ```
 
-**Frontend**
+### Start Backend
+```bash
+cd backend
+python app.py
+```
 
+### Frontend (Optional Static Preview)
+```bash
 cd front_end
 python -m http.server 8000
-
+```

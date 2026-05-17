@@ -24,6 +24,8 @@ def register_hire_routes(app, deps):
     hydrate_hires_with_context = deps["hydrate_hires_with_context"]
     can_view_documents_admin = deps["can_view_documents_admin"]
     can_manage_hiring_admin = deps["can_manage_hiring_admin"]
+    can_view_compliance_admin = deps["can_view_compliance_admin"]
+    can_manage_compliance_admin = deps["can_manage_compliance_admin"]
     department_and_title_are_valid = deps["department_and_title_are_valid"]
     normalize_optional_date_field = deps["normalize_optional_date_field"]
     get_role_id = deps["get_role_id"]
@@ -38,6 +40,26 @@ def register_hire_routes(app, deps):
     register_user_db = deps["register_user_db"]
     enrich_document_record = deps["enrich_document_record"]
     serialize_task_rows = deps["serialize_task_rows"]
+    ensure_compliance_rows_for_email = deps["ensure_compliance_rows_for_email"]
+    load_compliance_rows_for_email = deps["load_compliance_rows_for_email"]
+    compliance_summary_for_rows = deps["compliance_summary_for_rows"]
+    compliance_checklist_items = deps["compliance_checklist_items"]
+    normalize_compliance_state = deps["normalize_compliance_state"]
+    COMPLIANCE_STATE_PENDING = deps["COMPLIANCE_STATE_PENDING"]
+    COMPLIANCE_STATE_APPROVED = deps["COMPLIANCE_STATE_APPROVED"]
+    COMPLIANCE_STATE_FLAGGED = deps["COMPLIANCE_STATE_FLAGGED"]
+
+    def requester_can_view_compliance() -> bool:
+        role = (session.get("role") or "").strip().lower()
+        if role in {"compliance", "hr"}:
+            return True
+        return can_view_compliance_admin()
+
+    def requester_can_manage_compliance() -> bool:
+        role = (session.get("role") or "").strip().lower()
+        if role == "compliance":
+            return True
+        return can_manage_compliance_admin()
 
     @app.post("/api/policy/ack")
     @login_required
@@ -85,6 +107,115 @@ def register_hire_routes(app, deps):
             else:
                 policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (session_email,))
         return jsonify({"policies": policies})
+
+    @app.get("/api/compliance/checklist")
+    @login_required
+    def compliance_checklist():
+        requester_email = (session.get("email") or "").strip().lower()
+        email = (request.args.get("email") or "").strip().lower() or requester_email
+        if not email:
+            return Response("Email is required.", status=400, mimetype="text/plain")
+        if email != requester_email and not requester_can_view_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        ensure_compliance_rows_for_email(email)
+        items = load_compliance_rows_for_email(email)
+        return jsonify(
+            {
+                "email": email,
+                "items": items,
+                "summary": compliance_summary_for_rows(items),
+                "template": compliance_checklist_items(),
+                "can_manage": requester_can_manage_compliance(),
+            }
+        )
+
+    @app.post("/api/compliance/checklist/<check_key>/status")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def compliance_checklist_update(check_key):
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        actor = (session.get("email") or "").strip().lower()
+        email = (request.form.get("email") or "").strip().lower()
+        key = (check_key or "").strip().lower()
+        state = normalize_compliance_state(request.form.get("status") or COMPLIANCE_STATE_PENDING)
+        note = (request.form.get("note") or "").strip()
+        if not email:
+            return Response("Email is required.", status=400, mimetype="text/plain")
+        if state not in {COMPLIANCE_STATE_PENDING, COMPLIANCE_STATE_APPROVED, COMPLIANCE_STATE_FLAGGED}:
+            return Response("Invalid compliance state.", status=400, mimetype="text/plain")
+
+        template_keys = {(item.get("id") or "").strip().lower() for item in compliance_checklist_items()}
+        if key not in template_keys:
+            return Response("Unknown compliance check item.", status=400, mimetype="text/plain")
+
+        ensure_compliance_rows_for_email(email)
+        existing = fetch_one(
+            "SELECT id, check_key FROM compliance_review_item WHERE LOWER(email)=LOWER(%s) AND check_key=%s LIMIT 1",
+            (email, key),
+        )
+        if not existing:
+            return Response("Compliance checklist item not found.", status=404, mimetype="text/plain")
+
+        if key == "final_signoff" and state == COMPLIANCE_STATE_APPROVED:
+            items = load_compliance_rows_for_email(email)
+            blockers = [
+                row.get("check_key")
+                for row in items
+                if (row.get("check_key") or "").strip().lower() != "final_signoff"
+                and normalize_compliance_state(row.get("state")) != COMPLIANCE_STATE_APPROVED
+            ]
+            if blockers:
+                return Response(
+                    "Final sign-off requires all other compliance checks approved first.",
+                    status=400,
+                    mimetype="text/plain",
+                )
+
+        if state == COMPLIANCE_STATE_PENDING:
+            execute(
+                """
+                UPDATE compliance_review_item
+                SET state = %s,
+                    reviewer_note = %s,
+                    reviewed_by = NULL,
+                    reviewed_at = NULL,
+                    updated_at = NOW(6),
+                    updated_by = %s
+                WHERE LOWER(email)=LOWER(%s) AND check_key=%s
+                """,
+                (state, note or None, actor, email, key),
+            )
+        else:
+            execute(
+                """
+                UPDATE compliance_review_item
+                SET state = %s,
+                    reviewer_note = %s,
+                    reviewed_by = %s,
+                    reviewed_at = NOW(6),
+                    updated_at = NOW(6),
+                    updated_by = %s
+                WHERE LOWER(email)=LOWER(%s) AND check_key=%s
+                """,
+                (state, note or None, actor, actor, email, key),
+            )
+
+        append_audit(
+            "compliance_check_update",
+            actor,
+            {
+                "email": email,
+                "check_key": key,
+                "state": state,
+                "note": note or "",
+            },
+        )
+
+        items = load_compliance_rows_for_email(email)
+        updated = next((row for row in items if (row.get("check_key") or "").strip().lower() == key), None)
+        return jsonify({"status": "ok", "item": updated, "summary": compliance_summary_for_rows(items)})
 
     @app.get("/api/onboarding/blueprint")
     @login_required
@@ -162,6 +293,7 @@ def register_hire_routes(app, deps):
         trainings = fetch_all("SELECT * FROM training_completion")
         it_provisions = fetch_all("SELECT * FROM it_provision")
         it_access_items = fetch_all("SELECT * FROM it_access_item")
+        compliance_items = fetch_all("SELECT * FROM compliance_review_item")
         users = fetch_all("SELECT email, full_name, avatar_url FROM `user`")
         users_by_email = {(u.get("email") or "").lower(): u for u in users}
         hydrated = hydrate_hires_with_context(
@@ -173,6 +305,7 @@ def register_hire_routes(app, deps):
             trainings,
             it_provisions,
             it_access_items=it_access_items,
+            compliance_items=compliance_items,
             users_by_email=users_by_email,
         )
         return jsonify({"hires": hydrated})
@@ -194,6 +327,8 @@ def register_hire_routes(app, deps):
         trainings = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,)) if email else []
         it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,)) if email else []
         it_access_items = fetch_all("SELECT * FROM it_access_item WHERE email = %s", (email,)) if email else []
+        ensure_compliance_rows_for_email(email)
+        compliance_items = load_compliance_rows_for_email(email) if email else []
         user = fetch_one("SELECT email, full_name, avatar_url FROM `user` WHERE email = %s", (email,)) if email else {}
         users_by_email = {email: user} if email else {}
 
@@ -206,6 +341,7 @@ def register_hire_routes(app, deps):
             trainings,
             it_provisions,
             it_access_items=it_access_items,
+            compliance_items=compliance_items,
             users_by_email=users_by_email,
         )
         payload = hydrated[0] if hydrated else {}
@@ -215,6 +351,10 @@ def register_hire_routes(app, deps):
         payload["trainings"] = trainings
         payload["it_provisions"] = it_provisions
         payload["it_access_items"] = it_access_items
+        payload["compliance"] = {
+            "items": compliance_items,
+            "summary": compliance_summary_for_rows(compliance_items),
+        }
         return jsonify(payload)
 
     @app.post("/api/new-hires/<hire_id>")

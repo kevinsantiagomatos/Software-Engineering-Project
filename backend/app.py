@@ -167,6 +167,17 @@ IT_ACCESS_STATES = {
     IT_ACCESS_STATE_DECLINED,
     IT_ACCESS_STATE_ERROR,
 }
+COMPLIANCE_STATE_PENDING = "pending_review"
+COMPLIANCE_STATE_APPROVED = "approved"
+COMPLIANCE_STATE_FLAGGED = "flagged"
+COMPLIANCE_STATES = {COMPLIANCE_STATE_PENDING, COMPLIANCE_STATE_APPROVED, COMPLIANCE_STATE_FLAGGED}
+COMPLIANCE_CHECKLIST_TEMPLATE = [
+    {"id": "documents_review", "label": "Required documents reviewed and validated"},
+    {"id": "policy_review", "label": "Policy acknowledgments verified"},
+    {"id": "contracts_review", "label": "Contract and certifications reviewed"},
+    {"id": "final_signoff", "label": "Final compliance sign-off"},
+]
+COMPLIANCE_CHECK_KEY_ORDER = [item["id"] for item in COMPLIANCE_CHECKLIST_TEMPLATE]
 IT_ACCESS_TEMPLATE_KEY_ORDER = [
     item.get("id")
     for item in (ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or [])
@@ -390,6 +401,29 @@ def ensure_additive_schema():
                 UNIQUE KEY uq_it_access_email_key (email, access_key),
                 KEY idx_it_access_email_state (email, state),
                 KEY idx_it_access_email_updated (email, updated_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
+
+    if not _table_exists("compliance_review_item"):
+        execute(
+            """
+            CREATE TABLE compliance_review_item (
+                id BIGINT NOT NULL AUTO_INCREMENT,
+                email VARCHAR(255) NOT NULL,
+                check_key VARCHAR(64) NOT NULL,
+                check_label VARCHAR(255) NOT NULL,
+                state VARCHAR(32) NOT NULL DEFAULT 'pending_review',
+                reviewer_note TEXT DEFAULT NULL,
+                reviewed_by VARCHAR(255) DEFAULT NULL,
+                reviewed_at DATETIME(6) DEFAULT NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                updated_by VARCHAR(255) DEFAULT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_compliance_email_key (email, check_key),
+                KEY idx_compliance_email_state (email, state),
+                KEY idx_compliance_email_updated (email, updated_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """
         )
@@ -863,6 +897,18 @@ def can_manage_it_access_admin() -> bool:
     return role == SUPERADMIN_ROLE or (role == "admin" and department == "it")
 
 
+def can_view_compliance_admin() -> bool:
+    role = (session.get("role") or "").strip().lower()
+    department = session_department_name()
+    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "compliance"})
+
+
+def can_manage_compliance_admin() -> bool:
+    role = (session.get("role") or "").strip().lower()
+    department = session_department_name()
+    return role == SUPERADMIN_ROLE or (role == "admin" and department == "compliance")
+
+
 def task_category_allowed_for_current_admin(category: str) -> bool:
     role = (session.get("role") or "").strip().lower()
     department = session_department_name()
@@ -1185,6 +1231,128 @@ def it_access_summary_for_rows(rows):
     }
 
 
+def compliance_checklist_items():
+    return [dict(item) for item in COMPLIANCE_CHECKLIST_TEMPLATE]
+
+
+def normalize_compliance_state(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in COMPLIANCE_STATES:
+        return COMPLIANCE_STATE_PENDING
+    return normalized
+
+
+def compliance_state_label(state: str) -> str:
+    normalized = normalize_compliance_state(state)
+    labels = {
+        COMPLIANCE_STATE_PENDING: "Pending review",
+        COMPLIANCE_STATE_APPROVED: "Approved",
+        COMPLIANCE_STATE_FLAGGED: "Flagged",
+    }
+    return labels.get(normalized, "Pending review")
+
+
+def ensure_compliance_rows_for_email(email: str):
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return
+    for item in compliance_checklist_items():
+        execute(
+            """
+            INSERT INTO compliance_review_item (
+                email, check_key, check_label, state, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, NOW(6), NOW(6))
+            ON DUPLICATE KEY UPDATE check_label = VALUES(check_label)
+            """,
+            (normalized, item["id"], item["label"], COMPLIANCE_STATE_PENDING),
+        )
+
+
+def serialize_compliance_rows(rows):
+    normalized = []
+    for row in rows or []:
+        item = dict(row or {})
+        state = normalize_compliance_state(item.get("state"))
+        item["email"] = (item.get("email") or "").strip().lower()
+        item["check_key"] = (item.get("check_key") or "").strip().lower()
+        item["check_label"] = (item.get("check_label") or item.get("check_key") or "Compliance check").strip()
+        item["state"] = state
+        item["state_label"] = compliance_state_label(state)
+        for date_field in ("reviewed_at", "created_at", "updated_at"):
+            value = item.get(date_field)
+            if value is None:
+                item[date_field] = None
+            elif hasattr(value, "isoformat"):
+                item[date_field] = value.isoformat()
+            else:
+                item[date_field] = str(value)
+        normalized.append(item)
+    return normalized
+
+
+def load_compliance_rows_for_email(email: str):
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return []
+    rows = fetch_all(
+        """
+        SELECT
+            id,
+            email,
+            check_key,
+            check_label,
+            state,
+            reviewer_note,
+            reviewed_by,
+            reviewed_at,
+            created_at,
+            updated_at,
+            updated_by
+        FROM compliance_review_item
+        WHERE LOWER(email) = LOWER(%s)
+        """,
+        (normalized,),
+    )
+    serialized = serialize_compliance_rows(rows)
+    order = {key: idx for idx, key in enumerate(COMPLIANCE_CHECK_KEY_ORDER)}
+    serialized.sort(
+        key=lambda row: (
+            order.get((row.get("check_key") or "").strip().lower(), 999),
+            (row.get("check_label") or "").strip().lower(),
+        )
+    )
+    return serialized
+
+
+def compliance_summary_for_rows(rows):
+    states_by_key = {
+        item["id"]: COMPLIANCE_STATE_PENDING for item in compliance_checklist_items()
+    }
+    for row in rows or []:
+        key = (row.get("check_key") or "").strip().lower()
+        if key in states_by_key:
+            states_by_key[key] = normalize_compliance_state(row.get("state"))
+
+    total = len(states_by_key)
+    approved = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_APPROVED)
+    flagged = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_FLAGGED)
+    pending = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_PENDING)
+    overall = COMPLIANCE_STATE_APPROVED if total > 0 and approved == total else (
+        COMPLIANCE_STATE_FLAGGED if flagged > 0 else COMPLIANCE_STATE_PENDING
+    )
+    return {
+        "total_items": total,
+        "approved_count": approved,
+        "flagged_count": flagged,
+        "pending_count": pending,
+        "all_approved": total > 0 and approved == total,
+        "has_flagged": flagged > 0,
+        "overall_status": overall,
+        "overall_label": compliance_state_label(overall),
+    }
+
+
 def normalize_optional_date_field(value, field_name: str):
     raw = (value or "").strip()
     if not raw:
@@ -1205,6 +1373,7 @@ def user_progress_snapshot(
     it_provisions=None,
     required_doc_types=None,
     it_access_items=None,
+    compliance_items=None,
 ):
     docs = docs or []
     tasks = tasks or []
@@ -1212,6 +1381,7 @@ def user_progress_snapshot(
     trainings = trainings or []
     it_provisions = it_provisions or []
     it_access_items = it_access_items or []
+    compliance_items = compliance_items or []
 
     ud = [d for d in docs if d.get("uploader_email") == email]
     ut = [t for t in tasks if t.get("owner_email") == email]
@@ -1219,8 +1389,11 @@ def user_progress_snapshot(
     utr = [t for t in trainings if t.get("email") == email]
     uit = [p for p in it_provisions if p.get("email") == email]
     uita = [item for item in it_access_items if (item.get("email") or "").strip().lower() == email]
+    ucomp = [item for item in compliance_items if (item.get("email") or "").strip().lower() == email]
     it_summary = it_access_summary_for_rows(uita)
     it_done = bool(it_summary.get("all_confirmed")) or bool(uit)
+    compliance_summary = compliance_summary_for_rows(ucomp)
+    compliance_approved = bool(compliance_summary.get("all_approved"))
 
     required_doc_types = required_doc_types or REQUIRED_DOCUMENT_TYPES
     required_doc_ids = [d["id"] for d in required_doc_types if not d.get("optional")]
@@ -1242,6 +1415,7 @@ def user_progress_snapshot(
         {"key": "policy_ack", "label": "Policies acknowledged", "done": bool(upol)},
         {"key": "training", "label": "Training completed", "done": bool(utr)},
         {"key": "it_access", "label": "IT provisioning completed", "done": it_done},
+        {"key": "compliance_review", "label": "Compliance approved", "done": compliance_approved},
     ]
     extra_total = len(expected_checks)
     extra_done = sum(1 for item in expected_checks if item["done"])
@@ -1253,14 +1427,29 @@ def user_progress_snapshot(
     completed = doc_done + task_done
     percentage = (completed / total_items * 100) if total_items else 0
 
-    if doc_done == doc_total and task_done == task_total and task_total > 0:
+    docs_complete = doc_total == 0 or doc_done == doc_total
+    has_document_activity = bool(ud)
+    policies_done = bool(upol)
+    training_done = bool(utr)
+    manager_tasks = [t for t in ut if (t.get("category") or "").strip().lower() == "manager"]
+    manager_tasks_open = [t for t in manager_tasks if (t.get("status") or "").strip().lower() != "completed"]
+
+    if docs_complete and task_done == task_total and task_total > 0 and compliance_approved:
         stage = "Completed"
-    elif doc_done == doc_total:
-        stage = "IT/Project/Training"
-    elif doc_done:
-        stage = "Documents"
+    elif not docs_complete:
+        stage = "Documents" if has_document_activity else "Account Setup"
+    elif not it_done:
+        stage = "IT Access"
+    elif not training_done or not policies_done:
+        stage = "Training/Orientation"
+    elif not compliance_approved:
+        stage = "Compliance Review"
+    elif manager_tasks_open:
+        stage = "Project Assignment"
+    elif any((t.get("status") or "").strip().lower() != "completed" for t in ut):
+        stage = "Project Assignment"
     else:
-        stage = "Account Created"
+        stage = "Completed"
 
     return {
         "email": email,
@@ -1273,6 +1462,7 @@ def user_progress_snapshot(
             **it_summary,
             "legacy_records": len(uit),
         },
+        "compliance": compliance_summary,
         "progress_percent": round(percentage, 2),
         "stage": stage,
     }
@@ -1287,10 +1477,12 @@ def hydrate_hires_with_context(
     trainings,
     it_provisions,
     it_access_items=None,
+    compliance_items=None,
     users_by_email=None,
 ):
     users_by_email = users_by_email or {}
     it_access_items = it_access_items or []
+    compliance_items = compliance_items or []
     att_by_hire = {}
     for att in attachments:
         att_by_hire.setdefault(att["hire_id"], []).append(att)
@@ -1306,6 +1498,7 @@ def hydrate_hires_with_context(
             item["full_name"] = linked_user.get("full_name")
         if email:
             employment_type = (item.get("employment_type") or "").lower()
+            compliance_for_email = [row for row in compliance_items if (row.get("email") or "").strip().lower() == email]
             item["progress"] = user_progress_snapshot(
                 email,
                 docs=docs,
@@ -1314,8 +1507,13 @@ def hydrate_hires_with_context(
                 trainings=trainings,
                 it_provisions=it_provisions,
                 it_access_items=it_access_items,
+                compliance_items=compliance_items,
                 required_doc_types=effective_required_document_types_for_email(email, employment_type),
             )
+            item["compliance"] = {
+                "items": serialize_compliance_rows(compliance_for_email),
+                "summary": compliance_summary_for_rows(compliance_for_email),
+            }
         hydrated.append(item)
     return hydrated
 
@@ -1378,6 +1576,8 @@ register_hire_routes(
         "hydrate_hires_with_context": hydrate_hires_with_context,
         "can_view_documents_admin": can_view_documents_admin,
         "can_manage_hiring_admin": can_manage_hiring_admin,
+        "can_view_compliance_admin": can_view_compliance_admin,
+        "can_manage_compliance_admin": can_manage_compliance_admin,
         "department_and_title_are_valid": department_and_title_are_valid,
         "normalize_optional_date_field": normalize_optional_date_field,
         "get_role_id": get_role_id,
@@ -1392,6 +1592,14 @@ register_hire_routes(
         "register_user_db": register_user_db,
         "enrich_document_record": enrich_document_record,
         "serialize_task_rows": serialize_task_rows,
+        "ensure_compliance_rows_for_email": ensure_compliance_rows_for_email,
+        "load_compliance_rows_for_email": load_compliance_rows_for_email,
+        "compliance_summary_for_rows": compliance_summary_for_rows,
+        "compliance_checklist_items": compliance_checklist_items,
+        "normalize_compliance_state": normalize_compliance_state,
+        "COMPLIANCE_STATE_PENDING": COMPLIANCE_STATE_PENDING,
+        "COMPLIANCE_STATE_APPROVED": COMPLIANCE_STATE_APPROVED,
+        "COMPLIANCE_STATE_FLAGGED": COMPLIANCE_STATE_FLAGGED,
     },
 )
 register_it_access_routes(
@@ -1461,6 +1669,7 @@ register_task_routes(
         "serialize_task_rows": serialize_task_rows,
         "user_progress_snapshot": user_progress_snapshot,
         "effective_required_document_types_for_email": effective_required_document_types_for_email,
+        "ensure_compliance_rows_for_email": ensure_compliance_rows_for_email,
     },
 )
 register_auth_routes(

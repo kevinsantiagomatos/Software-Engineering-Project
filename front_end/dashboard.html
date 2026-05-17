@@ -297,14 +297,14 @@
           { key: "account", label: "Account Created", icon: "👤", href: null },
           { key: "documents", label: "Document Filing and Submitting", icon: "📎", href: "/upload_documents.html" },
           { key: "it", label: "IT Access Configuration", icon: "🖥️", href: "/it_access.html" },
-          { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: "/under_construction.html" }
+          { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: "/project_assignment.html" }
         ];
         stepsEl.innerHTML = items
           .map(item => {
             const st = statuses[item.key] || "pending";
             const iconBg = st === "completed" ? "#d1fae5" : st === "in_progress" ? "#fef9c3" : "#e5e7eb";
             const note = st === "completed" ? "Completed" : st === "in_progress" ? "Action in progress" : "Pending next step";
-            const isAlwaysClickable = item.key === "documents";
+            const isAlwaysClickable = item.key === "documents" || item.key === "it";
             const linkStart = item.href && (isAlwaysClickable || st === "in_progress" || st === "pending") ? `<a class="step-link" href="${item.href}${currentEmail ? `?email=${encodeURIComponent(currentEmail)}` : ""}">` : "";
             const linkEnd = linkStart ? "</a>" : "";
             return `
@@ -363,16 +363,23 @@
           renderDocs(reqs.requirements || []);
           const baseTasks = tasks.tasks || [];
           const itAccess = progress.it_access || {};
+          const compliance = progress.compliance || {};
           let itPseudoStatus = "pending";
           if (itAccess.all_confirmed || Number(progress.it_provisioned || 0) > 0) {
             itPseudoStatus = "completed";
           } else if (Number(itAccess.configured_count || 0) > 0) {
             itPseudoStatus = "in_progress";
           }
+          const complianceStatus = (compliance.overall_status || "").toLowerCase() === "approved"
+            ? "completed"
+            : (compliance.overall_status || "").toLowerCase() === "flagged"
+              ? "blocked"
+              : "pending";
           const pseudoTasks = [
             { id: "policy_ack", title: "Sign company policies", description: "", status: progress.policies_signed ? "completed" : "pending" },
             { id: "training", title: "Complete onboarding training", description: "", status: progress.training_completed ? "completed" : "pending" },
             { id: "it_provision", title: "IT provisioning checklist", description: "", status: itPseudoStatus },
+            { id: "compliance_review", title: "Compliance review and approval", description: "", status: complianceStatus },
           ];
           const combinedTasks = [...baseTasks, ...pseudoTasks];
           renderTasks(combinedTasks);

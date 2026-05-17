@@ -30,6 +30,42 @@
 
     <div class="container">
       <div id="alert"></div>
+      <section class="card" style="margin-bottom:14px;">
+        <h3 class="section-title">Filters & Export</h3>
+        <div class="filter-grid">
+          <select id="filterStage" class="text-input">
+            <option value="">All stages</option>
+            <option value="Account Setup">Account Setup</option>
+            <option value="Documents">Documents</option>
+            <option value="IT Access">IT Access</option>
+            <option value="Training/Orientation">Training/Orientation</option>
+            <option value="Compliance Review">Compliance Review</option>
+            <option value="Project Assignment">Project Assignment</option>
+            <option value="Completed">Completed</option>
+          </select>
+          <select id="filterStatus" class="text-input">
+            <option value="">All statuses</option>
+            <option value="pending_document_submission">Pending Document Submission</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+          <select id="filterEmployment" class="text-input">
+            <option value="">All employment types</option>
+            <option value="employee">Employee</option>
+            <option value="contractor">Contractor</option>
+          </select>
+          <input id="filterDepartment" class="text-input" placeholder="Department contains..." />
+          <input id="filterCreatedFrom" class="text-input" type="date" />
+          <input id="filterCreatedTo" class="text-input" type="date" />
+        </div>
+        <div class="actions-row">
+          <button id="applyFilters" class="submit-button" style="padding:10px 16px;">Apply</button>
+          <button id="clearFilters" class="submit-button" style="padding:10px 16px; background:#334155;">Clear</button>
+          <button id="exportCsv" class="submit-button" style="padding:10px 16px; background:#0f172a;">Export CSV</button>
+          <button id="exportPdf" class="submit-button" style="padding:10px 16px; background:#1d4ed8;">Export PDF</button>
+          <span id="rowCount" class="muted" style="margin-left:auto;">Rows: --</span>
+        </div>
+      </section>
       <div class="grid" id="kpiGrid"></div>
 
       <div class="grid" style="margin-top:16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
@@ -44,6 +80,10 @@
         <section class="card">
           <h3 class="section-title">Employment Type</h3>
           <div id="employmentDist" class="bar-list"></div>
+        </section>
+        <section class="card">
+          <h3 class="section-title">Compliance Distribution</h3>
+          <div id="complianceDist" class="bar-list"></div>
         </section>
       </div>
     </div>
@@ -63,6 +103,20 @@
       const stageDist = document.getElementById("stageDist");
       const statusDist = document.getElementById("statusDist");
       const employmentDist = document.getElementById("employmentDist");
+      const complianceDist = document.getElementById("complianceDist");
+      const filterStage = document.getElementById("filterStage");
+      const filterStatus = document.getElementById("filterStatus");
+      const filterEmployment = document.getElementById("filterEmployment");
+      const filterDepartment = document.getElementById("filterDepartment");
+      const filterCreatedFrom = document.getElementById("filterCreatedFrom");
+      const filterCreatedTo = document.getElementById("filterCreatedTo");
+      const applyFiltersBtn = document.getElementById("applyFilters");
+      const clearFiltersBtn = document.getElementById("clearFilters");
+      const exportCsvBtn = document.getElementById("exportCsv");
+      const exportPdfBtn = document.getElementById("exportPdf");
+      const rowCountEl = document.getElementById("rowCount");
+
+      let sessionInfo = null;
 
       function showAlert(msg, isError=false) {
         alertEl.textContent = msg;
@@ -88,6 +142,18 @@
           .join(" ");
       }
 
+      function buildFilterQuery(withFormat = "") {
+        const params = new URLSearchParams();
+        if (filterStage.value) params.set("stage", filterStage.value);
+        if (filterStatus.value) params.set("status", filterStatus.value);
+        if (filterEmployment.value) params.set("employment_type", filterEmployment.value);
+        if (filterDepartment.value.trim()) params.set("department", filterDepartment.value.trim());
+        if (filterCreatedFrom.value) params.set("created_from", filterCreatedFrom.value);
+        if (filterCreatedTo.value) params.set("created_to", filterCreatedTo.value);
+        if (withFormat) params.set("format", withFormat);
+        return params.toString();
+      }
+
       function renderKPIs(m) {
         const totals = m.totals || {};
         const kpis = m.kpis || {};
@@ -96,6 +162,8 @@
           ["Docs Approved", totals.documents_approved || 0],
           ["Docs Pending", totals.documents_pending_review || 0],
           ["Tasks Completed", totals.tasks_completed || 0],
+          ["Compliance Approved", totals.compliance_approved_hires || 0],
+          ["Compliance Flagged", totals.compliance_flagged_hires || 0],
           ["Avg Progress", `${kpis.average_progress_percent || 0}%`],
           ["Avg Days In Pipeline", kpis.average_days_since_hire_created || 0],
         ];
@@ -129,33 +197,73 @@
           }).join("");
       }
 
+      async function loadMetrics() {
+        const qs = buildFilterQuery();
+        const url = `/api/admin/metrics${qs ? `?${qs}` : ""}`;
+        const metrics = await fetchJson(url);
+        renderKPIs(metrics);
+        renderDistribution(stageDist, metrics.distribution?.stage || {});
+        renderDistribution(statusDist, metrics.distribution?.status || {});
+        renderDistribution(employmentDist, metrics.distribution?.employment_type || {});
+        renderDistribution(complianceDist, metrics.distribution?.compliance || {});
+        rowCountEl.textContent = `Rows: ${metrics.rows_count || 0}`;
+        showAlert("Metrics loaded.");
+      }
+
       async function bootstrap() {
         try {
-          const session = await fetchJson('/api/session');
-          const role = (session.role || '').toLowerCase();
-          const email = (session.email || '').toLowerCase();
+          sessionInfo = await fetchJson("/api/session");
+          const role = (sessionInfo.role || "").toLowerCase();
+          const email = (sessionInfo.email || "").toLowerCase();
           if (!ADMIN_ROLES.includes(role)) {
             window.location.replace(`/dashboard.html?email=${encodeURIComponent(email)}`);
             return;
           }
 
-          fullNameEl.textContent = `${session.full_name || session.email} · Metrics`;
-          roleLineEl.textContent = `Role: ${role} · ${session.email || ''}`;
-          avatarEl.textContent = (session.full_name || session.email || 'M').slice(0,1).toUpperCase();
+          fullNameEl.textContent = `${sessionInfo.full_name || sessionInfo.email} · Metrics`;
+          roleLineEl.textContent = `Role: ${role} · ${sessionInfo.email || ""}`;
+          avatarEl.textContent = (sessionInfo.full_name || sessionInfo.email || "M").slice(0,1).toUpperCase();
           profileLink.href = `/profile.html?email=${encodeURIComponent(email)}`;
           menuSuperDashboard.style.display = role === "superadmin" ? "block" : "none";
           menuRegisterHire.style.display = role === "hr" || role === "manager" ? "block" : "none";
 
-          const metrics = await fetchJson('/api/admin/metrics');
-          renderKPIs(metrics);
-          renderDistribution(stageDist, metrics.distribution?.stage || {});
-          renderDistribution(statusDist, metrics.distribution?.status || {});
-          renderDistribution(employmentDist, metrics.distribution?.employment_type || {});
-          showAlert('Metrics loaded.');
+          await loadMetrics();
         } catch (err) {
-          showAlert(err.message || 'Unable to load metrics.', true);
+          showAlert(err.message || "Unable to load metrics.", true);
         }
       }
+
+      applyFiltersBtn.addEventListener("click", async () => {
+        try {
+          await loadMetrics();
+        } catch (err) {
+          showAlert(err.message || "Unable to apply filters.", true);
+        }
+      });
+
+      clearFiltersBtn.addEventListener("click", async () => {
+        filterStage.value = "";
+        filterStatus.value = "";
+        filterEmployment.value = "";
+        filterDepartment.value = "";
+        filterCreatedFrom.value = "";
+        filterCreatedTo.value = "";
+        try {
+          await loadMetrics();
+        } catch (err) {
+          showAlert(err.message || "Unable to reset filters.", true);
+        }
+      });
+
+      exportCsvBtn.addEventListener("click", () => {
+        const qs = buildFilterQuery("csv");
+        window.location.href = `/api/admin/metrics/export${qs ? `?${qs}` : ""}`;
+      });
+
+      exportPdfBtn.addEventListener("click", () => {
+        const qs = buildFilterQuery("pdf");
+        window.location.href = `/api/admin/metrics/export${qs ? `?${qs}` : ""}`;
+      });
 
       menuBtn.addEventListener("click", (e) => {
         e.stopPropagation();

@@ -60,6 +60,13 @@ def register_page_routes(app, deps):
             return redirect(f"/profile.html?email={quote_plus(email)}", code=302)
         return redirect("/profile.html", code=302)
 
+    @app.get("/project_assignment")
+    def project_assignment_alias():
+        email = (request.args.get("email") or "").strip()
+        if email:
+            return redirect(f"/project_assignment.html?email={quote_plus(email)}", code=302)
+        return redirect("/project_assignment.html", code=302)
+
     @app.get("/style/<path:asset_path>")
     def style_assets(asset_path):
         if not STYLE_DIR.exists():

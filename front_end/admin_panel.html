@@ -39,9 +39,12 @@
               <input id="hireSearch" class="text-input" placeholder="Search by name, email, department, or type..." />
               <select id="stageFilter" class="text-input">
                 <option value="">All stages</option>
-                <option value="Account Created">Account Created</option>
+                <option value="Account Setup">Account Setup</option>
                 <option value="Documents">Documents</option>
-                <option value="IT/Project/Training">IT/Project/Training</option>
+                <option value="IT Access">IT Access</option>
+                <option value="Training/Orientation">Training/Orientation</option>
+                <option value="Compliance Review">Compliance Review</option>
+                <option value="Project Assignment">Project Assignment</option>
                 <option value="Completed">Completed</option>
               </select>
               <select id="statusFilter" class="text-input">
@@ -244,9 +247,9 @@
 
       function stageClass(stage) {
         const s = (stage || "").toLowerCase();
-        if (s === "account created") return "stage-account";
+        if (s === "account setup" || s === "account created") return "stage-account";
         if (s === "documents") return "stage-documents";
-        if (s === "it/project/training") return "stage-workflow";
+        if (s === "it access" || s === "training/orientation" || s === "compliance review" || s === "project assignment" || s === "it/project/training") return "stage-workflow";
         if (s === "completed") return "stage-complete";
         return "";
       }

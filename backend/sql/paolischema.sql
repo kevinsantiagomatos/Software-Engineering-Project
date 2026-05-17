@@ -271,6 +271,41 @@ LOCK TABLES `policy_ack` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `compliance_review_item`
+--
+
+DROP TABLE IF EXISTS `compliance_review_item`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `compliance_review_item` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL,
+  `check_key` varchar(64) NOT NULL,
+  `check_label` varchar(255) NOT NULL,
+  `state` varchar(32) NOT NULL DEFAULT 'pending_review',
+  `reviewer_note` text DEFAULT NULL,
+  `reviewed_by` varchar(255) DEFAULT NULL,
+  `reviewed_at` datetime(6) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `updated_by` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_compliance_email_key` (`email`,`check_key`),
+  KEY `idx_compliance_email_state` (`email`,`state`),
+  KEY `idx_compliance_email_updated` (`email`,`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `compliance_review_item`
+--
+
+LOCK TABLES `compliance_review_item` WRITE;
+/*!40000 ALTER TABLE `compliance_review_item` DISABLE KEYS */;
+/*!40000 ALTER TABLE `compliance_review_item` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `task`
 --
 
