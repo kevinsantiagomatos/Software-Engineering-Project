@@ -89,7 +89,7 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin"];
       const alertEl = document.getElementById("alert");
       const fullNameEl = document.getElementById("fullName");
       const roleLineEl = document.getElementById("roleLine");
@@ -214,9 +214,14 @@
         try {
           sessionInfo = await fetchJson("/api/session");
           const role = (sessionInfo.role || "").toLowerCase();
+          const department = (sessionInfo.department || "").toLowerCase();
           const email = (sessionInfo.email || "").toLowerCase();
           if (!ADMIN_ROLES.includes(role)) {
             window.location.replace(`/dashboard.html?email=${encodeURIComponent(email)}`);
+            return;
+          }
+          if (role === "admin" && department === "compliance") {
+            window.location.replace("/admin_panel.html");
             return;
           }
 

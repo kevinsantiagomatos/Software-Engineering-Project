@@ -271,6 +271,34 @@ LOCK TABLES `policy_ack` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `policy_definition`
+--
+
+DROP TABLE IF EXISTS `policy_definition`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `policy_definition` (
+  `policy_id` varchar(64) NOT NULL,
+  `label` varchar(255) NOT NULL,
+  `file_path` varchar(512) NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `updated_by` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`policy_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `policy_definition`
+--
+
+LOCK TABLES `policy_definition` WRITE;
+/*!40000 ALTER TABLE `policy_definition` DISABLE KEYS */;
+INSERT INTO `policy_definition` VALUES ('company_policies','Company Policies','policies/company_policies.pdf','2026-05-19 00:00:00.000000','2026-05-19 00:00:00.000000','schema_seed'),('medical_plan','Medical Plan Policy','policies/medical_plan_policy.pdf','2026-05-19 00:00:00.000000','2026-05-19 00:00:00.000000','schema_seed');
+/*!40000 ALTER TABLE `policy_definition` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `compliance_review_item`
 --
 

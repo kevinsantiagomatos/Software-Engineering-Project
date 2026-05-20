@@ -12,31 +12,179 @@
       <section class="hero">
         <div>
           <h1>Training and Orientation</h1>
-          <p>Complete assigned onboarding modules and track your progress across required training items.</p>
+          <p>Complete assigned onboarding modules and track progress across required training items.</p>
         </div>
         <a href="/dashboard.html">Back to dashboard</a>
       </section>
 
-    <div class="container">
-      <h2>Training and Orientation</h2>
-      <div class="card">
-        <div class="controls" style="margin-bottom:12px;">
-          <input id="email" class="text-input" type="email" placeholder="Your email" />
-          <button id="load" class="submit-button" style="padding:10px 16px;">Load</button>
+      <div class="container">
+        <h2>Training and Orientation</h2>
+
+        <div class="layout">
+          <section class="card modules-card">
+            <div class="toolbar">
+              <input id="email" class="text-input" type="email" placeholder="User email" />
+              <button id="load" class="submit-button" type="button">Load</button>
+              <button id="markAll" class="submit-button" type="button" style="display:none;">Mark all pending complete</button>
+            </div>
+
+            <div class="toolbar toolbar-sub">
+              <input id="searchInput" class="text-input" type="text" placeholder="Search module title or description" />
+              <select id="filterStatus" class="text-input">
+                <option value="all">All statuses</option>
+                <option value="pending">Pending only</option>
+                <option value="completed">Completed only</option>
+              </select>
+            </div>
+
+            <div id="status" class="muted status-message"></div>
+            <ul id="modules" class="module-list"></ul>
+          </section>
+
+          <aside class="side-column">
+            <section class="card summary-card">
+              <h3>Progress Summary</h3>
+              <div class="subject-line">
+                <div class="subject-label">Trainee</div>
+                <div id="subjectName" class="subject-name">--</div>
+                <div id="subjectEmail" class="subject-email">--</div>
+              </div>
+
+              <div class="kpis">
+                <div class="kpi">
+                  <span>Total</span>
+                  <strong id="totalCount">0</strong>
+                </div>
+                <div class="kpi">
+                  <span>Completed</span>
+                  <strong id="doneCount">0</strong>
+                </div>
+                <div class="kpi">
+                  <span>Pending</span>
+                  <strong id="pendingCount">0</strong>
+                </div>
+              </div>
+
+              <div class="progress-wrap">
+                <div class="progress-track">
+                  <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <div id="progressText" class="progress-text">0%</div>
+              </div>
+
+              <div id="lastCompletedAt" class="muted">No modules completed yet.</div>
+            </section>
+
+            <section class="card checklist-card">
+              <h3>Orientation Checklist</h3>
+              <p class="muted checklist-note">Operational checkpoints aligned with onboarding orientation.</p>
+              <ul id="orientationChecklist" class="list"></ul>
+            </section>
+          </aside>
         </div>
-        <ul id="modules" class="list"></ul>
       </div>
-    </div>
     </main>
 
     <script>
       const emailInput = document.getElementById("email");
       const loadBtn = document.getElementById("load");
+      const markAllBtn = document.getElementById("markAll");
+      const statusEl = document.getElementById("status");
       const modulesEl = document.getElementById("modules");
+      const searchInput = document.getElementById("searchInput");
+      const filterStatus = document.getElementById("filterStatus");
+      const subjectNameEl = document.getElementById("subjectName");
+      const subjectEmailEl = document.getElementById("subjectEmail");
+      const totalCountEl = document.getElementById("totalCount");
+      const doneCountEl = document.getElementById("doneCount");
+      const pendingCountEl = document.getElementById("pendingCount");
+      const progressBarEl = document.getElementById("progressBar");
+      const progressTextEl = document.getElementById("progressText");
+      const lastCompletedAtEl = document.getElementById("lastCompletedAt");
+      const orientationChecklistEl = document.getElementById("orientationChecklist");
+
+      const ORIENTATION_CHECKPOINTS = [
+        {
+          id: "hr_policies",
+          label: "HR policies and norms walkthrough",
+          matchIds: ["handbook", "rrhh_policies"],
+          keyword: "handbook",
+        },
+        {
+          id: "security_setup",
+          label: "IT security and MFA configuration",
+          matchIds: ["security101", "it_security"],
+          keyword: "security",
+        },
+        {
+          id: "agile_tools",
+          label: "Agile flow, tools, and documentation",
+          matchIds: ["tools", "agile_flow"],
+          keyword: "tools",
+        },
+        {
+          id: "billing_orientation",
+          label: "Billing manual orientation",
+          matchIds: ["billing_orientation"],
+          keyword: "billing",
+        },
+      ];
+
+      let csrfToken = null;
+      let modules = [];
+      let completionRows = [];
+      let completionByModule = new Map();
+      let isBusy = false;
+      let currentSubjectName = "--";
+
+      let sessionInfo = {
+        email: "",
+        role: "",
+        full_name: "",
+        department: "",
+      };
+
+      function normalizeEmail(value) {
+        return (value || "").toString().trim().toLowerCase();
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function formatDateTime(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        return date.toLocaleString();
+      }
+
+      function canManageOtherTraining() {
+        const role = (sessionInfo.role || "").toLowerCase();
+        const department = (sessionInfo.department || "").toLowerCase();
+        return role === "superadmin" || role === "manager" || (role === "admin" && department === "hr");
+      }
+
+      function setBusy(flag) {
+        isBusy = Boolean(flag);
+        loadBtn.disabled = isBusy;
+        markAllBtn.disabled = isBusy;
+        emailInput.disabled = isBusy;
+        searchInput.disabled = isBusy;
+        filterStatus.disabled = isBusy;
+        modulesEl.querySelectorAll("button[data-id]").forEach((btn) => {
+          btn.disabled = isBusy;
+        });
+      }
 
       async function fetchJson(url, options) {
         const res = await fetch(url, options);
-        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+        if (res.status === 401 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
           window.location.replace("/log_in.html");
           throw new Error("Authentication required");
         }
@@ -44,56 +192,353 @@
         return res.json();
       }
 
-      let completions = [];
-      let modules = [];
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
 
-      function render() {
-        modulesEl.innerHTML = modules
-          .map(m => {
-            const done = completions.some(c => c.module_id === m.id);
-            return `<li><div><strong>${m.title}</strong><br/><small>${m.description}</small></div>
+      function isModuleCompleted(moduleId) {
+        return completionByModule.has(moduleId);
+      }
+
+      function completedCount() {
+        return modules.reduce((count, module) => count + (isModuleCompleted(module.id) ? 1 : 0), 0);
+      }
+
+      function pendingModules() {
+        return modules.filter((module) => !isModuleCompleted(module.id));
+      }
+
+      function checkpointCompleted(checkpoint) {
+        const idMatches = (checkpoint.matchIds || []).some((moduleId) => isModuleCompleted(moduleId));
+        if (idMatches) return true;
+        const keyword = (checkpoint.keyword || "").toLowerCase();
+        if (!keyword) return false;
+        return modules.some((module) => {
+          const summary = `${module.id || ""} ${module.title || ""} ${module.description || ""}`.toLowerCase();
+          return summary.includes(keyword) && isModuleCompleted(module.id);
+        });
+      }
+
+      function renderOrientationChecklist() {
+        orientationChecklistEl.innerHTML = ORIENTATION_CHECKPOINTS.map((checkpoint) => {
+          const done = checkpointCompleted(checkpoint);
+          const badgeClass = done ? "badge-completed" : "badge-pending";
+          const badgeText = done ? "Done" : "Pending";
+          return `
+            <li>
+              <span>${escapeHtml(checkpoint.label)}</span>
+              <span class="badge ${badgeClass}">${badgeText}</span>
+            </li>
+          `;
+        }).join("");
+      }
+
+      function renderSummary() {
+        const total = modules.length;
+        const done = completedCount();
+        const pending = Math.max(0, total - done);
+        const pct = total ? Math.round((done / total) * 100) : 0;
+
+        totalCountEl.textContent = String(total);
+        doneCountEl.textContent = String(done);
+        pendingCountEl.textContent = String(pending);
+        progressBarEl.style.width = `${pct}%`;
+        progressTextEl.textContent = `${pct}% complete`;
+
+        const sortedByTime = [...completionRows]
+          .filter((row) => row && row.completed_at)
+          .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+        const latest = sortedByTime[0];
+        lastCompletedAtEl.textContent = latest
+          ? `Last completion: ${formatDateTime(latest.completed_at)}`
+          : "No modules completed yet.";
+
+        subjectNameEl.textContent = currentSubjectName || "--";
+        subjectEmailEl.textContent = normalizeEmail(emailInput.value) || "--";
+
+        const hasPending = pending > 0;
+        markAllBtn.style.display = hasPending ? "inline-flex" : "none";
+        if (hasPending) {
+          markAllBtn.textContent = `Mark all pending complete (${pending})`;
+        }
+      }
+
+      function visibleModules() {
+        const query = searchInput.value.trim().toLowerCase();
+        const statusFilter = filterStatus.value;
+        return modules
+          .filter((module) => {
+            const done = isModuleCompleted(module.id);
+            if (statusFilter === "pending" && done) return false;
+            if (statusFilter === "completed" && !done) return false;
+            if (!query) return true;
+            const haystack = `${module.id || ""} ${module.title || ""} ${module.description || ""}`.toLowerCase();
+            return haystack.includes(query);
+          })
+          .sort((a, b) => {
+            const aDone = isModuleCompleted(a.id);
+            const bDone = isModuleCompleted(b.id);
+            if (aDone !== bDone) return aDone ? 1 : -1;
+            return (a.title || a.id || "").localeCompare(b.title || b.id || "");
+          });
+      }
+
+      function renderModules() {
+        if (!modules.length) {
+          modulesEl.innerHTML = `
+            <li class="empty-state">
               <div>
-                <span class="badge">${done ? "Completed" : "Pending"}</span>
-                ${done ? "" : `<button data-id="${m.id}" class="submit-button" style="padding:8px 12px;">Mark complete</button>`}
+                <strong>No training modules configured.</strong>
+                <div class="muted">Ask an admin to seed training modules in the training catalog.</div>
               </div>
-            </li>`;
+            </li>
+          `;
+          return;
+        }
+
+        const rows = visibleModules();
+        if (!rows.length) {
+          modulesEl.innerHTML = `
+            <li class="empty-state">
+              <div>
+                <strong>No modules match your filters.</strong>
+                <div class="muted">Try clearing search or switching status filter.</div>
+              </div>
+            </li>
+          `;
+          return;
+        }
+
+        modulesEl.innerHTML = rows
+          .map((module) => {
+            const completion = completionByModule.get(module.id);
+            const done = Boolean(completion);
+            const stateClass = done ? "badge-completed" : "badge-pending";
+            const stateText = done ? "Completed" : "Pending";
+            const completedAt = completion ? formatDateTime(completion.completed_at) : "";
+            return `
+              <li class="module-item ${done ? "module-completed" : "module-pending"}">
+                <div class="module-main">
+                  <div class="module-top">
+                    <h3>${escapeHtml(module.title || module.id)}</h3>
+                    <span class="badge ${stateClass}">${stateText}</span>
+                  </div>
+                  <p>${escapeHtml(module.description || "No description provided.")}</p>
+                  <div class="module-meta">
+                    <span>Module ID: <code>${escapeHtml(module.id)}</code></span>
+                    ${done && completedAt ? `<span>Completed at: ${escapeHtml(completedAt)}</span>` : ""}
+                  </div>
+                </div>
+                <div class="module-actions">
+                  ${done ? "" : `<button data-id="${escapeHtml(module.id)}" class="submit-button" type="button">Mark complete</button>`}
+                </div>
+              </li>
+            `;
           })
           .join("");
-        modulesEl.querySelectorAll("button[data-id]").forEach(btn => {
-          btn.addEventListener("click", () => complete(btn.dataset.id));
+
+        modulesEl.querySelectorAll("button[data-id]").forEach((btn) => {
+          btn.addEventListener("click", () => completeSingle(btn.dataset.id));
         });
+      }
+
+      function renderAll() {
+        renderSummary();
+        renderOrientationChecklist();
+        renderModules();
+      }
+
+      function setStatus(message, isError = false) {
+        statusEl.textContent = message || "";
+        statusEl.classList.toggle("error-text", Boolean(isError));
+      }
+
+      async function loadSessionContext() {
+        const data = await fetchJson("/api/session");
+        sessionInfo = {
+          email: normalizeEmail(data.email),
+          role: (data.role || "").toLowerCase(),
+          full_name: String(data.full_name || data.email || "").trim(),
+          department: (data.department || "").toLowerCase(),
+        };
+
+        const requestedEmail = normalizeEmail(new URLSearchParams(window.location.search).get("email"));
+        const rememberedEmail = normalizeEmail(localStorage.getItem("paoli_email"));
+        let targetEmail = sessionInfo.email;
+
+        if (requestedEmail && (requestedEmail === sessionInfo.email || canManageOtherTraining())) {
+          targetEmail = requestedEmail;
+        } else if (!requestedEmail && rememberedEmail && (rememberedEmail === sessionInfo.email || canManageOtherTraining())) {
+          targetEmail = rememberedEmail;
+        }
+
+        emailInput.value = targetEmail || sessionInfo.email;
+        localStorage.setItem("paoli_email", emailInput.value);
+
+        if (!canManageOtherTraining() && emailInput.value !== sessionInfo.email) {
+          emailInput.value = sessionInfo.email;
+        }
+      }
+
+      async function resolveSubjectName(email) {
+        if (email === sessionInfo.email) return sessionInfo.full_name || sessionInfo.email;
+        if (!canManageOtherTraining()) return email;
+        try {
+          const user = await fetchJson(`/api/user?email=${encodeURIComponent(email)}`);
+          return String(user.full_name || user.email || email).trim();
+        } catch (_) {
+          return email;
+        }
       }
 
       async function load() {
-        const email = emailInput.value.trim();
-        if (!email) return;
-        localStorage.setItem("paoli_email", email);
-        const [mods, comps] = await Promise.all([
-          fetchJson("/api/training/list"),
-          fetchJson(`/api/training/status?email=${encodeURIComponent(email)}`)
-        ]);
-        modules = mods.modules || [];
-        completions = comps.completions || [];
-        render();
+        setBusy(true);
+        setStatus("");
+        try {
+          let email = normalizeEmail(emailInput.value);
+          if (!email) {
+            setStatus("Email is required.", true);
+            modules = [];
+            completionRows = [];
+            completionByModule = new Map();
+            renderAll();
+            return;
+          }
+
+          if (!canManageOtherTraining() && email !== sessionInfo.email) {
+            email = sessionInfo.email;
+            emailInput.value = email;
+            setStatus("Loaded your own training records.");
+          }
+
+          localStorage.setItem("paoli_email", email);
+          currentSubjectName = await resolveSubjectName(email);
+
+          const [mods, comps] = await Promise.all([
+            fetchJson("/api/training/list"),
+            fetchJson(`/api/training/status?email=${encodeURIComponent(email)}`),
+          ]);
+
+          modules = Array.isArray(mods.modules)
+            ? mods.modules.map((module) => ({
+                id: String(module.id || "").trim(),
+                title: String(module.title || module.id || "").trim(),
+                description: String(module.description || "").trim(),
+              }))
+            : [];
+
+          completionRows = Array.isArray(comps.completions) ? comps.completions : [];
+          completionByModule = new Map();
+          completionRows.forEach((row) => {
+            const moduleId = String(row.module_id || "").trim();
+            if (!moduleId) return;
+            const existing = completionByModule.get(moduleId);
+            if (!existing) {
+              completionByModule.set(moduleId, row);
+              return;
+            }
+            const existingTs = new Date(existing.completed_at || 0).getTime();
+            const currentTs = new Date(row.completed_at || 0).getTime();
+            if (currentTs >= existingTs) {
+              completionByModule.set(moduleId, row);
+            }
+          });
+
+          renderAll();
+        } finally {
+          setBusy(false);
+        }
       }
 
-      async function complete(id) {
-        const email = emailInput.value.trim();
-        if (!email) return;
-        await fetchJson("/api/training/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ email, module_id: id })
+      async function completeSingle(moduleId) {
+        const email = normalizeEmail(emailInput.value);
+        if (!email || !moduleId || isBusy) return;
+
+        setBusy(true);
+        try {
+          const token = await ensureCsrf();
+          await fetchJson("/api/training/complete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRF-Token": token,
+            },
+            body: new URLSearchParams({ email, module_id: moduleId }),
+          });
+          await load();
+          setStatus("Training item marked as completed.");
+        } catch (err) {
+          setStatus(err.message || "Unable to complete training item.", true);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function completeAllPending() {
+        if (isBusy) return;
+        const email = normalizeEmail(emailInput.value);
+        const pending = pendingModules();
+        if (!email || !pending.length) return;
+
+        setBusy(true);
+        try {
+          const token = await ensureCsrf();
+          for (let i = 0; i < pending.length; i += 1) {
+            const module = pending[i];
+            setStatus(`Completing module ${i + 1} of ${pending.length}...`);
+            await fetchJson("/api/training/complete", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRF-Token": token,
+              },
+              body: new URLSearchParams({ email, module_id: module.id }),
+            });
+          }
+          await load();
+          setStatus("Training and orientation marked as completed.");
+        } catch (err) {
+          setStatus(err.message || "Unable to complete all training items.", true);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      loadBtn.addEventListener("click", () => {
+        load().catch((err) => {
+          setStatus(err.message || "Unable to load training modules.", true);
         });
-        load();
-      }
+      });
 
-      loadBtn.addEventListener("click", load);
-      (function prefill() {
-        const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
-        if (email) {
-          emailInput.value = email;
-          load();
+      emailInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        loadBtn.click();
+      });
+
+      searchInput.addEventListener("input", () => {
+        renderModules();
+      });
+
+      filterStatus.addEventListener("change", () => {
+        renderModules();
+      });
+
+      markAllBtn.addEventListener("click", () => {
+        completeAllPending().catch((err) => {
+          setStatus(err.message || "Unable to complete all training items.", true);
+        });
+      });
+
+      (async function bootstrap() {
+        try {
+          await loadSessionContext();
+          await load();
+        } catch (err) {
+          setStatus(err.message || "Unable to initialize training page.", true);
         }
       })();
     </script>

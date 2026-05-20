@@ -171,6 +171,28 @@ COMPLIANCE_STATE_PENDING = "pending_review"
 COMPLIANCE_STATE_APPROVED = "approved"
 COMPLIANCE_STATE_FLAGGED = "flagged"
 COMPLIANCE_STATES = {COMPLIANCE_STATE_PENDING, COMPLIANCE_STATE_APPROVED, COMPLIANCE_STATE_FLAGGED}
+POLICY_REVIEW_STATES = {"signed", "approved", "rejected", "pending_review"}
+POLICY_ID_GROUPS = {
+    "company_policies": {"company_policies", "code_of_conduct", "handbook"},
+    "medical_plan": {"medical_plan", "medical_plan_policy"},
+    # Billing manual acknowledgement is tracked through training/orientation, not policy signing.
+}
+POLICY_ID_ALIASES = {}
+for _canonical_policy_id, _aliases in POLICY_ID_GROUPS.items():
+    for _alias in _aliases:
+        POLICY_ID_ALIASES[_alias] = _canonical_policy_id
+DEFAULT_POLICY_DEFINITIONS = [
+    {
+        "id": "company_policies",
+        "label": "Company Policies",
+        "file_path": "policies/company_policies.pdf",
+    },
+    {
+        "id": "medical_plan",
+        "label": "Medical Plan Policy",
+        "file_path": "policies/medical_plan_policy.pdf",
+    },
+]
 COMPLIANCE_CHECKLIST_TEMPLATE = [
     {"id": "documents_review", "label": "Required documents reviewed and validated"},
     {"id": "policy_review", "label": "Policy acknowledgments verified"},
@@ -426,6 +448,46 @@ def ensure_additive_schema():
                 KEY idx_compliance_email_updated (email, updated_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """
+        )
+
+    if not _table_exists("policy_definition"):
+        execute(
+            """
+            CREATE TABLE policy_definition (
+                policy_id VARCHAR(64) NOT NULL,
+                label VARCHAR(255) NOT NULL,
+                file_path VARCHAR(512) NOT NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                updated_by VARCHAR(255) DEFAULT NULL,
+                PRIMARY KEY (policy_id),
+                KEY idx_policy_definition_active (is_active)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
+
+    if _table_exists("policy_definition") and not _column_exists("policy_definition", "is_active"):
+        execute("ALTER TABLE policy_definition ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER file_path")
+        execute("ALTER TABLE policy_definition ADD KEY idx_policy_definition_active (is_active)")
+
+    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewed_by"):
+        execute("ALTER TABLE policy_ack ADD COLUMN reviewed_by VARCHAR(255) NULL AFTER status")
+    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewed_at"):
+        execute("ALTER TABLE policy_ack ADD COLUMN reviewed_at DATETIME(6) NULL AFTER reviewed_by")
+    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewer_note"):
+        execute("ALTER TABLE policy_ack ADD COLUMN reviewer_note TEXT NULL AFTER reviewed_at")
+
+    for policy in DEFAULT_POLICY_DEFINITIONS:
+        execute(
+            """
+            INSERT INTO policy_definition (policy_id, label, file_path, is_active, updated_by)
+            VALUES (%s, %s, %s, 1, %s)
+            ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                file_path = VALUES(file_path)
+            """,
+            (policy["id"], policy["label"], policy["file_path"], "system_bootstrap"),
         )
 
     for dep_name in DEFAULT_DEPARTMENTS:
@@ -870,13 +932,13 @@ def session_department_name() -> str:
 def can_view_documents_admin() -> bool:
     role = (session.get("role") or "").strip().lower()
     department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "compliance"})
+    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department == "hr")
 
 
 def can_manage_documents_admin() -> bool:
     role = (session.get("role") or "").strip().lower()
     department = session_department_name()
-    return role == SUPERADMIN_ROLE or (role == "admin" and department in {"hr", "compliance"})
+    return role == SUPERADMIN_ROLE or (role == "admin" and department == "hr")
 
 
 def can_manage_hiring_admin() -> bool:
@@ -888,7 +950,7 @@ def can_manage_hiring_admin() -> bool:
 def can_view_it_access_admin() -> bool:
     role = (session.get("role") or "").strip().lower()
     department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "it", "compliance"})
+    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "it"})
 
 
 def can_manage_it_access_admin() -> bool:
@@ -920,8 +982,10 @@ def task_category_allowed_for_current_admin(category: str) -> bool:
         return False
     if department == "it":
         return normalized == "it"
-    if department in {"hr", "compliance"}:
+    if department == "hr":
         return normalized in TASK_CATEGORIES and normalized != "it"
+    if department == "compliance":
+        return normalized == "compliance"
     return False
 
 
@@ -1353,6 +1417,85 @@ def compliance_summary_for_rows(rows):
     }
 
 
+def normalize_policy_id(policy_id: str) -> str:
+    raw = (policy_id or "").strip().lower()
+    return POLICY_ID_ALIASES.get(raw, raw)
+
+
+def list_policy_catalog(include_inactive: bool = False):
+    policies_by_id = {}
+
+    for policy in DEFAULT_POLICY_DEFINITIONS:
+        canonical_id = normalize_policy_id(policy.get("id"))
+        file_path = (policy.get("file_path") or "").strip().lstrip("/")
+        policies_by_id[canonical_id] = {
+            "id": canonical_id,
+            "label": (policy.get("label") or canonical_id).strip(),
+            "file_path": file_path,
+            "url": f"/uploads/{file_path}" if file_path else "",
+            "is_active": True,
+            "updated_at": "",
+            "updated_by": "",
+        }
+
+    if _table_exists("policy_definition"):
+        has_active_column = _column_exists("policy_definition", "is_active")
+        rows = fetch_all(
+            """
+            SELECT policy_id, label, file_path, is_active, updated_at, updated_by
+            FROM policy_definition
+            """
+            if has_active_column
+            else """
+            SELECT policy_id, label, file_path, updated_at, updated_by
+            FROM policy_definition
+            """
+        )
+        for row in rows:
+            canonical_id = normalize_policy_id(row.get("policy_id"))
+            if not canonical_id:
+                continue
+            if has_active_column:
+                is_active = bool(int(row.get("is_active") or 0))
+            else:
+                is_active = True
+            label = (row.get("label") or policies_by_id.get(canonical_id, {}).get("label") or canonical_id).strip()
+            file_path = (row.get("file_path") or policies_by_id.get(canonical_id, {}).get("file_path") or "").strip().lstrip("/")
+            policies_by_id[canonical_id] = {
+                "id": canonical_id,
+                "label": label,
+                "file_path": file_path,
+                "url": f"/uploads/{file_path}" if file_path else "",
+                "is_active": is_active,
+                "updated_at": row.get("updated_at") or "",
+                "updated_by": row.get("updated_by") or "",
+            }
+
+    default_order = [normalize_policy_id(policy.get("id")) for policy in DEFAULT_POLICY_DEFINITIONS]
+    ordered = []
+    for canonical_id in default_order:
+        row = policies_by_id.get(canonical_id)
+        if not row:
+            continue
+        if not include_inactive and not row.get("is_active", True):
+            continue
+        ordered.append(row)
+
+    remaining_ids = sorted(
+        [pid for pid in policies_by_id.keys() if pid not in set(default_order)],
+        key=lambda pid: (policies_by_id[pid].get("label") or pid).lower(),
+    )
+    for canonical_id in remaining_ids:
+        row = policies_by_id.get(canonical_id)
+        if not row:
+            continue
+        if not include_inactive and not row.get("is_active", True):
+            continue
+        ordered.append(row)
+
+    return ordered
+
+
 def normalize_optional_date_field(value, field_name: str):
     raw = (value or "").strip()
     if not raw:
@@ -1386,6 +1529,12 @@ def user_progress_snapshot(
     ud = [d for d in docs if d.get("uploader_email") == email]
     ut = [t for t in tasks if t.get("owner_email") == email]
     upol = [p for p in policies if p.get("email") == email]
+    required_policy_ids = {policy["id"] for policy in list_policy_catalog()}
+    signed_policy_ids = set()
+    for policy_row in upol:
+        canonical_policy_id = normalize_policy_id(policy_row.get("policy_id") or "")
+        if canonical_policy_id in required_policy_ids:
+            signed_policy_ids.add(canonical_policy_id)
     utr = [t for t in trainings if t.get("email") == email]
     uit = [p for p in it_provisions if p.get("email") == email]
     uita = [item for item in it_access_items if (item.get("email") or "").strip().lower() == email]
@@ -1412,7 +1561,7 @@ def user_progress_snapshot(
     doc_done = sum(1 for status in doc_status_by_type.values() if status == "approved")
 
     expected_checks = [
-        {"key": "policy_ack", "label": "Policies acknowledged", "done": bool(upol)},
+        {"key": "policy_ack", "label": "Policies acknowledged", "done": required_policy_ids.issubset(signed_policy_ids)},
         {"key": "training", "label": "Training completed", "done": bool(utr)},
         {"key": "it_access", "label": "IT provisioning completed", "done": it_done},
         {"key": "compliance_review", "label": "Compliance approved", "done": compliance_approved},
@@ -1429,7 +1578,7 @@ def user_progress_snapshot(
 
     docs_complete = doc_total == 0 or doc_done == doc_total
     has_document_activity = bool(ud)
-    policies_done = bool(upol)
+    policies_done = required_policy_ids.issubset(signed_policy_ids)
     training_done = bool(utr)
     manager_tasks = [t for t in ut if (t.get("category") or "").strip().lower() == "manager"]
     manager_tasks_open = [t for t in manager_tasks if (t.get("status") or "").strip().lower() != "completed"]
@@ -1455,7 +1604,7 @@ def user_progress_snapshot(
         "email": email,
         "documents": {"total": doc_total, "approved": doc_done},
         "tasks": {"total": task_total, "completed": task_done},
-        "policies_signed": len(upol),
+        "policies_signed": len(signed_policy_ids),
         "training_completed": len(utr),
         "it_provisioned": int(it_summary.get("confirmed_count") or len(uit)),
         "it_access": {
@@ -1600,6 +1749,9 @@ register_hire_routes(
         "COMPLIANCE_STATE_PENDING": COMPLIANCE_STATE_PENDING,
         "COMPLIANCE_STATE_APPROVED": COMPLIANCE_STATE_APPROVED,
         "COMPLIANCE_STATE_FLAGGED": COMPLIANCE_STATE_FLAGGED,
+        "POLICY_ID_GROUPS": POLICY_ID_GROUPS,
+        "normalize_policy_id": normalize_policy_id,
+        "list_policy_catalog": list_policy_catalog,
     },
 )
 register_it_access_routes(

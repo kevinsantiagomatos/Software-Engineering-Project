@@ -3,6 +3,7 @@
   .avatar { width:56px; height:56px; border-radius:14px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.2rem; color:#fff; }
   .container { max-width: 1180px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
   .grid { display:grid; gap:16px; grid-template-columns: 1.25fr 1fr; }
+  .grid.grid-compliance { grid-template-columns: 1.35fr 0.85fr; align-items:start; }
   .stack { display:grid; gap:16px; }
   .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; min-width:0; }
   .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }

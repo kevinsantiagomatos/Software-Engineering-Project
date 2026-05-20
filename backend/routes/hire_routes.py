@@ -1,4 +1,5 @@
 import json
+import re
 import secrets
 
 import pymysql
@@ -48,43 +49,388 @@ def register_hire_routes(app, deps):
     COMPLIANCE_STATE_PENDING = deps["COMPLIANCE_STATE_PENDING"]
     COMPLIANCE_STATE_APPROVED = deps["COMPLIANCE_STATE_APPROVED"]
     COMPLIANCE_STATE_FLAGGED = deps["COMPLIANCE_STATE_FLAGGED"]
+    POLICY_ID_GROUPS = deps["POLICY_ID_GROUPS"]
+    normalize_policy_id = deps["normalize_policy_id"]
+    list_policy_catalog = deps["list_policy_catalog"]
 
     def requester_can_view_compliance() -> bool:
-        role = (session.get("role") or "").strip().lower()
-        if role in {"compliance", "hr"}:
-            return True
         return can_view_compliance_admin()
 
     def requester_can_manage_compliance() -> bool:
-        role = (session.get("role") or "").strip().lower()
-        if role == "compliance":
-            return True
         return can_manage_compliance_admin()
+
+    def requester_can_manage_training_for_others() -> bool:
+        requester_role = (session.get("role") or "").strip().lower()
+        return requester_role == SUPERADMIN_ROLE or requester_role == "manager" or (
+            requester_role == "admin" and session_department_name() == "hr"
+        )
+
+    def serialize_policy_catalog_row(row):
+        policy_id = normalize_policy_id(row.get("id") or row.get("policy_id") or "")
+        label = (row.get("label") or policy_id).strip()
+        file_path = (row.get("file_path") or "").strip().lstrip("/")
+        url = (row.get("url") or "").strip() or (f"/uploads/{file_path}" if file_path else "")
+        raw_active = row.get("is_active", True)
+        if isinstance(raw_active, str):
+            is_active = raw_active.strip().lower() not in {"0", "false", "no", "inactive"}
+        else:
+            is_active = bool(raw_active)
+        return {
+            "id": policy_id,
+            "label": label,
+            "file_path": file_path,
+            "url": url,
+            "is_active": is_active,
+            "updated_at": row.get("updated_at") or "",
+            "updated_by": row.get("updated_by") or "",
+        }
+
+    def policy_aliases_for_id(policy_id: str):
+        canonical = normalize_policy_id(policy_id)
+        aliases = POLICY_ID_GROUPS.get(canonical, {canonical})
+        normalized = {(alias or "").strip().lower() for alias in aliases if (alias or "").strip()}
+        if canonical:
+            normalized.add(canonical)
+        return sorted(normalized)
+
+    def normalize_policy_review_state(value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized in {"approved", "rejected", "pending_review", "signed"}:
+            return normalized
+        if normalized in {"pending", "review"}:
+            return "pending_review"
+        return "signed"
+
+    @app.get("/api/policy/catalog")
+    @login_required
+    def policy_catalog():
+        return jsonify({"policies": [serialize_policy_catalog_row(row) for row in list_policy_catalog()]})
+
+    @app.get("/api/policy/admin/catalog")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_catalog():
+        if not requester_can_view_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        return jsonify(
+            {
+                "policies": [serialize_policy_catalog_row(row) for row in list_policy_catalog(include_inactive=True)],
+                "can_manage": requester_can_manage_compliance(),
+            }
+        )
+
+    @app.post("/api/policy/admin/update")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_update():
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        actor = (session.get("email") or "").strip().lower()
+        raw_policy_id = (request.form.get("policy_id") or "").strip().lower()
+        policy_id = normalize_policy_id(raw_policy_id)
+        if not policy_id:
+            return Response("policy_id is required.", status=400, mimetype="text/plain")
+
+        existing = fetch_one(
+            """
+            SELECT policy_id, label, file_path
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        )
+        if not existing:
+            return Response("Policy definition not found.", status=404, mimetype="text/plain")
+
+        label = (request.form.get("label") or "").strip() or (existing.get("label") or "").strip()
+        if not label:
+            return Response("Policy label is required.", status=400, mimetype="text/plain")
+
+        file_path = (existing.get("file_path") or "").strip().lstrip("/")
+        policy_file = request.files.get("policy_file")
+        if policy_file and policy_file.filename:
+            safe_name = secure_filename(policy_file.filename)
+            if not safe_name.lower().endswith(".pdf"):
+                return Response("Only PDF files are supported.", status=400, mimetype="text/plain")
+            stored_name = f"{policy_id}.pdf"
+            destination = UPLOAD_DIR / "policies" / stored_name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            policy_file.save(destination)
+            file_path = f"policies/{stored_name}"
+
+        if not file_path:
+            return Response("Policy file path is missing. Upload a PDF file.", status=400, mimetype="text/plain")
+
+        execute(
+            """
+            INSERT INTO policy_definition (policy_id, label, file_path, updated_by)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                file_path = VALUES(file_path),
+                updated_by = VALUES(updated_by),
+                updated_at = NOW(6)
+            """,
+            (policy_id, label, file_path, actor),
+        )
+        append_audit(
+            "policy_definition_update",
+            actor,
+            {"policy_id": policy_id, "label": label, "file_path": file_path},
+        )
+        updated = fetch_one(
+            """
+            SELECT policy_id, label, file_path, is_active, updated_at, updated_by
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        ) or {"policy_id": policy_id, "label": label, "file_path": file_path}
+        return jsonify({"status": "ok", "policy": serialize_policy_catalog_row(updated)})
+
+    @app.post("/api/policy/admin/create")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_create():
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        actor = (session.get("email") or "").strip().lower()
+        raw_policy_id = (request.form.get("policy_id") or "").strip().lower()
+        policy_id = normalize_policy_id(raw_policy_id)
+        label = (request.form.get("label") or "").strip()
+        policy_file = request.files.get("policy_file")
+
+        if not policy_id:
+            return Response("policy_id is required.", status=400, mimetype="text/plain")
+        if not re.match(r"^[a-z0-9_]{3,64}$", policy_id):
+            return Response("policy_id must use 3-64 chars: lowercase letters, numbers, underscore.", status=400, mimetype="text/plain")
+        if not label:
+            return Response("Policy label is required.", status=400, mimetype="text/plain")
+        if not policy_file or not policy_file.filename:
+            return Response("Policy PDF file is required.", status=400, mimetype="text/plain")
+
+        safe_name = secure_filename(policy_file.filename)
+        if not safe_name.lower().endswith(".pdf"):
+            return Response("Only PDF files are supported.", status=400, mimetype="text/plain")
+
+        exists = fetch_one(
+            """
+            SELECT policy_id
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        )
+        if exists:
+            return Response("Policy already exists. Use update instead.", status=409, mimetype="text/plain")
+
+        stored_name = f"{policy_id}.pdf"
+        destination = UPLOAD_DIR / "policies" / stored_name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        policy_file.save(destination)
+        file_path = f"policies/{stored_name}"
+
+        execute(
+            """
+            INSERT INTO policy_definition (policy_id, label, file_path, is_active, updated_by)
+            VALUES (%s, %s, %s, 1, %s)
+            """,
+            (policy_id, label, file_path, actor),
+        )
+        append_audit(
+            "policy_definition_create",
+            actor,
+            {"policy_id": policy_id, "label": label, "file_path": file_path},
+        )
+        created = fetch_one(
+            """
+            SELECT policy_id, label, file_path, is_active, updated_at, updated_by
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        ) or {"policy_id": policy_id, "label": label, "file_path": file_path, "is_active": 1}
+        return jsonify({"status": "ok", "policy": serialize_policy_catalog_row(created)})
+
+    @app.post("/api/policy/admin/state")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_state():
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        actor = (session.get("email") or "").strip().lower()
+        policy_id = normalize_policy_id((request.form.get("policy_id") or "").strip().lower())
+        raw_state = (request.form.get("state") or "").strip().lower()
+        if not policy_id:
+            return Response("policy_id is required.", status=400, mimetype="text/plain")
+
+        if raw_state in {"1", "true", "active", "enabled"}:
+            is_active = 1
+        elif raw_state in {"0", "false", "inactive", "disabled"}:
+            is_active = 0
+        else:
+            return Response("State must be active or inactive.", status=400, mimetype="text/plain")
+
+        existing_catalog = {
+            normalize_policy_id(row.get("id") or row.get("policy_id")): row
+            for row in list_policy_catalog(include_inactive=True)
+        }
+        existing = existing_catalog.get(policy_id)
+        if not existing:
+            return Response("Policy definition not found.", status=404, mimetype="text/plain")
+
+        execute(
+            """
+            INSERT INTO policy_definition (policy_id, label, file_path, is_active, updated_by)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                file_path = VALUES(file_path),
+                is_active = VALUES(is_active),
+                updated_by = VALUES(updated_by),
+                updated_at = NOW(6)
+            """,
+            (
+                policy_id,
+                (existing.get("label") or policy_id).strip(),
+                (existing.get("file_path") or "").strip().lstrip("/"),
+                is_active,
+                actor,
+            ),
+        )
+        append_audit(
+            "policy_definition_state",
+            actor,
+            {"policy_id": policy_id, "is_active": bool(is_active)},
+        )
+        updated = fetch_one(
+            """
+            SELECT policy_id, label, file_path, is_active, updated_at, updated_by
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        ) or {
+            "policy_id": policy_id,
+            "label": (existing.get("label") or policy_id).strip(),
+            "file_path": (existing.get("file_path") or "").strip().lstrip("/"),
+            "is_active": is_active,
+        }
+        return jsonify({"status": "ok", "policy": serialize_policy_catalog_row(updated)})
+
+    @app.post("/api/policy/admin/delete")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_delete():
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        actor = (session.get("email") or "").strip().lower()
+        policy_id = normalize_policy_id((request.form.get("policy_id") or "").strip().lower())
+        if not policy_id:
+            return Response("policy_id is required.", status=400, mimetype="text/plain")
+
+        core_policy_ids = {normalize_policy_id("company_policies"), normalize_policy_id("medical_plan")}
+        if policy_id in core_policy_ids:
+            return Response("Core policies cannot be deleted. Deactivate instead.", status=400, mimetype="text/plain")
+
+        existing = fetch_one(
+            """
+            SELECT policy_id, label, file_path
+            FROM policy_definition
+            WHERE policy_id = %s
+            LIMIT 1
+            """,
+            (policy_id,),
+        )
+        if not existing:
+            return Response("Policy definition not found.", status=404, mimetype="text/plain")
+
+        aliases = policy_aliases_for_id(policy_id)
+        placeholders = ",".join(["%s"] * len(aliases))
+        usage = fetch_one(
+            f"""
+            SELECT COUNT(*) AS c
+            FROM policy_ack
+            WHERE LOWER(policy_id) IN ({placeholders})
+            """,
+            tuple(aliases),
+        )
+        if int((usage or {}).get("c") or 0) > 0:
+            return Response("Policy has acknowledgment history and cannot be deleted. Deactivate instead.", status=409, mimetype="text/plain")
+
+        execute("DELETE FROM policy_definition WHERE policy_id = %s", (policy_id,))
+
+        file_path = (existing.get("file_path") or "").strip().lstrip("/")
+        if file_path:
+            try:
+                policies_dir = (UPLOAD_DIR / "policies").resolve()
+                file_target = (UPLOAD_DIR / file_path).resolve()
+                if str(file_target).startswith(str(policies_dir)) and file_target.exists():
+                    file_target.unlink()
+            except Exception:
+                pass
+
+        append_audit(
+            "policy_definition_delete",
+            actor,
+            {"policy_id": policy_id, "label": (existing.get("label") or "").strip()},
+        )
+        return jsonify({"status": "ok", "policy_id": policy_id})
 
     @app.post("/api/policy/ack")
     @login_required
     def policy_ack():
         session_email = (session.get("email") or "").strip().lower()
+        requester_role = (session.get("role") or "").strip().lower()
         email = (request.form.get("email") or "").strip().lower()
-        policy_id = (request.form.get("policy_id") or "").strip()
+        policy_id_raw = (request.form.get("policy_id") or "").strip().lower()
         signature = (request.form.get("signature") or "").strip()
+        policy_id = normalize_policy_id(policy_id_raw)
         if not session_email:
             return Response("Authentication required", status=401, mimetype="text/plain")
+        if requester_role in ADMIN_ROLES:
+            return Response("Admin accounts do not sign policy acknowledgments.", status=403, mimetype="text/plain")
         if not policy_id or not signature:
             return Response("policy_id and signature are required.", status=400, mimetype="text/plain")
         if email and email != session_email:
             return Response("Forbidden", status=403, mimetype="text/plain")
-        execute(
-            """
-            INSERT INTO policy_ack (id, email, policy_id, signature, status, signed_at)
-            VALUES (%s,%s,%s,%s,%s,NOW())
-            ON DUPLICATE KEY UPDATE
-                signature = VALUES(signature),
-                status = VALUES(status),
-                signed_at = VALUES(signed_at)
+
+        available_policy_ids = {normalize_policy_id(row.get("id")) for row in list_policy_catalog()}
+        if policy_id not in available_policy_ids:
+            return Response("Unknown policy_id.", status=400, mimetype="text/plain")
+
+        aliases = policy_aliases_for_id(policy_id)
+        placeholders = ",".join(["%s"] * len(aliases))
+        existing = fetch_one(
+            f"""
+            SELECT id, policy_id, status, signed_at
+            FROM policy_ack
+            WHERE LOWER(email)=LOWER(%s)
+              AND LOWER(policy_id) IN ({placeholders})
+            ORDER BY signed_at DESC
+            LIMIT 1
             """,
-            (secrets.token_hex(8), session_email, policy_id, signature, "signed"),
+            (session_email, *aliases),
         )
+        if existing:
+            return Response("This policy was already signed.", status=409, mimetype="text/plain")
+
+        try:
+            execute(
+                """
+                INSERT INTO policy_ack (id, email, policy_id, signature, status, signed_at)
+                VALUES (%s,%s,%s,%s,%s,NOW())
+                """,
+                (secrets.token_hex(8), session_email, policy_id, signature, "pending_review"),
+            )
+        except pymysql.err.IntegrityError:
+            return Response("This policy was already signed.", status=409, mimetype="text/plain")
         append_audit("policy_ack", session_email, {"policy_id": policy_id})
         return jsonify({"status": "ok", "email": session_email})
 
@@ -107,6 +453,200 @@ def register_hire_routes(app, deps):
             else:
                 policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (session_email,))
         return jsonify({"policies": policies})
+
+    @app.get("/api/policy/admin/review")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_review():
+        if not requester_can_view_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        email_filter = (request.args.get("email") or "").strip().lower()
+        policy_filter = normalize_policy_id((request.args.get("policy_id") or "").strip().lower())
+        state_filter = (request.args.get("state") or "").strip().lower()
+        allowed_state_filters = {"", "pending_signature", "pending_review", "signed", "approved", "rejected"}
+        if state_filter not in allowed_state_filters:
+            return Response("Invalid state filter.", status=400, mimetype="text/plain")
+
+        catalog_rows = [serialize_policy_catalog_row(row) for row in list_policy_catalog(include_inactive=True)]
+        if policy_filter and not any((row.get("id") or "") == policy_filter for row in catalog_rows):
+            return Response("Unknown policy_id filter.", status=400, mimetype="text/plain")
+
+        users = fetch_all(
+            """
+            SELECT
+                LOWER(src.email) AS email,
+                MAX(src.full_name) AS full_name
+            FROM (
+                SELECT nh.email AS email, TRIM(CONCAT_WS(' ', nh.first_name, nh.last_name)) AS full_name
+                FROM new_hire nh
+                WHERE nh.email IS NOT NULL AND nh.email <> ''
+                UNION ALL
+                SELECT u.email AS email, u.full_name AS full_name
+                FROM `user` u
+                WHERE u.email IS NOT NULL AND u.email <> ''
+                  AND LOWER(COALESCE(u.role, '')) IN ('employee', 'contractor')
+            ) src
+            GROUP BY LOWER(src.email)
+            ORDER BY LOWER(src.email)
+            """
+        )
+        if email_filter:
+            users = [u for u in users if email_filter in ((u.get("email") or "").strip().lower())]
+
+        ack_rows = fetch_all(
+            """
+            SELECT
+                pa.id,
+                LOWER(pa.email) AS email,
+                pa.policy_id,
+                pa.signature,
+                pa.status,
+                pa.signed_at,
+                pa.reviewed_by,
+                pa.reviewed_at,
+                pa.reviewer_note
+            FROM policy_ack pa
+            """
+        )
+        latest_by_user_policy = {}
+        for row in ack_rows:
+            email = (row.get("email") or "").strip().lower()
+            if not email:
+                continue
+            canonical_policy_id = normalize_policy_id(row.get("policy_id") or "")
+            if not canonical_policy_id:
+                continue
+            key = (email, canonical_policy_id)
+            current = latest_by_user_policy.get(key)
+            current_signed_at = str((current or {}).get("signed_at") or "")
+            candidate_signed_at = str(row.get("signed_at") or "")
+            if not current or candidate_signed_at >= current_signed_at:
+                latest_by_user_policy[key] = row
+
+        records = []
+        for user_row in users:
+            email = (user_row.get("email") or "").strip().lower()
+            if not email:
+                continue
+            full_name = (user_row.get("full_name") or "").strip() or email
+            for policy_row in catalog_rows:
+                policy_id = normalize_policy_id(policy_row.get("id") or "")
+                if not policy_id:
+                    continue
+                if policy_filter and policy_filter != policy_id:
+                    continue
+                ack_row = latest_by_user_policy.get((email, policy_id))
+                signed = bool(ack_row)
+                review_state = normalize_policy_review_state((ack_row or {}).get("status") or "signed") if signed else "pending_signature"
+                if state_filter and review_state != state_filter:
+                    continue
+                records.append(
+                    {
+                        "email": email,
+                        "full_name": full_name,
+                        "policy_id": policy_id,
+                        "policy_label": (policy_row.get("label") or policy_id).strip(),
+                        "policy_active": bool(policy_row.get("is_active")),
+                        "signed": signed,
+                        "status": review_state,
+                        "signature": (ack_row or {}).get("signature") or "",
+                        "signed_at": (ack_row or {}).get("signed_at") or "",
+                        "reviewed_by": (ack_row or {}).get("reviewed_by") or "",
+                        "reviewed_at": (ack_row or {}).get("reviewed_at") or "",
+                        "reviewer_note": (ack_row or {}).get("reviewer_note") or "",
+                    }
+                )
+
+        summary = {
+            "total": len(records),
+            "signed": sum(1 for row in records if row.get("signed")),
+            "pending_signature": sum(1 for row in records if row.get("status") == "pending_signature"),
+            "pending_review": sum(1 for row in records if row.get("status") in {"pending_review", "signed"}),
+            "approved": sum(1 for row in records if row.get("status") == "approved"),
+            "rejected": sum(1 for row in records if row.get("status") == "rejected"),
+        }
+
+        return jsonify(
+            {
+                "records": records,
+                "policies": catalog_rows,
+                "summary": summary,
+                "can_manage": requester_can_manage_compliance(),
+            }
+        )
+
+    @app.post("/api/policy/admin/review-status")
+    @login_required
+    @require_role(ADMIN_ROLES)
+    def policy_admin_review_status():
+        if not requester_can_manage_compliance():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        actor = (session.get("email") or "").strip().lower()
+        email = (request.form.get("email") or "").strip().lower()
+        policy_id = normalize_policy_id((request.form.get("policy_id") or "").strip().lower())
+        status = normalize_policy_review_state(request.form.get("status") or "pending_review")
+        reviewer_note = (request.form.get("reviewer_note") or "").strip()
+
+        if not email:
+            return Response("Email is required.", status=400, mimetype="text/plain")
+        if not policy_id:
+            return Response("policy_id is required.", status=400, mimetype="text/plain")
+        if status not in {"approved", "rejected", "pending_review"}:
+            return Response("Invalid review status.", status=400, mimetype="text/plain")
+
+        aliases = policy_aliases_for_id(policy_id)
+        placeholders = ",".join(["%s"] * len(aliases))
+        target = fetch_one(
+            f"""
+            SELECT id, policy_id, status
+            FROM policy_ack
+            WHERE LOWER(email)=LOWER(%s)
+              AND LOWER(policy_id) IN ({placeholders})
+            ORDER BY signed_at DESC
+            LIMIT 1
+            """,
+            (email, *aliases),
+        )
+        if not target:
+            return Response("No signed acknowledgment found for this user and policy.", status=404, mimetype="text/plain")
+
+        try:
+            execute(
+                """
+                UPDATE policy_ack
+                SET status = %s,
+                    reviewed_by = %s,
+                    reviewed_at = NOW(6),
+                    reviewer_note = %s
+                WHERE id = %s
+                """,
+                (status, actor, reviewer_note or None, target.get("id")),
+            )
+        except Exception:
+            execute("UPDATE policy_ack SET status = %s WHERE id = %s", (status, target.get("id")))
+
+        append_audit(
+            "policy_ack_review_status",
+            actor,
+            {
+                "email": email,
+                "policy_id": policy_id,
+                "status": status,
+                "reviewer_note": reviewer_note,
+            },
+        )
+        updated = fetch_one(
+            """
+            SELECT id, email, policy_id, status, signature, signed_at, reviewed_by, reviewed_at, reviewer_note
+            FROM policy_ack
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (target.get("id"),),
+        ) or {}
+        return jsonify({"status": "ok", "ack": updated})
 
     @app.get("/api/compliance/checklist")
     @login_required
@@ -250,28 +790,31 @@ def register_hire_routes(app, deps):
     @app.post("/api/training/complete")
     @login_required
     def training_complete():
+        session_email = (session.get("email") or "").strip().lower()
         email = (request.form.get("email") or "").strip().lower()
         module_id = (request.form.get("module_id") or "").strip()
         if not email or not module_id:
             return Response("Email and module_id are required.", status=400, mimetype="text/plain")
-        if email != session.get("email"):
+        if email != session_email and not requester_can_manage_training_for_others():
             return Response("Forbidden", status=403, mimetype="text/plain")
+
+        module = fetch_one("SELECT id FROM training_module WHERE id = %s LIMIT 1", (module_id,))
+        if not module:
+            return Response("Unknown module_id.", status=400, mimetype="text/plain")
+
         execute("DELETE FROM training_completion WHERE email = %s AND module_id = %s", (email, module_id))
         execute(
             "INSERT INTO training_completion (email, module_id, completed_at) VALUES (%s,%s,NOW())",
             (email, module_id),
         )
-        append_audit("training_complete", email, {"module_id": module_id})
-        return jsonify({"status": "ok"})
+        append_audit("training_complete", session_email, {"email": email, "module_id": module_id})
+        return jsonify({"status": "ok", "email": email, "module_id": module_id})
 
     @app.get("/api/training/status")
     @login_required
     def training_status():
         email = (request.args.get("email") or "").strip().lower()
-        requester_role = (session.get("role") or "").strip().lower()
-        can_admin_training = requester_role == SUPERADMIN_ROLE or requester_role == "manager" or (
-            requester_role == "admin" and session_department_name() in {"hr", "compliance"}
-        )
+        can_admin_training = requester_can_manage_training_for_others()
         if email:
             if email != session.get("email") and not can_admin_training:
                 return Response("Forbidden", status=403, mimetype="text/plain")
@@ -323,10 +866,19 @@ def register_hire_routes(app, deps):
         if not can_view_documents_admin():
             docs = []
         tasks = fetch_all("SELECT * FROM task WHERE owner_email = %s", (email,)) if email else []
+        requester_role = (session.get("role") or "").strip().lower()
+        requester_department = session_department_name()
+        compliance_only_view = requester_role == "admin" and requester_department == "compliance"
+        if compliance_only_view:
+            tasks = [row for row in tasks if (row.get("category") or "").strip().lower() == "compliance"]
         policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,)) if email else []
         trainings = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,)) if email else []
         it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,)) if email else []
         it_access_items = fetch_all("SELECT * FROM it_access_item WHERE email = %s", (email,)) if email else []
+        if compliance_only_view:
+            trainings = []
+            it_provisions = []
+            it_access_items = []
         ensure_compliance_rows_for_email(email)
         compliance_items = load_compliance_rows_for_email(email) if email else []
         user = fetch_one("SELECT email, full_name, avatar_url FROM `user` WHERE email = %s", (email,)) if email else {}

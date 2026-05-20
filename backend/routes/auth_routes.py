@@ -112,6 +112,8 @@ def register_auth_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def get_users():
+        if not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
         role_filter = (request.args.get("role") or "").strip().lower()
         users = list_users()
         if role_filter:

@@ -104,7 +104,7 @@
       const menu = document.getElementById("menu");
       let currentEmail = "";
       let currentRole = null; // viewer's role; set once from their own account
-      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin"];
       const directorySection = document.getElementById("directorySection");
       const userList = document.getElementById("userList");
       const hireList = document.getElementById("hireList");
@@ -190,7 +190,7 @@
 
       async function loadDirectory() {
         const role = (currentRole || "employee").toLowerCase();
-        const isAdmin = ["admin", "manager", "superadmin", "hr", "it", "compliance"].includes(role);
+          const isAdmin = ["admin", "manager", "superadmin"].includes(role);
         if (!isAdmin) {
           directorySection.style.display = "none";
           userList.innerHTML = "";

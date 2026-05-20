@@ -12,59 +12,130 @@
     <main class="page">
       <section class="hero">
         <div>
-          <h1>Policy Acknowledgment</h1>
-          <p>Review company policies and submit your signature acknowledgment for each required policy document.</p>
+          <h1 id="heroTitle">Policy Acknowledgment</h1>
+          <p id="heroSubtitle">Review required policy documents and submit one acknowledgment per policy.</p>
         </div>
         <a href="/dashboard.html">Back to dashboard</a>
       </section>
 
-    <div class="container">
-      <h2>Policy Acknowledgment</h2>
-      <div class="card">
-        <h3 style="margin-top:0;">Preview</h3>
-        <div class="viewer">
-          <div class="viewer-toolbar">
-            <button id="prevPage">← Prev</button>
-            <button id="nextPage">Next →</button>
-            <a id="openPdf" href="#" target="_blank" rel="noopener" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Open</a>
-            <a id="downloadPdf" href="#" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Download</a>
-            <span id="pageLabel" style="margin-left:auto; font-weight:600;"></span>
+      <div class="container">
+        <h2 id="pageTitle">Review and Sign</h2>
+        <div class="layout">
+          <div class="card preview-card">
+            <h3 style="margin-top:0;">Preview</h3>
+            <div class="viewer">
+              <div class="viewer-toolbar">
+                <button id="prevPage" type="button">&lt; Prev</button>
+                <button id="nextPage" type="button">Next &gt;</button>
+                <a id="openPdf" href="#" target="_blank" rel="noopener" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Open</a>
+                <a id="downloadPdf" href="#" style="color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; background:#0f172a;">Download</a>
+                <span id="pageLabel" style="margin-left:auto; font-weight:600;"></span>
+              </div>
+              <canvas id="pdfCanvas" class="viewer-canvas"></canvas>
+            </div>
+            <div class="muted" id="previewStatus" style="margin-top:8px;"></div>
           </div>
-          <canvas id="pdfCanvas" class="viewer-canvas"></canvas>
-        </div>
-        <div class="muted" id="previewStatus" style="margin-top:8px;"></div>
-      </div>
-      <div class="card">
-        <div class="controls" style="margin-bottom:12px;">
-          <div id="emailBadge" class="muted" style="padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; min-width:240px;">
-            Signed in as: --
+
+          <div class="side-column">
+            <div class="card action-card" id="actionCard">
+              <div id="signControls" class="controls" style="margin-bottom:12px;">
+                <div id="emailBadge" class="muted" style="padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; min-width:240px;">
+                  Signed in as: --
+                </div>
+                <input id="signature" class="text-input" type="text" placeholder="Type your full legal name" />
+                <select id="policy" class="text-input"></select>
+                <button id="sign" class="submit-button" type="button" style="padding:10px 16px;">Sign</button>
+              </div>
+              <div id="reviewerNotice" class="muted" style="display:none; margin:0 0 10px 0;"></div>
+              <div class="muted" style="margin:0 0 10px 0;">Billing Manual is handled through orientation/training and is not signed on this page.</div>
+              <div id="status" class="muted"></div>
+            </div>
+
+            <div class="card status-card" id="statusCard">
+              <h3>Required Policy Status</h3>
+              <ul id="list" class="list"></ul>
+            </div>
+
+            <div class="card admin-card" id="policyReviewCard" style="display:none;">
+              <h3 style="margin-top:0;">Compliance Signature Review</h3>
+              <div class="controls" style="margin-bottom:10px;">
+                <input id="reviewEmailFilter" class="text-input" type="text" placeholder="Filter by email" />
+                <select id="reviewPolicyFilter" class="text-input"></select>
+                <select id="reviewStateFilter" class="text-input">
+                  <option value="">All statuses</option>
+                  <option value="pending_signature">Pending signature</option>
+                  <option value="pending_review">Pending review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button id="reviewReload" class="submit-button" type="button" style="padding:10px 16px;">Refresh</button>
+              </div>
+              <div id="reviewSummary" class="muted" style="margin:0 0 10px 0;"></div>
+              <ul id="reviewList" class="list"></ul>
+              <div id="reviewPagination" class="review-pagination" style="display:none;">
+                <button id="reviewPrevPage" class="submit-button" type="button" style="padding:8px 12px; background:#0f172a;">Prev</button>
+                <span id="reviewPageLabel" class="muted">Page 1 of 1</span>
+                <button id="reviewNextPage" class="submit-button" type="button" style="padding:8px 12px; background:#0f172a;">Next</button>
+              </div>
+            </div>
           </div>
-          <input id="signature" class="text-input" type="text" placeholder="Type your name as signature" />
-          <select id="policy" class="text-input">
-            <option value="code_of_conduct">Code of Conduct</option>
-            <option value="privacy">Privacy Policy</option>
-            <option value="handbook">Employee Handbook</option>
-            <option value="company_policies">Company Policies</option>
-            <option value="medical_plan">Medical Plan Policy</option>
-            <option value="billing_manual">Billing Manual</option>
-          </select>
-          <button id="sign" class="submit-button" style="padding:10px 16px;">Sign</button>
         </div>
-        <div id="status" class="muted"></div>
+
+        <div class="card admin-card" id="policyAdminCard" style="display:none;">
+          <h3 style="margin-top:0;">Compliance Policy File Management</h3>
+          <div class="muted" style="margin:0 0 10px 0;">
+            Update existing policies, activate/deactivate, add new policies, or delete non-core policies without acknowledgment history.
+          </div>
+
+          <div class="manage-block">
+            <h4 class="manage-title">Edit Existing Policy</h4>
+            <div class="controls policy-controls" style="margin-bottom:10px;">
+              <select id="adminPolicySelect" class="text-input"></select>
+              <input id="adminPolicyLabel" class="text-input" type="text" placeholder="Policy label" />
+              <input id="adminPolicyFile" class="text-input" type="file" accept="application/pdf" />
+            </div>
+            <div class="controls policy-controls" style="margin-bottom:10px;">
+              <button id="adminPolicySave" class="submit-button" type="button" style="padding:10px 16px;">Save Policy</button>
+              <button id="adminPolicyToggleState" class="submit-button" type="button" style="padding:10px 16px; background:#475569;">Deactivate</button>
+              <button id="adminPolicyDelete" class="submit-button" type="button" style="padding:10px 16px; background:#b91c1c;">Delete Policy</button>
+            </div>
+          </div>
+
+          <div class="manage-block">
+            <h4 class="manage-title">Add New Policy</h4>
+            <div class="controls policy-controls" style="margin-bottom:10px;">
+              <input id="adminNewPolicyId" class="text-input" type="text" placeholder="new_policy_id" />
+              <input id="adminNewPolicyLabel" class="text-input" type="text" placeholder="New policy label" />
+              <input id="adminNewPolicyFile" class="text-input" type="file" accept="application/pdf" />
+              <button id="adminPolicyCreate" class="submit-button" type="button" style="padding:10px 16px;">Add Policy</button>
+            </div>
+          </div>
+
+          <div id="adminPolicyStatus" class="muted"></div>
+          <ul id="adminPolicyList" class="list" style="margin-top:10px;"></ul>
+        </div>
       </div>
-      <div class="card">
-        <h3>Your signatures</h3>
-        <ul id="list" class="list"></ul>
-      </div>
-    </div>
     </main>
+
     <script>
+      const ADMIN_ROLES = new Set(["admin", "manager", "superadmin"]);
+
+      const heroTitle = document.getElementById("heroTitle");
+      const heroSubtitle = document.getElementById("heroSubtitle");
+      const pageTitle = document.getElementById("pageTitle");
+      const actionCard = document.getElementById("actionCard");
+      const signControls = document.getElementById("signControls");
+      const reviewerNotice = document.getElementById("reviewerNotice");
+      const statusCard = document.getElementById("statusCard");
+      const previewCard = document.querySelector(".preview-card");
+
       const emailBadge = document.getElementById("emailBadge");
       const signatureInput = document.getElementById("signature");
       const policySelect = document.getElementById("policy");
       const signBtn = document.getElementById("sign");
       const statusEl = document.getElementById("status");
       const listEl = document.getElementById("list");
+
       const prevPageBtn = document.getElementById("prevPage");
       const nextPageBtn = document.getElementById("nextPage");
       const openPdfLink = document.getElementById("openPdf");
@@ -72,23 +143,101 @@
       const pageLabel = document.getElementById("pageLabel");
       const canvas = document.getElementById("pdfCanvas");
       const previewStatus = document.getElementById("previewStatus");
+
+      const policyReviewCard = document.getElementById("policyReviewCard");
+      const reviewEmailFilter = document.getElementById("reviewEmailFilter");
+      const reviewPolicyFilter = document.getElementById("reviewPolicyFilter");
+      const reviewStateFilter = document.getElementById("reviewStateFilter");
+      const reviewReload = document.getElementById("reviewReload");
+      const reviewSummary = document.getElementById("reviewSummary");
+      const reviewList = document.getElementById("reviewList");
+      const reviewPagination = document.getElementById("reviewPagination");
+      const reviewPrevPage = document.getElementById("reviewPrevPage");
+      const reviewNextPage = document.getElementById("reviewNextPage");
+      const reviewPageLabel = document.getElementById("reviewPageLabel");
+
+      const policyAdminCard = document.getElementById("policyAdminCard");
+      const adminPolicySelect = document.getElementById("adminPolicySelect");
+      const adminPolicyLabel = document.getElementById("adminPolicyLabel");
+      const adminPolicyFile = document.getElementById("adminPolicyFile");
+      const adminPolicySave = document.getElementById("adminPolicySave");
+      const adminPolicyToggleState = document.getElementById("adminPolicyToggleState");
+      const adminPolicyDelete = document.getElementById("adminPolicyDelete");
+      const adminNewPolicyId = document.getElementById("adminNewPolicyId");
+      const adminNewPolicyLabel = document.getElementById("adminNewPolicyLabel");
+      const adminNewPolicyFile = document.getElementById("adminNewPolicyFile");
+      const adminPolicyCreate = document.getElementById("adminPolicyCreate");
+      const adminPolicyStatus = document.getElementById("adminPolicyStatus");
+      const adminPolicyList = document.getElementById("adminPolicyList");
+
       let pdfDoc = null;
       let currentPage = 1;
       let csrfToken = null;
       let sessionEmail = "";
+      let sessionRole = "";
+      let sessionDepartment = "";
+      let canSignPolicies = true;
+      let canReviewPolicies = false;
+      let canManagePolicyCatalog = false;
+      let signedPolicies = new Set();
+      let policyDefinitions = [];
+      let policyById = {};
+      let adminPolicyRows = [];
+      let reviewRecords = [];
+      let reviewPage = 1;
+      let resizeTimer = null;
+      const REVIEW_PAGE_SIZE = 8;
 
-      const policyToUrl = {
-        code_of_conduct: "/uploads/policies/company_policies.pdf",
-        privacy: "/uploads/policies/privacy_policy.pdf",
-        handbook: "/uploads/policies/company_policies.pdf",
-        company_policies: "/uploads/policies/company_policies.pdf",
-        medical_plan: "/uploads/policies/medical_plan_policy.pdf",
-        billing_manual: "/uploads/policies/billing_manual.pdf",
+      const POLICY_ALIAS_TO_CANONICAL = {
+        company_policies: "company_policies",
+        code_of_conduct: "company_policies",
+        handbook: "company_policies",
+        medical_plan: "medical_plan",
+        medical_plan_policy: "medical_plan",
       };
+
+      function normalizePolicyId(policyId) {
+        const key = String(policyId || "").trim().toLowerCase();
+        return POLICY_ALIAS_TO_CANONICAL[key] || key;
+      }
+
+      function isActivePolicy(value) {
+        if (typeof value === "string") {
+          return !["0", "false", "no", "inactive"].includes(value.trim().toLowerCase());
+        }
+        return Boolean(value);
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function asDateString(value) {
+        if (!value) return "--";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString();
+      }
+
+      function selectedPolicyId() {
+        const current = normalizePolicyId(policySelect.value);
+        if (policyById[current]) return current;
+        return policyDefinitions.length ? policyDefinitions[0].id : "";
+      }
+
+      function formatSignedAt(value) {
+        if (!value) return "Signed";
+        return `Signed ${asDateString(value)}`;
+      }
 
       async function fetchJson(url, options) {
         const res = await fetch(url, options);
-        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+        if (res.status === 401 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
           window.location.replace("/log_in.html");
           throw new Error("Authentication required");
         }
@@ -103,50 +252,171 @@
         return csrfToken;
       }
 
+      async function loadSessionInfo() {
+        const data = await fetchJson("/api/session");
+        sessionEmail = String(data.email || "").trim().toLowerCase();
+        sessionRole = String(data.role || "").trim().toLowerCase();
+        sessionDepartment = String(data.department || "").trim().toLowerCase();
+
+        canSignPolicies = !ADMIN_ROLES.has(sessionRole);
+        canReviewPolicies =
+          sessionRole === "superadmin" ||
+          sessionRole === "manager" ||
+          (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment));
+
+        emailBadge.textContent = sessionEmail ? `Signed in as: ${sessionEmail}` : "Signed in as: current session";
+      }
+
+      function applySessionMode() {
+        if (canSignPolicies) {
+          heroTitle.textContent = "Policy Acknowledgment";
+          heroSubtitle.textContent = "Review required policy documents and submit one acknowledgment per policy.";
+          pageTitle.textContent = "Review and Sign";
+          signControls.style.display = "flex";
+          reviewerNotice.style.display = "none";
+          statusCard.style.display = "block";
+          policyReviewCard.style.height = "";
+          return;
+        }
+
+        heroTitle.textContent = "Policy Compliance Review";
+        heroSubtitle.textContent = "Review who has signed, validate signatures, and manage policy lifecycle.";
+        pageTitle.textContent = "Compliance Policy Workspace";
+        signControls.style.display = "none";
+        reviewerNotice.style.display = "block";
+        reviewerNotice.textContent = "Reviewer mode: admin accounts do not sign policies. Use review tools below to approve/reject and manage policies.";
+        statusCard.style.display = "none";
+      }
+
+      function syncReviewCardHeight() {
+        if (!canReviewPolicies) return;
+        if (policyReviewCard.style.display === "none") return;
+        if (!previewCard) return;
+        const previewHeight = Math.round(previewCard.getBoundingClientRect().height);
+        if (previewHeight > 260) {
+          policyReviewCard.style.height = `${previewHeight}px`;
+        } else {
+          policyReviewCard.style.height = "";
+        }
+      }
+
+      function renderPolicySelect() {
+        if (!policyDefinitions.length) {
+          policySelect.innerHTML = '<option value="">No active policies configured</option>';
+          policySelect.disabled = true;
+          return;
+        }
+        policySelect.disabled = false;
+        policySelect.innerHTML = policyDefinitions
+          .map((policy) => `<option value="${escapeHtml(policy.id)}">${escapeHtml(policy.label)}</option>`)
+          .join("");
+      }
+
+      async function loadPolicyCatalog() {
+        const previous = normalizePolicyId(policySelect.value);
+        const data = await fetchJson("/api/policy/catalog");
+        const rawPolicies = Array.isArray(data.policies) ? data.policies : [];
+        const seen = new Set();
+        const normalized = [];
+        for (const row of rawPolicies) {
+          const id = normalizePolicyId(row.id || row.policy_id);
+          const label = String(row.label || id).trim();
+          const url = String(row.url || "").trim();
+          if (!id || !label || !url || seen.has(id)) continue;
+          seen.add(id);
+          normalized.push({
+            id,
+            label,
+            url,
+            file_path: String(row.file_path || "").trim(),
+            updated_at: row.updated_at || "",
+            updated_by: row.updated_by || "",
+          });
+        }
+        policyDefinitions = normalized;
+        policyById = policyDefinitions.reduce((acc, row) => {
+          acc[row.id] = row;
+          return acc;
+        }, {});
+        renderPolicySelect();
+        const next = policyById[previous] ? previous : (policyDefinitions[0] ? policyDefinitions[0].id : "");
+        if (next) {
+          policySelect.value = next;
+        }
+      }
+
+      function updateSignAvailability() {
+        const currentPolicy = selectedPolicyId();
+        const alreadySigned = currentPolicy && signedPolicies.has(currentPolicy);
+        signBtn.disabled = !canSignPolicies || !currentPolicy || alreadySigned;
+        if (!canSignPolicies) return;
+        if (!currentPolicy) {
+          statusEl.textContent = "No active policies are configured.";
+          return;
+        }
+        if (alreadySigned) {
+          statusEl.textContent = "This policy is already signed.";
+        } else if (statusEl.textContent === "This policy is already signed.") {
+          statusEl.textContent = "";
+        }
+      }
+
       async function loadStatus() {
+        if (!canSignPolicies) return;
         try {
-          const data = await fetchJson("/api/policy/status");
-          const items = data.policies || [];
-          listEl.innerHTML = items.length
-            ? items.map(p => `<li><span>${p.policy_id}</span><span>${p.status}</span></li>`).join("")
-            : "<li>No signatures yet.</li>";
+          if (!policyDefinitions.length) {
+            await loadPolicyCatalog();
+          }
+          const query = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
+          const data = await fetchJson(`/api/policy/status${query}`);
+          const rows = Array.isArray(data.policies) ? data.policies : [];
+          const latestByPolicy = new Map();
+
+          for (const row of rows) {
+            const policyId = normalizePolicyId(row.policy_id);
+            if (!policyById[policyId]) continue;
+            const previous = latestByPolicy.get(policyId);
+            const previousTime = previous && previous.signed_at ? new Date(previous.signed_at).getTime() : 0;
+            const currentTime = row.signed_at ? new Date(row.signed_at).getTime() : 0;
+            if (!previous || currentTime >= previousTime) {
+              latestByPolicy.set(policyId, row);
+            }
+          }
+
+          signedPolicies = new Set(Array.from(latestByPolicy.keys()));
+          listEl.innerHTML = policyDefinitions.map((policy) => {
+            const signedRow = latestByPolicy.get(policy.id);
+            const stateText = signedRow ? formatSignedAt(signedRow.signed_at) : "Pending";
+            const stateStyle = signedRow
+              ? "background:#dcfce7;color:#166534;"
+              : "background:#fef3c7;color:#92400e;";
+            return `<li><span>${escapeHtml(policy.label)}</span><span style="padding:4px 8px;border-radius:999px;font-size:12px;${stateStyle}">${escapeHtml(stateText)}</span></li>`;
+          }).join("");
+
+          updateSignAvailability();
         } catch (err) {
           statusEl.textContent = err.message;
         }
       }
 
-      signBtn.addEventListener("click", async () => {
-        statusEl.textContent = "";
-        const sig = signatureInput.value.trim();
-        const policy = policySelect.value;
-        if (!sig) {
-          statusEl.textContent = "Signature is required.";
+      async function loadPdf(policyId) {
+        const canonicalPolicyId = normalizePolicyId(policyId);
+        const selectedPolicy = policyById[canonicalPolicyId] || policyDefinitions[0];
+        if (!selectedPolicy || !selectedPolicy.url) {
+          previewStatus.textContent = "No policy PDF configured.";
+          pdfDoc = null;
+          pageLabel.textContent = "";
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           return;
         }
-        try {
-          const token = await ensureCsrf();
-          await fetchJson("/api/policy/ack", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-              "X-CSRF-Token": token,
-            },
-            body: new URLSearchParams({ signature: sig, policy_id: policy })
-          });
-          statusEl.textContent = "Signed.";
-          signatureInput.value = "";
-          loadStatus();
-        } catch (err) {
-          statusEl.textContent = err.message;
-        }
-      });
+        const url = selectedPolicy.url;
 
-      async function loadPdf(policyId) {
-        const url = policyToUrl[policyId] || policyToUrl.company_policies;
         openPdfLink.href = url;
         downloadPdfLink.href = `${url}${url.includes("?") ? "&" : "?"}download=1`;
         previewStatus.textContent = "Loading preview...";
         currentPage = 1;
+
         try {
           pdfDoc = await pdfjsLib.getDocument(url).promise;
           renderPage(currentPage);
@@ -162,7 +432,13 @@
       async function renderPage(pageNum) {
         if (!pdfDoc) return;
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.2 });
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewerWidth = Math.max(320, canvas.parentElement.clientWidth - 24);
+        const maxHeight = Math.min(window.innerHeight * 0.62, 780);
+        const widthScale = viewerWidth / baseViewport.width;
+        const heightScale = maxHeight / baseViewport.height;
+        const scale = Math.max(0.7, Math.min(1.3, widthScale, heightScale));
+        const viewport = page.getViewport({ scale });
         const context = canvas.getContext("2d");
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -171,7 +447,269 @@
         prevPageBtn.disabled = pageNum <= 1;
         nextPageBtn.disabled = pageNum >= pdfDoc.numPages;
         previewStatus.textContent = "";
+        syncReviewCardHeight();
       }
+
+      function syncAdminSelection() {
+        const selectedId = normalizePolicyId(adminPolicySelect.value);
+        const selected = adminPolicyRows.find((row) => normalizePolicyId(row.id || row.policy_id) === selectedId);
+        adminPolicyLabel.value = selected ? String(selected.label || "").trim() : "";
+        const currentlyActive = selected ? isActivePolicy(selected.is_active) : true;
+        adminPolicyToggleState.textContent = currentlyActive ? "Deactivate" : "Activate";
+        adminPolicyToggleState.style.background = currentlyActive ? "#b91c1c" : "#166534";
+        adminPolicyToggleState.disabled = !canManagePolicyCatalog || !selectedId;
+        adminPolicyDelete.disabled = !canManagePolicyCatalog || !selectedId;
+      }
+
+      function renderAdminPolicyList() {
+        if (!adminPolicyRows.length) {
+          adminPolicyList.innerHTML = '<li><span>No policy definitions found.</span></li>';
+          adminPolicySelect.innerHTML = "";
+          syncAdminSelection();
+          return;
+        }
+        const previousSelection = normalizePolicyId(adminPolicySelect.value);
+        adminPolicySelect.innerHTML = adminPolicyRows
+          .map((row) => {
+            const id = normalizePolicyId(row.id || row.policy_id);
+            const label = String(row.label || id).trim();
+            const stateSuffix = isActivePolicy(row.is_active) ? "" : " (inactive)";
+            return `<option value="${escapeHtml(id)}">${escapeHtml(label + stateSuffix)}</option>`;
+          })
+          .join("");
+        if (previousSelection && adminPolicyRows.some((row) => normalizePolicyId(row.id || row.policy_id) === previousSelection)) {
+          adminPolicySelect.value = previousSelection;
+        }
+        adminPolicyList.innerHTML = adminPolicyRows
+          .map((row) => {
+            const id = normalizePolicyId(row.id || row.policy_id);
+            const label = String(row.label || id).trim();
+            const url = String(row.url || "").trim();
+            const updatedBy = String(row.updated_by || "").trim();
+            const updatedAt = asDateString(row.updated_at || "");
+            const isActive = isActivePolicy(row.is_active);
+            const stateBadge = isActive
+              ? '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#dcfce7;color:#166534;">active</span>'
+              : '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#e2e8f0;color:#334155;">inactive</span>';
+            const meta = updatedBy ? `Updated by ${updatedBy} on ${updatedAt}` : `Updated ${updatedAt}`;
+            const fileLink = url
+              ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Open PDF</a>`
+              : "<span>No file</span>";
+            return `<li><span><strong>${escapeHtml(label)}</strong> <code>${escapeHtml(id)}</code> ${stateBadge}<br><small>${escapeHtml(meta)}</small></span><span>${fileLink}</span></li>`;
+          })
+          .join("");
+        syncAdminSelection();
+      }
+
+      async function loadPolicyAdminPanel() {
+        if (!canReviewPolicies) {
+          policyAdminCard.style.display = "none";
+          return;
+        }
+        try {
+          const data = await fetchJson("/api/policy/admin/catalog");
+          adminPolicyRows = (Array.isArray(data.policies) ? data.policies : []).map((row) => ({
+            ...row,
+            id: normalizePolicyId(row.id || row.policy_id),
+            is_active: isActivePolicy(row.is_active),
+          }));
+          canManagePolicyCatalog = Boolean(data.can_manage);
+          policyAdminCard.style.display = "block";
+          adminPolicySave.disabled = !canManagePolicyCatalog;
+          adminPolicyFile.disabled = !canManagePolicyCatalog;
+          adminPolicyLabel.disabled = !canManagePolicyCatalog;
+          adminPolicyToggleState.disabled = !canManagePolicyCatalog;
+          adminPolicyDelete.disabled = !canManagePolicyCatalog;
+          adminPolicyCreate.disabled = !canManagePolicyCatalog;
+          adminNewPolicyId.disabled = !canManagePolicyCatalog;
+          adminNewPolicyLabel.disabled = !canManagePolicyCatalog;
+          adminNewPolicyFile.disabled = !canManagePolicyCatalog;
+          renderAdminPolicyList();
+          if (!canManagePolicyCatalog) {
+            adminPolicyStatus.textContent = "Read-only access. Compliance manage permission is required to apply changes.";
+          } else if (adminPolicyStatus.textContent.includes("Read-only access")) {
+            adminPolicyStatus.textContent = "";
+          }
+        } catch (err) {
+          policyAdminCard.style.display = "none";
+        }
+      }
+
+      function renderReviewPolicyFilter(policies) {
+        const current = normalizePolicyId(reviewPolicyFilter.value);
+        reviewPolicyFilter.innerHTML = '<option value="">All policies</option>' + policies.map((policy) => {
+          const id = normalizePolicyId(policy.id || policy.policy_id);
+          const label = String(policy.label || id).trim();
+          const suffix = isActivePolicy(policy.is_active) ? "" : " (inactive)";
+          return `<option value="${escapeHtml(id)}">${escapeHtml(label + suffix)}</option>`;
+        }).join("");
+        if (current && Array.from(reviewPolicyFilter.options).some((opt) => normalizePolicyId(opt.value) === current)) {
+          reviewPolicyFilter.value = current;
+        }
+      }
+
+      function reviewStatusChip(status) {
+        const s = String(status || "pending_signature").trim().toLowerCase();
+        if (s === "approved") return '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#dcfce7;color:#166534;">approved</span>';
+        if (s === "rejected") return '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#fee2e2;color:#991b1b;">rejected</span>';
+        if (s === "pending_signature") return '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#e2e8f0;color:#334155;">pending signature</span>';
+        return '<span style="padding:4px 8px;border-radius:999px;font-size:12px;background:#fef3c7;color:#92400e;">pending review</span>';
+      }
+
+      function renderReviewRows() {
+        if (!reviewRecords.length) {
+          reviewList.innerHTML = "<li>No signature records found for the selected filters.</li>";
+          reviewPagination.style.display = "none";
+          return;
+        }
+        const totalPages = Math.max(1, Math.ceil(reviewRecords.length / REVIEW_PAGE_SIZE));
+        reviewPage = Math.max(1, Math.min(reviewPage, totalPages));
+        const start = (reviewPage - 1) * REVIEW_PAGE_SIZE;
+        const pageRows = reviewRecords.slice(start, start + REVIEW_PAGE_SIZE);
+
+        reviewList.innerHTML = pageRows.map((row) => {
+          const status = String(row.status || "pending_signature").trim().toLowerCase();
+          const signed = Boolean(row.signed);
+          const signatureText = String(row.signature || "").trim();
+          const signatureHtml = signed
+            ? `<div><strong>Signature:</strong> <code>${escapeHtml(signatureText || "(empty text)")}</code></div>`
+            : "<div><strong>Signature:</strong> -- not signed --</div>";
+          const reviewerMeta = row.reviewed_by
+            ? `<div><small>Reviewed by ${escapeHtml(row.reviewed_by)} on ${escapeHtml(asDateString(row.reviewed_at || ""))}</small></div>`
+            : "";
+          const noteMeta = row.reviewer_note ? `<div><small>Note: ${escapeHtml(row.reviewer_note)}</small></div>` : "";
+          const policyInactive = row.policy_active ? "" : " <span style='color:#334155;'>(inactive policy)</span>";
+
+          let actionHtml = "";
+          if (canManagePolicyCatalog && signed) {
+            actionHtml = `
+              <button class="doc-btn approve" data-review-email="${escapeHtml(row.email)}" data-review-policy="${escapeHtml(row.policy_id)}" data-review-status="approved">Approve</button>
+              <button class="doc-btn reject" data-review-email="${escapeHtml(row.email)}" data-review-policy="${escapeHtml(row.policy_id)}" data-review-status="rejected">Reject</button>
+              <button class="doc-btn" data-review-email="${escapeHtml(row.email)}" data-review-policy="${escapeHtml(row.policy_id)}" data-review-status="pending_review">Re-open</button>
+            `;
+          }
+
+          return `
+            <li>
+              <span>
+                <strong>${escapeHtml(row.full_name || row.email)}</strong> &lt;${escapeHtml(row.email)}&gt;<br>
+                <small>${escapeHtml(row.policy_label || row.policy_id)} <code>${escapeHtml(row.policy_id)}</code>${policyInactive}</small><br>
+                <small>Signed at: ${escapeHtml(asDateString(row.signed_at || ""))}</small>
+                ${signatureHtml}
+                ${reviewerMeta}
+                ${noteMeta}
+              </span>
+              <span class="actions">
+                ${reviewStatusChip(status)}
+                ${actionHtml}
+              </span>
+            </li>
+          `;
+        }).join("");
+
+        reviewPageLabel.textContent = `Page ${reviewPage} of ${totalPages}`;
+        reviewPrevPage.disabled = reviewPage <= 1;
+        reviewNextPage.disabled = reviewPage >= totalPages;
+        reviewPagination.style.display = totalPages > 1 ? "flex" : "none";
+      }
+
+      async function loadPolicyReview() {
+        if (!canReviewPolicies) {
+          policyReviewCard.style.display = "none";
+          reviewPagination.style.display = "none";
+          policyReviewCard.style.height = "";
+          return;
+        }
+
+        const params = new URLSearchParams();
+        const emailValue = (reviewEmailFilter.value || "").trim();
+        const policyValue = normalizePolicyId(reviewPolicyFilter.value || "");
+        const stateValue = (reviewStateFilter.value || "").trim().toLowerCase();
+
+        if (emailValue) params.set("email", emailValue);
+        if (policyValue) params.set("policy_id", policyValue);
+        if (stateValue) params.set("state", stateValue);
+
+        try {
+          const data = await fetchJson(`/api/policy/admin/review?${params.toString()}`);
+          const records = Array.isArray(data.records) ? data.records : [];
+          const policies = Array.isArray(data.policies) ? data.policies : [];
+          policyReviewCard.style.display = "flex";
+          renderReviewPolicyFilter(policies);
+          reviewRecords = records;
+          reviewPage = 1;
+          renderReviewRows();
+          const summary = data.summary || {};
+          reviewSummary.textContent =
+            `Rows ${Number(summary.total || 0)} · Signed ${Number(summary.signed || 0)} · Pending signature ${Number(summary.pending_signature || 0)} · Pending review ${Number(summary.pending_review || 0)} · Approved ${Number(summary.approved || 0)} · Rejected ${Number(summary.rejected || 0)}`;
+          requestAnimationFrame(syncReviewCardHeight);
+        } catch (err) {
+          policyReviewCard.style.display = "none";
+          reviewPagination.style.display = "none";
+          policyReviewCard.style.height = "";
+        }
+      }
+
+      async function updatePolicyReviewStatus(email, policyId, nextStatus) {
+        const token = await ensureCsrf();
+        let reviewerNote = "";
+        if (nextStatus === "rejected") {
+          reviewerNote = (window.prompt("Optional rejection note:", "") || "").trim();
+        }
+        await fetchJson("/api/policy/admin/review-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRF-Token": token,
+          },
+          body: new URLSearchParams({
+            email,
+            policy_id: policyId,
+            status: nextStatus,
+            reviewer_note: reviewerNote,
+          }),
+        });
+      }
+
+      signBtn.addEventListener("click", async () => {
+        statusEl.textContent = "";
+        const signature = signatureInput.value.trim();
+        const policyId = selectedPolicyId();
+
+        if (!canSignPolicies) {
+          statusEl.textContent = "Reviewer accounts cannot sign policies.";
+          return;
+        }
+        if (!signature) {
+          statusEl.textContent = "Please type your name to sign.";
+          return;
+        }
+        if (!policyById[policyId]) {
+          statusEl.textContent = "Unknown policy selection.";
+          return;
+        }
+        if (signedPolicies.has(policyId)) {
+          statusEl.textContent = "This policy is already signed.";
+          return;
+        }
+
+        try {
+          const token = await ensureCsrf();
+          await fetchJson("/api/policy/ack", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRF-Token": token,
+            },
+            body: new URLSearchParams({ signature, policy_id: policyId }),
+          });
+          statusEl.textContent = "Policy signed successfully.";
+          signatureInput.value = "";
+          await loadStatus();
+        } catch (err) {
+          statusEl.textContent = err.message;
+        }
+      });
 
       prevPageBtn.addEventListener("click", () => {
         if (!pdfDoc || currentPage <= 1) return;
@@ -185,25 +723,245 @@
         renderPage(currentPage);
       });
 
-      policySelect.addEventListener("change", () => loadPdf(policySelect.value));
+      policySelect.addEventListener("change", () => {
+        updateSignAvailability();
+        loadPdf(policySelect.value);
+      });
 
-      function prefillIdentity() {
-        const email = new URLSearchParams(window.location.search).get("email") || localStorage.getItem("paoli_email");
-        if (email) {
-          sessionEmail = email.trim().toLowerCase();
-          localStorage.setItem("paoli_email", sessionEmail);
-          emailBadge.textContent = `Signed in as: ${sessionEmail}`;
-        } else {
-          emailBadge.textContent = "Signed in as: your current session";
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          if (pdfDoc) renderPage(currentPage);
+          if (canReviewPolicies) syncReviewCardHeight();
+        }, 120);
+      });
+
+      adminPolicySelect.addEventListener("change", () => {
+        syncAdminSelection();
+        const selectedId = normalizePolicyId(adminPolicySelect.value);
+        if (selectedId) {
+          policySelect.value = selectedId;
+          loadPdf(selectedId);
+        }
+      });
+
+      adminPolicySave.addEventListener("click", async () => {
+        adminPolicyStatus.textContent = "";
+        if (!canManagePolicyCatalog) {
+          adminPolicyStatus.textContent = "You do not have permission to update policy definitions.";
+          return;
+        }
+        const policyId = normalizePolicyId(adminPolicySelect.value);
+        const label = adminPolicyLabel.value.trim();
+        const policyFile = adminPolicyFile.files && adminPolicyFile.files.length ? adminPolicyFile.files[0] : null;
+        if (!policyId) {
+          adminPolicyStatus.textContent = "Select a policy first.";
+          return;
+        }
+        if (!label) {
+          adminPolicyStatus.textContent = "Policy label is required.";
+          return;
+        }
+        if (policyFile && !String(policyFile.name || "").toLowerCase().endsWith(".pdf")) {
+          adminPolicyStatus.textContent = "Only PDF files are supported.";
+          return;
+        }
+        try {
+          const token = await ensureCsrf();
+          const form = new FormData();
+          form.set("policy_id", policyId);
+          form.set("label", label);
+          if (policyFile) form.set("policy_file", policyFile);
+          await fetchJson("/api/policy/admin/update", {
+            method: "POST",
+            headers: { "X-CSRF-Token": token },
+            body: form,
+          });
+          adminPolicyStatus.textContent = "Policy definition updated.";
+          adminPolicyFile.value = "";
+          await loadPolicyCatalog();
+          await loadStatus();
+          await loadPdf(policySelect.value);
+          await loadPolicyAdminPanel();
+          await loadPolicyReview();
+        } catch (err) {
+          adminPolicyStatus.textContent = err.message;
+        }
+      });
+
+      adminPolicyToggleState.addEventListener("click", async () => {
+        adminPolicyStatus.textContent = "";
+        if (!canManagePolicyCatalog) {
+          adminPolicyStatus.textContent = "You do not have permission to change policy state.";
+          return;
+        }
+        const policyId = normalizePolicyId(adminPolicySelect.value);
+        const selected = adminPolicyRows.find((row) => normalizePolicyId(row.id || row.policy_id) === policyId);
+        if (!policyId || !selected) {
+          adminPolicyStatus.textContent = "Select a policy first.";
+          return;
+        }
+        const nextState = isActivePolicy(selected.is_active) ? "inactive" : "active";
+        try {
+          const token = await ensureCsrf();
+          await fetchJson("/api/policy/admin/state", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "X-CSRF-Token": token },
+            body: new URLSearchParams({ policy_id: policyId, state: nextState }),
+          });
+          adminPolicyStatus.textContent = `Policy ${nextState === "active" ? "activated" : "deactivated"}.`;
+          await loadPolicyCatalog();
+          await loadStatus();
+          await loadPdf(policySelect.value);
+          await loadPolicyAdminPanel();
+          await loadPolicyReview();
+        } catch (err) {
+          adminPolicyStatus.textContent = err.message;
+        }
+      });
+
+      adminPolicyCreate.addEventListener("click", async () => {
+        adminPolicyStatus.textContent = "";
+        if (!canManagePolicyCatalog) {
+          adminPolicyStatus.textContent = "You do not have permission to create policies.";
+          return;
+        }
+        const policyId = normalizePolicyId(adminNewPolicyId.value.trim());
+        const label = adminNewPolicyLabel.value.trim();
+        const policyFile = adminNewPolicyFile.files && adminNewPolicyFile.files.length ? adminNewPolicyFile.files[0] : null;
+        if (!policyId) {
+          adminPolicyStatus.textContent = "New policy ID is required.";
+          return;
+        }
+        if (!label) {
+          adminPolicyStatus.textContent = "New policy label is required.";
+          return;
+        }
+        if (!policyFile) {
+          adminPolicyStatus.textContent = "New policy PDF is required.";
+          return;
+        }
+        if (!String(policyFile.name || "").toLowerCase().endsWith(".pdf")) {
+          adminPolicyStatus.textContent = "Only PDF files are supported.";
+          return;
+        }
+        try {
+          const token = await ensureCsrf();
+          const form = new FormData();
+          form.set("policy_id", policyId);
+          form.set("label", label);
+          form.set("policy_file", policyFile);
+          await fetchJson("/api/policy/admin/create", {
+            method: "POST",
+            headers: { "X-CSRF-Token": token },
+            body: form,
+          });
+          adminPolicyStatus.textContent = "Policy created.";
+          adminNewPolicyId.value = "";
+          adminNewPolicyLabel.value = "";
+          adminNewPolicyFile.value = "";
+          await loadPolicyCatalog();
+          await loadStatus();
+          await loadPdf(policySelect.value);
+          await loadPolicyAdminPanel();
+          await loadPolicyReview();
+        } catch (err) {
+          adminPolicyStatus.textContent = err.message;
+        }
+      });
+
+      adminPolicyDelete.addEventListener("click", async () => {
+        adminPolicyStatus.textContent = "";
+        if (!canManagePolicyCatalog) {
+          adminPolicyStatus.textContent = "You do not have permission to delete policies.";
+          return;
+        }
+        const policyId = normalizePolicyId(adminPolicySelect.value);
+        if (!policyId) {
+          adminPolicyStatus.textContent = "Select a policy first.";
+          return;
+        }
+        const confirmDelete = window.confirm(`Delete policy '${policyId}'? This cannot be undone.`);
+        if (!confirmDelete) return;
+        try {
+          const token = await ensureCsrf();
+          await fetchJson("/api/policy/admin/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "X-CSRF-Token": token },
+            body: new URLSearchParams({ policy_id: policyId }),
+          });
+          adminPolicyStatus.textContent = "Policy deleted.";
+          await loadPolicyCatalog();
+          await loadStatus();
+          await loadPdf(policySelect.value);
+          await loadPolicyAdminPanel();
+          await loadPolicyReview();
+        } catch (err) {
+          adminPolicyStatus.textContent = err.message;
+        }
+      });
+
+      reviewReload.addEventListener("click", loadPolicyReview);
+      reviewEmailFilter.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loadPolicyReview();
+        }
+      });
+      reviewPolicyFilter.addEventListener("change", () => {
+        const selectedPolicy = normalizePolicyId(reviewPolicyFilter.value);
+        if (selectedPolicy && policyById[selectedPolicy]) {
+          policySelect.value = selectedPolicy;
+          loadPdf(selectedPolicy);
+        }
+        loadPolicyReview();
+      });
+      reviewStateFilter.addEventListener("change", loadPolicyReview);
+      reviewPrevPage.addEventListener("click", () => {
+        if (reviewPage <= 1) return;
+        reviewPage -= 1;
+        renderReviewRows();
+      });
+      reviewNextPage.addEventListener("click", () => {
+        const totalPages = Math.max(1, Math.ceil(reviewRecords.length / REVIEW_PAGE_SIZE));
+        if (reviewPage >= totalPages) return;
+        reviewPage += 1;
+        renderReviewRows();
+      });
+
+      reviewList.addEventListener("click", async (event) => {
+        const btn = event.target.closest("button[data-review-email]");
+        if (!btn) return;
+        const email = String(btn.dataset.reviewEmail || "").trim().toLowerCase();
+        const policyId = normalizePolicyId(btn.dataset.reviewPolicy || "");
+        const nextStatus = String(btn.dataset.reviewStatus || "").trim().toLowerCase();
+        if (!email || !policyId || !nextStatus) return;
+        try {
+          await updatePolicyReviewStatus(email, policyId, nextStatus);
+          await loadPolicyReview();
+        } catch (err) {
+          adminPolicyStatus.textContent = err.message;
+        }
+      });
+
+      async function bootstrap() {
+        try {
+          await loadSessionInfo();
+          applySessionMode();
+          await loadPolicyCatalog();
+          if (policySelect.value) {
+            await loadPdf(policySelect.value);
+          }
+          await loadStatus();
+          await loadPolicyAdminPanel();
+          await loadPolicyReview();
+          updateSignAvailability();
+        } catch (err) {
+          statusEl.textContent = err.message;
         }
       }
 
-      function prefill() {
-        prefillIdentity();
-        loadStatus();
-        loadPdf(policySelect.value);
-      }
-      prefill();
+      bootstrap();
     </script>
   </body>
 </html>

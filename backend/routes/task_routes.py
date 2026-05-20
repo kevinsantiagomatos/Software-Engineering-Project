@@ -45,7 +45,13 @@ def register_task_routes(app, deps):
             return Response("Invalid category.", status=400, mimetype="text/plain")
         requester_role = (session.get("role") or "").strip().lower()
         if requester_role == "admin" and not payload["category"]:
-            payload["category"] = "it" if session_department_name() == "it" else "hr"
+            department = session_department_name()
+            if department == "it":
+                payload["category"] = "it"
+            elif department == "compliance":
+                payload["category"] = "compliance"
+            else:
+                payload["category"] = "hr"
         if requester_role in ADMIN_ROLES and not task_category_allowed_for_current_admin(payload["category"]):
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -105,6 +111,9 @@ def register_task_routes(app, deps):
         if requester_role == "admin" and requester_department == "it":
             query += " AND category = %s"
             params.append("it")
+        if requester_role == "admin" and requester_department == "compliance":
+            query += " AND category = %s"
+            params.append("compliance")
 
         tasks = fetch_all(query, params)
         return jsonify({"tasks": serialize_task_rows(tasks)})

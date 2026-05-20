@@ -456,6 +456,8 @@ def register_admin_routes(app, deps):
     @app.get("/api/report/summary")
     @require_role(ADMIN_ROLES)
     def report_summary():
+        if not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
         users = list_users()
         docs = fetch_all("SELECT status FROM document")
         tasks = fetch_all("SELECT status FROM task")
@@ -475,6 +477,8 @@ def register_admin_routes(app, deps):
     @app.get("/api/admin/metrics")
     @require_role(ADMIN_ROLES)
     def admin_metrics():
+        if not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
         try:
             filters = parse_metrics_filters()
         except ValueError as exc:
@@ -496,6 +500,8 @@ def register_admin_routes(app, deps):
     @app.get("/api/admin/metrics/export")
     @require_role(ADMIN_ROLES)
     def admin_metrics_export():
+        if not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
         try:
             filters = parse_metrics_filters()
         except ValueError as exc:

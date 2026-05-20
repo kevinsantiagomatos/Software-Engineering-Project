@@ -21,7 +21,8 @@
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
           <a class="menu-link" href="/dashboard.html">Employee View</a>
           <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
-          <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+          <a class="menu-link" id="menuPolicyManage" href="/policy_sign.html" style="display:none;">Policy Management</a>
+          <a class="menu-link" id="menuMetrics" href="/admin_metrics.html">Metrics</a>
           <a class="menu-link" id="menuProfile" href="/profile.html">My Profile</a>
           <a class="menu-link" href="/log_in.html">Log Out</a>
         </div>
@@ -30,11 +31,11 @@
 
     <div class="container">
       <div id="pageAlert"></div>
-      <div class="grid">
+      <div class="grid" id="adminGrid">
         <div class="stack">
           <section class="card">
-            <h3 class="panel-title">New Hire Queue</h3>
-            <p class="panel-subtitle">Color-coded queue of hires. Click a card to open the full admin profile.</p>
+            <h3 class="panel-title" id="queueTitle">New Hire Queue</h3>
+            <p class="panel-subtitle" id="queueSubtitle">Color-coded queue of hires. Click a card to open the full admin profile.</p>
             <div class="controls" style="margin-top:10px;">
               <input id="hireSearch" class="text-input" placeholder="Search by name, email, department, or type..." />
               <select id="stageFilter" class="text-input">
@@ -60,7 +61,15 @@
           </section>
         </div>
 
-        <div class="stack">
+        <div class="stack" id="toolsStack">
+          <section class="card" id="complianceToolsCard" style="display:none;">
+            <h3 class="panel-title">Compliance Tools</h3>
+            <p class="panel-subtitle">Manage policy definitions, files, and active/inactive status from one place.</p>
+            <div class="actions" style="margin-top:10px;">
+              <a id="openPolicyManagement" class="link-btn" href="/policy_sign.html">Open Policy Management</a>
+            </div>
+          </section>
+
           <section class="card" id="docCard" style="display:none;">
             <h3 class="panel-title">Document Review</h3>
             <p class="panel-subtitle">View and validate uploaded documents by user email.</p>
@@ -108,9 +117,12 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin"];
 
       const pageAlert = document.getElementById("pageAlert");
+      const adminGrid = document.getElementById("adminGrid");
+      const queueTitle = document.getElementById("queueTitle");
+      const queueSubtitle = document.getElementById("queueSubtitle");
       const fullNameEl = document.getElementById("fullName");
       const roleLineEl = document.getElementById("roleLine");
       const avatarEl = document.getElementById("avatar");
@@ -118,7 +130,12 @@
       const menuPanel = document.getElementById("menuPanel");
       const menuSuperDashboard = document.getElementById("menuSuperDashboard");
       const menuRegisterHire = document.getElementById("menuRegisterHire");
+      const menuPolicyManage = document.getElementById("menuPolicyManage");
+      const menuMetrics = document.getElementById("menuMetrics");
       const menuProfile = document.getElementById("menuProfile");
+      const toolsStack = document.getElementById("toolsStack");
+      const complianceToolsCard = document.getElementById("complianceToolsCard");
+      const openPolicyManagement = document.getElementById("openPolicyManagement");
 
       const hireSearch = document.getElementById("hireSearch");
       const stageFilter = document.getElementById("stageFilter");
@@ -162,6 +179,7 @@
       let sessionRole = "";
       let sessionDepartment = "";
       let sessionEmail = "";
+      let complianceOnlyMode = false;
       let hiresData = [];
       const SORT_MODES = [
         { key: "progress_desc", label: "Sort: Progress ↓" },
@@ -235,14 +253,28 @@
         const d = (department || "").toLowerCase();
         const isSuper = r === "superadmin";
         const isAdmin = r === "admin";
-        const isHRReview = isSuper || r === "manager" || (isAdmin && (d === "hr" || d === "compliance")) || r === "hr" || r === "compliance";
+        const isComplianceAdmin = isAdmin && d === "compliance";
+        complianceOnlyMode = isAdmin && d === "compliance";
+        const isHRReview = !complianceOnlyMode && (isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr");
         const isTaskAdmin = isSuper || r === "manager" || isAdmin || r === "it" || r === "hr";
+        const canOpenPolicyManage = isSuper || isComplianceAdmin;
 
         docCard.style.display = isHRReview ? "block" : "none";
-        taskCard.style.display = isTaskAdmin ? "block" : "none";
-        taskListCard.style.display = isTaskAdmin ? "block" : "none";
+        taskCard.style.display = complianceOnlyMode ? "none" : (isTaskAdmin ? "block" : "none");
+        taskListCard.style.display = complianceOnlyMode ? "none" : (isTaskAdmin ? "block" : "none");
+        complianceToolsCard.style.display = complianceOnlyMode ? "block" : "none";
+        toolsStack.style.display = (docCard.style.display === "none" && taskCard.style.display === "none" && taskListCard.style.display === "none" && complianceToolsCard.style.display === "none")
+          ? "none"
+          : "grid";
+        adminGrid.classList.toggle("grid-compliance", complianceOnlyMode);
+        queueTitle.textContent = complianceOnlyMode ? "Compliance Queue" : "New Hire Queue";
+        queueSubtitle.textContent = complianceOnlyMode
+          ? "Focused queue for compliance review. Open a hire to validate checklist items and policy status."
+          : "Color-coded queue of hires. Click a card to open the full admin profile.";
         menuSuperDashboard.style.display = isSuper ? "block" : "none";
-        menuRegisterHire.style.display = (isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr") ? "block" : "none";
+        menuRegisterHire.style.display = complianceOnlyMode ? "none" : ((isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr") ? "block" : "none");
+        menuPolicyManage.style.display = canOpenPolicyManage ? "block" : "none";
+        menuMetrics.style.display = complianceOnlyMode ? "none" : "block";
       }
 
       function stageClass(stage) {
@@ -302,10 +334,25 @@
           const tasks = prog.tasks || { completed: 0, total: 0 };
           const stage = prog.stage || "Pending";
           const pct = Number(prog.progress_percent || 0);
+          const compliance = prog.compliance || {};
           const detailHref = h.id ? `/admin_hire_detail.html?hire_id=${encodeURIComponent(h.id)}` : "#";
           const progressClass = pct >= 80 ? "progress-high" : pct >= 50 ? "progress-mid" : "progress-low";
           const docsClass = docs.total > 0 && docs.approved === docs.total ? "docs-good" : "docs-warn";
           const tasksClass = tasks.total > 0 && tasks.completed === tasks.total ? "tasks-good" : "tasks-warn";
+          const complianceStatus = (compliance.overall_status || "pending_review").toLowerCase().replace(/_/g, " ");
+          const complianceClass = complianceStatus === "approved" ? "tasks-good" : complianceStatus === "flagged" ? "tasks-warn" : "docs-warn";
+          const kpiRow = complianceOnlyMode
+            ? `
+                    <span class="kpi-chip stage-chip ${stageClass(stage)}">Stage: ${stage}</span>
+                    <span class="kpi-chip ${complianceClass}">Compliance: ${complianceStatus}</span>
+                    <span class="kpi-chip ${progressClass}">Progress: ${pct}%</span>
+              `
+            : `
+                    <span class="kpi-chip stage-chip ${stageClass(stage)}">Stage: ${stage}</span>
+                    <span class="kpi-chip ${progressClass}">Progress: ${pct}%</span>
+                    <span class="kpi-chip ${docsClass}">Docs: ${docs.approved}/${docs.total}</span>
+                    <span class="kpi-chip ${tasksClass}">Tasks: ${tasks.completed}/${tasks.total}</span>
+              `;
           const avatar = h.avatar_url
             ? `<img src="${h.avatar_url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;" />`
             : `${(h.first_name || h.email || "H").slice(0,1).toUpperCase()}`;
@@ -322,10 +369,7 @@
                     </div>
                   </div>
                   <div class="kpi-row">
-                    <span class="kpi-chip stage-chip ${stageClass(stage)}">Stage: ${stage}</span>
-                    <span class="kpi-chip ${progressClass}">Progress: ${pct}%</span>
-                    <span class="kpi-chip ${docsClass}">Docs: ${docs.approved}/${docs.total}</span>
-                    <span class="kpi-chip ${tasksClass}">Tasks: ${tasks.completed}/${tasks.total}</span>
+                    ${kpiRow}
                   </div>
                 </div>
               </a>
@@ -463,6 +507,8 @@
           avatarEl.textContent = (session.full_name || session.email || "A").slice(0, 1).toUpperCase();
           const profileEmailParam = sessionEmail ? `?email=${encodeURIComponent(sessionEmail)}` : "";
           menuProfile.href = `/profile.html${profileEmailParam}`;
+          menuPolicyManage.href = `/policy_sign.html${profileEmailParam}`;
+          openPolicyManagement.href = `/policy_sign.html${profileEmailParam}`;
 
           assignedBy.value = sessionEmail;
           applyRoleVisibility(sessionRole, sessionDepartment);
