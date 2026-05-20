@@ -3,6 +3,30 @@ from pathlib import Path
 
 import pymysql
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+
+def _load_env_file(path: Path):
+    if not path.exists() or not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or key in os.environ:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+_load_env_file(BASE_DIR / ".env")
+_load_env_file(BACKEND_DIR / ".env")
+
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "5000"))
 DEV_AUTOLOGIN_EMAIL = (os.getenv("DEV_AUTOLOGIN_EMAIL") or "").strip().lower()
@@ -20,8 +44,6 @@ DB_CONFIG = {
 }
 DB_AUTO_INIT = os.getenv("DB_AUTO_INIT", "true").strip().lower() not in {"0", "false", "no"}
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-BACKEND_DIR = Path(__file__).resolve().parents[1]
 FRONT_END_DIR = BASE_DIR / "front_end"
 STYLE_DIR = BASE_DIR / "style"
 DATA_DIR = BASE_DIR / "data_store"
