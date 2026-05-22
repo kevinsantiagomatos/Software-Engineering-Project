@@ -19,7 +19,7 @@
         <div id="menuPanel" class="menu-panel">
           <a class="menu-link" id="menuSuperDashboard" href="/superadmin_dashboard.html" style="display:none;">Superadmin Console</a>
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
-          <a class="menu-link" href="/dashboard.html">Employee View</a>
+          <a class="menu-link" id="menuManagerWorkspace" href="/manager_workspace.html" style="display:none;">Manager Workspace</a>
           <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
           <a class="menu-link" id="menuPolicyManage" href="/policy_sign.html" style="display:none;">Policy Management</a>
           <a class="menu-link" id="menuMetrics" href="/admin_metrics.html">Metrics</a>
@@ -117,7 +117,7 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["admin", "manager", "superadmin"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
 
       const pageAlert = document.getElementById("pageAlert");
       const adminGrid = document.getElementById("adminGrid");
@@ -130,6 +130,7 @@
       const menuPanel = document.getElementById("menuPanel");
       const menuSuperDashboard = document.getElementById("menuSuperDashboard");
       const menuRegisterHire = document.getElementById("menuRegisterHire");
+      const menuManagerWorkspace = document.getElementById("menuManagerWorkspace");
       const menuPolicyManage = document.getElementById("menuPolicyManage");
       const menuMetrics = document.getElementById("menuMetrics");
       const menuProfile = document.getElementById("menuProfile");
@@ -187,6 +188,16 @@
         { key: "stage_asc", label: "Sort: Stage A-Z" },
       ];
       let sortModeIndex = 0;
+
+      function normalizeDepartment(value) {
+        const raw = (value || "").toString().trim().toLowerCase().replace(/[_-]+/g, " ");
+        const normalized = raw.replace(/\s+/g, " ");
+        if (!normalized) return "";
+        if (["hr", "human resources", "human resource"].includes(normalized)) return "hr";
+        if (["it", "information technology"].includes(normalized)) return "it";
+        if (normalized === "compliance") return "compliance";
+        return normalized;
+      }
 
       function showLoginSuccess() {
         const params = new URLSearchParams(window.location.search);
@@ -250,13 +261,16 @@
 
       function applyRoleVisibility(role, department) {
         const r = (role || "").toLowerCase();
-        const d = (department || "").toLowerCase();
+        const d = normalizeDepartment(department);
         const isSuper = r === "superadmin";
         const isAdmin = r === "admin";
-        const isComplianceAdmin = isAdmin && d === "compliance";
-        complianceOnlyMode = isAdmin && d === "compliance";
-        const isHRReview = !complianceOnlyMode && (isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr");
-        const isTaskAdmin = isSuper || r === "manager" || isAdmin || r === "it" || r === "hr";
+        const isHRLegacy = r === "hr";
+        const isITLegacy = r === "it";
+        const isComplianceLegacy = r === "compliance";
+        const isComplianceAdmin = isComplianceLegacy || (isAdmin && d === "compliance");
+        complianceOnlyMode = isComplianceAdmin;
+        const isHRReview = !complianceOnlyMode && (isSuper || isHRLegacy || (isAdmin && (d === "hr" || d === "")));
+        const isTaskAdmin = isSuper || r === "manager" || isAdmin || isITLegacy || isHRLegacy;
         const canOpenPolicyManage = isSuper || isComplianceAdmin;
 
         docCard.style.display = isHRReview ? "block" : "none";
@@ -272,7 +286,8 @@
           ? "Focused queue for compliance review. Open a hire to validate checklist items and policy status."
           : "Color-coded queue of hires. Click a card to open the full admin profile.";
         menuSuperDashboard.style.display = isSuper ? "block" : "none";
-        menuRegisterHire.style.display = complianceOnlyMode ? "none" : ((isSuper || r === "manager" || (isAdmin && d === "hr") || r === "hr") ? "block" : "none");
+        menuManagerWorkspace.style.display = (isSuper || r === "manager") ? "block" : "none";
+        menuRegisterHire.style.display = complianceOnlyMode ? "none" : ((isSuper || isHRLegacy || (isAdmin && (d === "hr" || d === ""))) ? "block" : "none");
         menuPolicyManage.style.display = canOpenPolicyManage ? "block" : "none";
         menuMetrics.style.display = complianceOnlyMode ? "none" : "block";
       }
@@ -335,7 +350,8 @@
           const stage = prog.stage || "Pending";
           const pct = Number(prog.progress_percent || 0);
           const compliance = prog.compliance || {};
-          const detailHref = h.id ? `/admin_hire_detail.html?hire_id=${encodeURIComponent(h.id)}` : "#";
+          const hireIdentifier = h.id || h.hire_id || h.email || "";
+          const detailHref = hireIdentifier ? `/admin_hire_detail?hire_id=${encodeURIComponent(hireIdentifier)}` : "#";
           const progressClass = pct >= 80 ? "progress-high" : pct >= 50 ? "progress-mid" : "progress-low";
           const docsClass = docs.total > 0 && docs.approved === docs.total ? "docs-good" : "docs-warn";
           const tasksClass = tasks.total > 0 && tasks.completed === tasks.total ? "tasks-good" : "tasks-warn";
@@ -499,6 +515,10 @@
 
           if (!ADMIN_ROLES.includes(sessionRole)) {
             window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
+            return;
+          }
+          if (sessionRole === "manager") {
+            window.location.replace("/manager_workspace.html");
             return;
           }
 

@@ -44,6 +44,10 @@
           <h3>Documents</h3>
           <ul id="docList" class="list"></ul>
         </div>
+        <div class="card" id="hireAttachmentsCard" style="display:none;">
+          <h3>HR Attachments</h3>
+          <ul id="hireAttachmentList" class="list"></ul>
+        </div>
         <div class="card">
           <h3>Tasks</h3>
           <ul id="taskList" class="list"></ul>
@@ -90,6 +94,8 @@
       const progressStat = document.getElementById("progressStat");
       const progressDetail = document.getElementById("progressDetail");
       const docList = document.getElementById("docList");
+      const hireAttachmentsCard = document.getElementById("hireAttachmentsCard");
+      const hireAttachmentList = document.getElementById("hireAttachmentList");
       const taskList = document.getElementById("taskList");
       const uploadLink = null;
       const profileLink = null;
@@ -186,6 +192,47 @@
         taskList.innerHTML = tasks
           .map(t => `<li style="padding:10px 0; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; gap:8px; align-items:center;"><div><strong>${t.title}</strong><br/><small>${t.description || ""}</small></div><span class="badge">${t.status}</span></li>`)
           .join("");
+      }
+
+      function renderHireAttachments(attachments) {
+        const items = Array.isArray(attachments) ? attachments : [];
+        if (!items.length) {
+          hireAttachmentsCard.style.display = "none";
+          hireAttachmentList.innerHTML = "";
+          return;
+        }
+
+        hireAttachmentsCard.style.display = "block";
+        hireAttachmentList.innerHTML = items
+          .map((item) => {
+            const label = item.label || "Attachment";
+            const fileName = item.original_name || item.stored_name || "Attached file";
+            const viewUrl = item.view_url || "";
+            const downloadUrl = viewUrl
+              ? `${viewUrl}${viewUrl.includes("?") ? "&" : "?"}download=1&filename=${encodeURIComponent(fileName)}`
+              : "";
+            const links = viewUrl
+              ? `<div class="attachment-actions">
+                   <a class="attachment-link" href="${viewUrl}" target="_blank" rel="noopener">Open</a>
+                   <a class="attachment-link" href="${downloadUrl}">Download</a>
+                 </div>`
+              : `<span class="muted">File unavailable</span>`;
+            return `<li>
+              <div><strong>${label}</strong><br/><small>${fileName}</small></div>
+              ${links}
+            </li>`;
+          })
+          .join("");
+      }
+
+      async function loadHireAttachments() {
+        try {
+          const data = await fetchJson("/api/hire/attachments");
+          renderHireAttachments(data.attachments || []);
+        } catch (_) {
+          hireAttachmentsCard.style.display = "none";
+          hireAttachmentList.innerHTML = "";
+        }
       }
 
       async function loadDirectory() {
@@ -293,11 +340,14 @@
       }
 
       function renderSteps(statuses) {
+        const projectHref = ["manager", "superadmin"].includes((currentRole || "").toLowerCase())
+          ? "/manager_workspace.html"
+          : "/project_assignment.html";
         const items = [
           { key: "account", label: "Account Created", icon: "👤", href: null },
           { key: "documents", label: "Document Filing and Submitting", icon: "📎", href: "/upload_documents.html" },
           { key: "it", label: "IT Access Configuration", icon: "🖥️", href: "/it_access.html" },
-          { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: "/project_assignment.html" }
+          { key: "project", label: "Project Assignment and Orientation", icon: "✏️", href: projectHref }
         ];
         stepsEl.innerHTML = items
           .map(item => {
@@ -387,6 +437,7 @@
           const statuses = deriveStageStatus(progress.documents || {}, combinedTasks);
           renderSteps(statuses);
           await loadUser(email);
+          await loadHireAttachments();
           localStorage.setItem("paoli_email", email);
           updatePolicyTrainingLinks();
           loadDirectory();
@@ -394,6 +445,8 @@
           progressStat.textContent = "--";
           progressDetail.textContent = err.message || "Unable to load data.";
           docList.innerHTML = "";
+          hireAttachmentList.innerHTML = "";
+          hireAttachmentsCard.style.display = "none";
           taskList.innerHTML = "";
           stepsEl.innerHTML = "";
           directorySection.style.display = "none";
@@ -432,8 +485,12 @@
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/profile.html${emailParam}">My profile</a>`);
         const role = currentRole || "employee";
         if (ADMIN_ROLES.includes(role)) {
-          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html">Admin panel</a>`);
-          items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/hr_register.html">Register new hire</a>`);
+          if (role === "manager") {
+            items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/manager_workspace.html">Manager workspace</a>`);
+          } else {
+            items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/admin_panel.html">Admin panel</a>`);
+            items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/hr_register.html">Register new hire</a>`);
+          }
         }
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/policy_sign.html${emailParam}">Policy sign</a>`);
         items.push(`<a class="forgot-link" style="display:block; padding:10px 12px;" href="/training.html${emailParam}">Training</a>`);
@@ -489,6 +546,10 @@
           const role = (s.role || "").toLowerCase();
           if (role === "superadmin") {
             window.location.replace("/superadmin_dashboard.html");
+            return false;
+          }
+          if (role === "manager") {
+            window.location.replace("/manager_workspace.html");
             return false;
           }
           if (ADMIN_ROLES.includes(role)) {

@@ -66,6 +66,18 @@
                 <input class="text-input" id="managerField" name="manager" />
               </div>
               <div>
+                <label class="field-label" for="projectNameField">Project Name</label>
+                <select class="text-input" id="projectNameField" name="project_name">
+                  <option value="">No project assignment</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="projectManagerEmailField">Project Manager Email</label>
+                <select class="text-input" id="projectManagerEmailField" name="project_manager_email" disabled>
+                  <option value="">No project manager</option>
+                </select>
+              </div>
+              <div>
                 <label class="field-label" for="statusField">Status</label>
                 <input class="text-input" id="statusField" name="status" />
               </div>
@@ -130,6 +142,17 @@
                   <input class="text-input" id="newJobTitleInput" placeholder="e.g. Senior Software Engineer" style="max-width:360px;" />
                   <button type="button" class="doc-btn" id="createJobTitleBtn">Add Title</button>
                   <span id="titleCreateState" class="muted"></span>
+                </div>
+              </div>
+              <div class="full title-admin-box" id="projectAdminBox">
+                <label class="muted" style="display:block; margin-bottom:6px;">Add/update project catalog</label>
+                <div class="actions" style="margin-top:0;">
+                  <input class="text-input" id="newProjectNameInput" placeholder="e.g. Core Platform Rollout" style="max-width:320px;" />
+                  <select class="text-input" id="newProjectManagerSelect" style="max-width:320px;">
+                    <option value="">Select project manager</option>
+                  </select>
+                  <button type="button" class="doc-btn" id="saveProjectBtn">Save Project</button>
+                  <span id="projectCatalogState" class="muted"></span>
                 </div>
               </div>
             </form>
@@ -229,6 +252,10 @@
                 </div>
               </div>
               <ul id="extraList" class="list pretty-list" style="margin-top:8px;"></ul>
+              <div id="policySignatureSection" style="margin-top:14px;">
+                <h4 style="margin:0 0 8px; color:#0f172a;">Policy Signatures</h4>
+                <ul id="policySignatureList" class="list pretty-list"></ul>
+              </div>
               <div id="complianceSection" style="margin-top:14px;">
                 <h4 style="margin:0 0 8px; color:#0f172a;">Compliance Checklist</h4>
                 <ul id="complianceList" class="list pretty-list"></ul>
@@ -240,7 +267,7 @@
     </div>
 
     <script>
-      const ADMIN_ROLES = ["admin", "manager", "superadmin"];
+      const ADMIN_ROLES = ["admin", "manager", "superadmin", "hr", "it", "compliance"];
       const alertEl = document.getElementById("alert");
       const hireForm = document.getElementById("hireForm");
       const saveBtn = document.getElementById("saveBtn");
@@ -255,6 +282,8 @@
       const taskCategorySelect = document.getElementById("taskCategorySelect");
       const taskCreateState = document.getElementById("taskCreateState");
       const extraList = document.getElementById("extraList");
+      const policySignatureSection = document.getElementById("policySignatureSection");
+      const policySignatureList = document.getElementById("policySignatureList");
       const complianceSection = document.getElementById("complianceSection");
       const complianceList = document.getElementById("complianceList");
       const kpis = document.getElementById("kpis");
@@ -271,10 +300,17 @@
       const sideMetaEl = document.getElementById("sideMeta");
       const departmentSelect = document.getElementById("departmentSelect");
       const jobTitleSelect = document.getElementById("jobTitleSelect");
+      const projectNameField = document.getElementById("projectNameField");
+      const projectManagerEmailField = document.getElementById("projectManagerEmailField");
       const titleAdminBox = document.getElementById("titleAdminBox");
       const createJobTitleBtn = document.getElementById("createJobTitleBtn");
       const newJobTitleInput = document.getElementById("newJobTitleInput");
       const titleCreateState = document.getElementById("titleCreateState");
+      const projectAdminBox = document.getElementById("projectAdminBox");
+      const newProjectNameInput = document.getElementById("newProjectNameInput");
+      const newProjectManagerSelect = document.getElementById("newProjectManagerSelect");
+      const saveProjectBtn = document.getElementById("saveProjectBtn");
+      const projectCatalogState = document.getElementById("projectCatalogState");
       const tabDocumentsBtn = document.getElementById("tabDocumentsBtn");
       const tabTasksBtn = document.getElementById("tabTasksBtn");
       const tabOverviewBtn = document.getElementById("tabOverviewBtn");
@@ -313,10 +349,137 @@
       let canViewCompliance = false;
       let canManageCompliance = false;
       let orgDepartments = [];
+      let projectCatalog = [];
+      let managerCatalog = [];
       let dynamicDocLabels = {};
+      let requirementRows = [];
       let itAdminTabLayout = false;
       let complianceTabLayout = false;
       let currentComplianceItems = [];
+
+      function normalizeDepartment(value) {
+        const raw = (value || "").toString().trim().toLowerCase().replace(/[_-]+/g, " ");
+        const normalized = raw.replace(/\s+/g, " ");
+        if (!normalized) return "";
+        if (["hr", "human resources", "human resource"].includes(normalized)) return "hr";
+        if (["it", "information technology"].includes(normalized)) return "it";
+        if (normalized === "compliance") return "compliance";
+        return normalized;
+      }
+
+      function isHRAdminSession() {
+        return sessionRole === "hr" || (sessionRole === "admin" && (sessionDepartment === "hr" || sessionDepartment === ""));
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function prettyPolicyId(value) {
+        const raw = (value || "").toString().trim();
+        if (!raw) return "Policy";
+        return raw.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+
+      const POLICY_ALIAS_TO_CANONICAL = {
+        company_policies: "company_policies",
+        code_of_conduct: "company_policies",
+        handbook: "company_policies",
+        medical_plan: "medical_plan",
+        medical_plan_policy: "medical_plan",
+      };
+
+      function normalizePolicyId(value) {
+        const key = (value || "").toString().trim().toLowerCase();
+        if (!key) return "";
+        return POLICY_ALIAS_TO_CANONICAL[key] || key;
+      }
+
+      function policyReviewActions(row) {
+        if (!canManageCompliance) return "";
+        const policyId = normalizePolicyId(row.policy_id || "");
+        const status = (row.status || "pending_review").toString().trim().toLowerCase();
+        if (!policyId || !(row.signature || "").toString().trim()) return "";
+        const actions = [];
+        if (status !== "approved") {
+          actions.push(`<button class="doc-btn approve" data-policy-id="${escapeHtml(policyId)}" data-policy-review-status="approved">Approve</button>`);
+        }
+        if (status !== "rejected") {
+          actions.push(`<button class="doc-btn reject" data-policy-id="${escapeHtml(policyId)}" data-policy-review-status="rejected">Reject</button>`);
+        }
+        if (status !== "pending_review") {
+          actions.push(`<button class="doc-btn" data-policy-id="${escapeHtml(policyId)}" data-policy-review-status="pending_review">Re-open</button>`);
+        }
+        return actions.join("");
+      }
+
+      let signablePolicyIds = new Set();
+      let signablePoliciesLoaded = false;
+
+      async function loadSignablePolicyCatalog() {
+        if (signablePoliciesLoaded) return;
+        const data = await fetchJson("/api/policy/catalog");
+        const rows = Array.isArray(data.policies) ? data.policies : [];
+        signablePolicyIds = new Set(
+          rows
+            .map((row) => normalizePolicyId(row.id || row.policy_id || ""))
+            .filter(Boolean)
+        );
+        signablePoliciesLoaded = true;
+      }
+
+      function filterSignablePolicyRows(rows) {
+        if (!Array.isArray(rows)) return [];
+        if (!signablePoliciesLoaded) return rows;
+        return rows.filter((row) => signablePolicyIds.has(normalizePolicyId(row.policy_id || "")));
+      }
+
+      function renderPolicySignatureSection(policies) {
+        if (itAdminTabLayout || !canViewCompliance) {
+          policySignatureSection.style.display = "none";
+          policySignatureList.innerHTML = "";
+          return;
+        }
+        policySignatureSection.style.display = "";
+        const rows = filterSignablePolicyRows(policies);
+        if (!rows.length) {
+          policySignatureList.innerHTML = "<li>No signable policy signatures available for this hire.</li>";
+          return;
+        }
+        policySignatureList.innerHTML = rows.map((row) => {
+          const policyId = prettyPolicyId(normalizePolicyId(row.policy_id || ""));
+          const signature = (row.signature || "").trim();
+          const signedAt = row.signed_at ? `<small>Signed at: ${escapeHtml(row.signed_at)}</small>` : "<small>Signed at: --</small>";
+          const reviewedBy = row.reviewed_by ? `<small>Reviewed by: ${escapeHtml(row.reviewed_by)}</small>` : "";
+          const reviewerNote = row.reviewer_note ? `<small>Reviewer note: ${escapeHtml(row.reviewer_note)}</small>` : "";
+          const signatureBlock = signature
+            ? `<div class="policy-signature-text">${escapeHtml(signature)}</div>`
+            : `<div class="policy-signature-text policy-signature-empty">No signature text captured.</div>`;
+          const reviewActions = policyReviewActions(row);
+          return `
+            <li>
+              <div>
+                <strong>${escapeHtml(policyId)}</strong>
+                <div class="policy-signature-meta">
+                  ${signedAt}
+                  ${reviewedBy}
+                  ${reviewerNote}
+                </div>
+                ${signatureBlock}
+              </div>
+              <div class="actions">
+                ${badge(row.status || "signed")}
+                ${reviewActions}
+              </div>
+            </li>
+          `;
+        }).join("");
+      }
 
       function setActiveTab(tab) {
         tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
@@ -324,11 +487,11 @@
       }
 
       function sessionIsItAdmin() {
-        return sessionRole === "admin" && sessionDepartment === "it";
+        return sessionRole === "it" || (sessionRole === "admin" && sessionDepartment === "it");
       }
 
       function sessionIsComplianceAdmin() {
-        return sessionRole === "admin" && sessionDepartment === "compliance";
+        return sessionRole === "compliance" || (sessionRole === "admin" && sessionDepartment === "compliance");
       }
 
       function setTabVisibility(buttonEl, paneEl, visible) {
@@ -492,6 +655,66 @@
         jobTitleSelect.innerHTML = options.join("");
       }
 
+      function setManagerOptions(selectEl, selectedEmail = "", includeBlank = true) {
+        if (!selectEl) return;
+        const selectedLower = (selectedEmail || "").toLowerCase();
+        const options = [];
+        if (includeBlank) options.push('<option value="">No project manager</option>');
+        managerCatalog.forEach((manager) => {
+          const email = manager.email || "";
+          const fullName = manager.full_name || email;
+          const selected = email.toLowerCase() === selectedLower ? "selected" : "";
+          options.push(`<option value="${email}" ${selected}>${fullName} (${email})</option>`);
+        });
+        if (selectedLower && !managerCatalog.some((manager) => (manager.email || "").toLowerCase() === selectedLower)) {
+          options.push(`<option value="${selectedEmail}" selected>${selectedEmail}</option>`);
+        }
+        selectEl.innerHTML = options.join("");
+      }
+
+      function syncProjectManagerFromSelectedProject() {
+        const selectedProject = (projectNameField.value || "").trim().toLowerCase();
+        if (!selectedProject) {
+          setManagerOptions(projectManagerEmailField, "", true);
+          projectManagerEmailField.value = "";
+          projectManagerEmailField.disabled = true;
+          return;
+        }
+        const match = projectCatalog.find((project) => (project.name || "").trim().toLowerCase() === selectedProject);
+        const managerEmail = (match?.manager_email || "").trim().toLowerCase();
+        setManagerOptions(projectManagerEmailField, managerEmail, true);
+        projectManagerEmailField.value = managerEmail;
+        projectManagerEmailField.disabled = true;
+      }
+
+      function setProjectOptions(selectedProject = "") {
+        const selectedLower = (selectedProject || projectNameField.value || "").toLowerCase();
+        const options = ['<option value="">No project assignment</option>'];
+        projectCatalog.forEach((project) => {
+          const name = (project.name || "").trim();
+          if (!name) return;
+          const selected = name.toLowerCase() === selectedLower ? "selected" : "";
+          const includeOption = project.is_active || selected;
+          if (!includeOption) return;
+          const manager = project.manager_name || project.manager_email || "";
+          const inactiveSuffix = project.is_active ? "" : " (inactive)";
+          options.push(`<option value="${name}" ${selected}>${name} — ${manager}${inactiveSuffix}</option>`);
+        });
+        if (selectedLower && !projectCatalog.some((project) => (project.name || "").toLowerCase() === selectedLower)) {
+          options.push(`<option value="${selectedProject}" selected>${selectedProject}</option>`);
+        }
+        projectNameField.innerHTML = options.join("");
+        syncProjectManagerFromSelectedProject();
+      }
+
+      async function loadProjectCatalog() {
+        const data = await fetchJson("/api/projects/catalog");
+        projectCatalog = data.projects || [];
+        managerCatalog = data.managers || [];
+        setProjectOptions(projectNameField.value || "");
+        setManagerOptions(newProjectManagerSelect, newProjectManagerSelect.value || "", true);
+      }
+
       function prettyStatusValue(value) {
         const raw = (value || "").toString().trim();
         if (!raw) return "";
@@ -544,6 +767,17 @@
         }
         setDepartmentOptions(h.department || "");
         setJobTitleOptions(h.job_title || "");
+        const selectedProjectName = (h.project_name || "").trim();
+        const selectedProjectManager = (h.project_manager_email || "").trim().toLowerCase();
+        setProjectOptions(selectedProjectName);
+        const projectInCatalog = projectCatalog.some(
+          (project) => (project.name || "").trim().toLowerCase() === selectedProjectName.toLowerCase()
+        );
+        if (selectedProjectManager && (!selectedProjectName || !projectInCatalog)) {
+          setManagerOptions(projectManagerEmailField, selectedProjectManager, true);
+          projectManagerEmailField.value = selectedProjectManager;
+          projectManagerEmailField.disabled = true;
+        }
       }
 
       function renderHire(h) {
@@ -569,22 +803,53 @@
         `;
 
         const docsArr = h.documents || [];
-        docsList.innerHTML = docsArr.length ? docsArr.map((d) => `
-          <li class="doc-row doc-row-${(d.status || "pending_review").toLowerCase()}">
-            <div class="doc-item-head">
-              <div>
-                <strong>${dynamicDocLabels[d.doc_type] || docTypeLabels[d.doc_type] || d.doc_type || 'Document'}</strong>
-                <div class="doc-meta">${d.original_name || ''}</div>
+        if (requirementRows.length) {
+          docsList.innerHTML = requirementRows.map((req) => {
+            const reqDocs = Array.isArray(req.documents) ? req.documents : [];
+            const latestDoc = reqDocs
+              .slice()
+              .sort((a, b) => String(b.uploaded_at || "").localeCompare(String(a.uploaded_at || "")))[0] || null;
+            const effectiveStatus = (req.status || latestDoc?.status || "missing").toLowerCase();
+            const label = req.label || dynamicDocLabels[req.id] || docTypeLabels[req.id] || req.id || "Document";
+            const optionalTag = req.optional ? " (optional)" : "";
+            const fileMeta = latestDoc?.original_name
+              ? latestDoc.original_name
+              : "No file uploaded yet.";
+            return `
+              <li class="doc-row doc-row-${effectiveStatus}">
+                <div class="doc-item-head">
+                  <div>
+                    <strong>${label}${optionalTag}</strong>
+                    <div class="doc-meta">${fileMeta}</div>
+                  </div>
+                  ${badge(effectiveStatus)}
+                </div>
+                <div class="actions">
+                  ${latestDoc?.view_url ? `<a class="doc-btn" href="${latestDoc.view_url}" target="_blank" rel="noopener">View</a>` : ''}
+                  ${latestDoc?.download_url ? `<a class="doc-btn" href="${latestDoc.download_url}">Download</a>` : ''}
+                  ${latestDoc ? docActions(latestDoc) : ""}
+                </div>
+              </li>
+            `;
+          }).join("");
+        } else {
+          docsList.innerHTML = docsArr.length ? docsArr.map((d) => `
+            <li class="doc-row doc-row-${(d.status || "pending_review").toLowerCase()}">
+              <div class="doc-item-head">
+                <div>
+                  <strong>${dynamicDocLabels[d.doc_type] || docTypeLabels[d.doc_type] || d.doc_type || 'Document'}</strong>
+                  <div class="doc-meta">${d.original_name || ''}</div>
+                </div>
+                ${badge(d.status || 'pending_review')}
               </div>
-              ${badge(d.status || 'pending_review')}
-            </div>
-            <div class="actions">
-              ${d.view_url ? `<a class="doc-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ''}
-              ${d.download_url ? `<a class="doc-btn" href="${d.download_url}">Download</a>` : ''}
-              ${docActions(d)}
-            </div>
-          </li>
-        `).join('') : '<li>No documents uploaded.</li>';
+              <div class="actions">
+                ${d.view_url ? `<a class="doc-btn" href="${d.view_url}" target="_blank" rel="noopener">View</a>` : ''}
+                ${d.download_url ? `<a class="doc-btn" href="${d.download_url}">Download</a>` : ''}
+                ${docActions(d)}
+              </div>
+            </li>
+          `).join('') : '<li>No documents uploaded.</li>';
+        }
 
         const tasksArr = h.tasks || [];
         tasksList.innerHTML = tasksArr.length ? tasksArr.map((t) => `
@@ -594,7 +859,8 @@
           </li>
         `).join('') : '<li>No tasks assigned.</li>';
 
-        const policies = (h.policies || []).length;
+        const policyRows = filterSignablePolicyRows(Array.isArray(h.policies) ? h.policies : []);
+        const policies = policyRows.length;
         const trainings = (h.trainings || []).length;
         const itSummary = h.progress?.it_access || {};
         const itConfirmed = Number(itSummary.confirmed_count || 0);
@@ -611,6 +877,7 @@
             <li><div>Issues reported</div><div class="actions"><span class="badge">${itIssues}</span></div></li>
             <li><div>Legacy IT provision records</div><div class="actions"><span class="badge">${itp}</span></div></li>
           `;
+          renderPolicySignatureSection(policyRows);
           renderComplianceSection(compliancePayload);
           return;
         }
@@ -618,6 +885,7 @@
           extraList.innerHTML = `
             <li><div>Policy signatures</div><div class="actions"><span class="badge">${policies}</span></div></li>
           `;
+          renderPolicySignatureSection(policyRows);
           renderComplianceSection(compliancePayload);
           return;
         }
@@ -627,26 +895,41 @@
           <li><div>IT access checklist</div><div class="actions"><span class="badge">${itConfirmed}/${itTotal || 0}</span><a class="doc-btn" href="${itLink}">Open</a></div></li>
           <li><div>Legacy IT provision records</div><div class="actions"><span class="badge">${itp}</span></div></li>
         `;
+        renderPolicySignatureSection(policyRows);
         renderComplianceSection(compliancePayload);
       }
 
       async function loadHire() {
+        if (canViewCompliance) {
+          try {
+            await loadSignablePolicyCatalog();
+          } catch (_) {
+            signablePoliciesLoaded = true;
+            signablePolicyIds = new Set();
+          }
+        }
         const h = await fetchJson(`/api/new-hires/${encodeURIComponent(hireId)}`);
         hireEmail = (h.email || "").toLowerCase();
         dynamicDocLabels = {};
+        requirementRows = [];
         if (hireEmail && (canReviewDocs || canManageDocSlots)) {
           try {
             const reqData = await fetchJson(`/documents/requirements?email=${encodeURIComponent(hireEmail)}`);
-            (reqData.requirements || []).forEach((r) => {
+            requirementRows = reqData.requirements || [];
+            requirementRows.forEach((r) => {
               if (r && r.id) dynamicDocLabels[r.id] = r.label || r.id;
             });
           } catch (_) {
             dynamicDocLabels = {};
+            requirementRows = [];
           }
         }
         if (!orgDepartments.length) {
           const org = await fetchJson("/api/org/structure");
           orgDepartments = org.departments || [];
+        }
+        if (!projectCatalog.length || !managerCatalog.length) {
+          await loadProjectCatalog();
         }
         populateForm(h);
         renderHire(h);
@@ -654,7 +937,7 @@
 
       async function bootstrap() {
         const params = new URLSearchParams(window.location.search);
-        hireId = params.get('hire_id') || '';
+        hireId = params.get('hire_id') || params.get('email') || '';
         if (!hireId) {
           showAlert('Missing hire_id in URL.', true);
           return;
@@ -663,23 +946,27 @@
         try {
           const session = await fetchJson('/api/session');
           sessionRole = (session.role || '').toLowerCase();
-          sessionDepartment = (session.department || "").toLowerCase();
+          sessionDepartment = normalizeDepartment(session.department || "");
           sessionEmail = (session.email || "").toLowerCase();
           if (!ADMIN_ROLES.includes(sessionRole)) {
             window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
             return;
           }
-          canReviewDocs = sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && sessionDepartment === "hr");
+          if (sessionRole === "manager") {
+            window.location.replace("/manager_workspace.html");
+            return;
+          }
+          canReviewDocs = sessionRole === "superadmin" || isHRAdminSession();
           if (sessionIsComplianceAdmin()) canReviewDocs = false;
-          canManageDocSlots = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "hr");
+          canManageDocSlots = sessionRole === "superadmin" || isHRAdminSession();
           canCreateTasks = ["admin", "manager", "superadmin"].includes(sessionRole) && !sessionIsComplianceAdmin();
-          canViewCompliance = sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment));
-          canManageCompliance = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "compliance");
+          canViewCompliance = sessionRole === "superadmin" || sessionRole === "compliance" || isHRAdminSession() || (sessionRole === "admin" && sessionDepartment === "compliance");
+          canManageCompliance = sessionRole === "superadmin" || sessionRole === "compliance" || (sessionRole === "admin" && sessionDepartment === "compliance");
           menuProfile.href = sessionEmail ? `/profile.html?email=${encodeURIComponent(sessionEmail)}` : "/profile.html";
           menuPolicyManage.href = sessionEmail ? `/policy_sign.html?email=${encodeURIComponent(sessionEmail)}` : "/policy_sign.html";
           menuSuperDashboard.style.display = sessionRole === "superadmin" ? "block" : "none";
-          menuPolicyManage.style.display = (sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "compliance")) ? "block" : "none";
-          menuRegisterHire.style.display = (sessionRole === "superadmin" || sessionRole === "manager" || (sessionRole === "admin" && sessionDepartment === "hr")) ? "block" : "none";
+          menuPolicyManage.style.display = (sessionRole === "superadmin" || sessionRole === "compliance" || (sessionRole === "admin" && sessionDepartment === "compliance")) ? "block" : "none";
+          menuRegisterHire.style.display = (sessionRole === "superadmin" || isHRAdminSession()) ? "block" : "none";
           menuMetrics.style.display = sessionIsComplianceAdmin() ? "none" : "block";
           configureTabsForSession();
           docCreateForm.style.display = canManageDocSlots ? "block" : "none";
@@ -691,14 +978,17 @@
             const org = await fetchJson("/api/org/structure");
             orgDepartments = org.departments || [];
           }
+          await loadProjectCatalog();
 
-          const canEdit = sessionRole === "superadmin" || (sessionRole === "admin" && sessionDepartment === "hr");
+          const canEdit = sessionRole === "superadmin" || isHRAdminSession();
           Array.from(hireForm.elements).forEach((el) => {
             if (el.name && el.name !== '') el.disabled = !canEdit;
           });
           saveBtn.style.display = canEdit ? 'inline-flex' : 'none';
           saveState.textContent = canEdit ? '' : 'Read-only: only HR can edit hire information.';
           titleAdminBox.style.display = canEdit ? "block" : "none";
+          projectAdminBox.style.display = canEdit ? "block" : "none";
+          projectManagerEmailField.disabled = true;
 
           await loadHire();
         } catch (err) {
@@ -710,7 +1000,11 @@
         e.preventDefault();
         saveState.textContent = '';
         try {
+          syncProjectManagerFromSelectedProject();
+          const pmWasDisabled = projectManagerEmailField.disabled;
+          if (pmWasDisabled) projectManagerEmailField.disabled = false;
           const formData = new FormData(hireForm);
+          if (pmWasDisabled) projectManagerEmailField.disabled = true;
           if (formData.has("status")) {
             formData.set("status", normalizeStatusValue(formData.get("status")));
           }
@@ -727,6 +1021,9 @@
 
       departmentSelect.addEventListener("change", () => {
         setJobTitleOptions("");
+      });
+      projectNameField.addEventListener("change", () => {
+        syncProjectManagerFromSelectedProject();
       });
 
       createJobTitleBtn.addEventListener("click", async () => {
@@ -755,6 +1052,35 @@
           titleCreateState.textContent = "Added.";
         } catch (err) {
           titleCreateState.textContent = err.message || "Failed to add title.";
+        }
+      });
+
+      saveProjectBtn.addEventListener("click", async () => {
+        projectCatalogState.textContent = "";
+        const name = (newProjectNameInput.value || "").trim();
+        const managerEmail = (newProjectManagerSelect.value || "").trim().toLowerCase();
+        if (!name) {
+          projectCatalogState.textContent = "Enter a project name.";
+          return;
+        }
+        if (!managerEmail) {
+          projectCatalogState.textContent = "Select a project manager.";
+          return;
+        }
+        try {
+          const data = await fetchJson("/api/projects/catalog/upsert", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ name, manager_email: managerEmail, is_active: "1" }),
+          });
+          projectCatalog = data.projects || projectCatalog;
+          managerCatalog = data.managers || managerCatalog;
+          setProjectOptions(name);
+          setManagerOptions(newProjectManagerSelect, managerEmail, true);
+          projectCatalogState.textContent = "Project catalog updated.";
+          newProjectNameInput.value = "";
+        } catch (err) {
+          projectCatalogState.textContent = err.message || "Unable to save project.";
         }
       });
 
@@ -869,6 +1195,37 @@
           showAlert("Compliance checklist updated.");
         } catch (err) {
           showAlert(err.message || "Unable to update compliance checklist item.", true);
+        }
+      });
+
+      policySignatureList.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-policy-review-status]");
+        if (!btn) return;
+        if (!canManageCompliance || !hireEmail) return;
+        const policyId = (btn.dataset.policyId || "").trim().toLowerCase();
+        const status = (btn.dataset.policyReviewStatus || "").trim().toLowerCase();
+        if (!policyId || !status) return;
+        let note = "";
+        if (status === "rejected") {
+          note = (window.prompt("Optional rejection note:", "") || "").trim();
+        } else {
+          note = (window.prompt("Optional reviewer note:", "") || "").trim();
+        }
+        try {
+          await fetchJson("/api/policy/admin/review-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              email: hireEmail,
+              policy_id: policyId,
+              status,
+              reviewer_note: note,
+            }),
+          });
+          await loadHire();
+          showAlert("Policy signature review updated.");
+        } catch (err) {
+          showAlert(err.message || "Unable to update policy signature review.", true);
         }
       });
 

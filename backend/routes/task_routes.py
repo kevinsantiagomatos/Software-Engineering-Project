@@ -4,6 +4,7 @@ from flask import Response, jsonify, request, session
 
 
 def register_task_routes(app, deps):
+    #configura rutas de este modulo
     login_required = deps["login_required"]
     require_role = deps["require_role"]
     ADMIN_ROLES = deps["ADMIN_ROLES"]
@@ -22,10 +23,26 @@ def register_task_routes(app, deps):
     effective_required_document_types_for_email = deps["effective_required_document_types_for_email"]
     ensure_compliance_rows_for_email = deps["ensure_compliance_rows_for_email"]
 
+    def manager_assigned_hire_emails(manager_email: str):
+        #obtiene hires bajo alcance del project manager autenticado
+        if not manager_email:
+            return set()
+        rows = fetch_all(
+            """
+            SELECT LOWER(email) AS email
+            FROM new_hire
+            WHERE LOWER(COALESCE(project_manager_email, '')) = LOWER(%s)
+               OR LOWER(COALESCE(manager, '')) = LOWER(%s)
+            """,
+            (manager_email, manager_email),
+        )
+        return {str(row.get("email") or "").strip().lower() for row in rows if row.get("email")}
+
     @app.post("/api/tasks")
     @login_required
     @require_role(ADMIN_ROLES)
     def create_task():
+        #crea tarea con reglas por rol y categoria permitida
         payload = {
             "title": request.form.get("title") or "",
             "description": request.form.get("description") or "",
@@ -52,6 +69,12 @@ def register_task_routes(app, deps):
                 payload["category"] = "compliance"
             else:
                 payload["category"] = "hr"
+        if requester_role == "manager":
+            payload["category"] = "manager"
+            requester_email = (session.get("email") or "").strip().lower()
+            allowed_owner_emails = manager_assigned_hire_emails(requester_email)
+            if payload["owner_email"] not in allowed_owner_emails:
+                return Response("Forbidden", status=403, mimetype="text/plain")
         if requester_role in ADMIN_ROLES and not task_category_allowed_for_current_admin(payload["category"]):
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -87,6 +110,7 @@ def register_task_routes(app, deps):
     @app.get("/api/tasks")
     @login_required
     def list_tasks_api():
+        #lista tareas filtradas por permisos y filtros opcionales
         email = (request.args.get("email") or "").strip().lower()
         category = (request.args.get("category") or "").strip().lower()
         query = "SELECT * FROM task WHERE 1=1"
@@ -100,6 +124,7 @@ def register_task_routes(app, deps):
         requester = session.get("email")
         requester_role = (session.get("role") or "").strip().lower()
         requester_department = session_department_name()
+        requester_email = (requester or "").strip().lower()
         if not email and requester_role == "employee":
             email = requester or ""
             query += " AND owner_email = %s"
@@ -108,6 +133,19 @@ def register_task_routes(app, deps):
             return Response("Forbidden", status=403, mimetype="text/plain")
         if not email and requester_role not in ADMIN_ROLES:
             return Response("Forbidden", status=403, mimetype="text/plain")
+        if requester_role == "manager":
+            allowed_owner_emails = manager_assigned_hire_emails(requester_email)
+            if email:
+                if email not in allowed_owner_emails:
+                    return Response("Forbidden", status=403, mimetype="text/plain")
+            else:
+                if not allowed_owner_emails:
+                    return jsonify({"tasks": []})
+                placeholders = ",".join(["%s"] * len(allowed_owner_emails))
+                query += f" AND owner_email IN ({placeholders})"
+                params.extend(sorted(allowed_owner_emails))
+            query += " AND category = %s"
+            params.append("manager")
         if requester_role == "admin" and requester_department == "it":
             query += " AND category = %s"
             params.append("it")
@@ -121,6 +159,7 @@ def register_task_routes(app, deps):
     @app.post("/api/tasks/<task_id>/status")
     @login_required
     def update_task_status(task_id):
+        #actualiza estado de tarea respetando ownership y permisos
         status = (request.form.get("status") or "").strip().lower()
         if status not in TASK_STATUSES:
             return Response("Invalid status.", status=400, mimetype="text/plain")
@@ -130,11 +169,16 @@ def register_task_routes(app, deps):
             return Response("Task not found.", status=404, mimetype="text/plain")
         requester = session.get("email")
         requester_role = (session.get("role") or "").strip().lower()
+        requester_email = (requester or "").strip().lower()
         if requester != task.get("owner_email") and requester_role not in ADMIN_ROLES:
             return Response("Forbidden", status=403, mimetype="text/plain")
         if requester_role in ADMIN_ROLES and requester != task.get("owner_email"):
             if not task_category_allowed_for_current_admin(task.get("category") or ""):
                 return Response("Forbidden", status=403, mimetype="text/plain")
+            if requester_role == "manager":
+                allowed_owner_emails = manager_assigned_hire_emails(requester_email)
+                if (task.get("owner_email") or "").strip().lower() not in allowed_owner_emails:
+                    return Response("Forbidden", status=403, mimetype="text/plain")
 
         with get_db_connection() as connection:
             with connection.cursor() as cursor:
@@ -148,6 +192,7 @@ def register_task_routes(app, deps):
     @app.get("/api/progress")
     @login_required
     def onboarding_progress():
+        #construye progreso individual o agregado para paneles
         email = (request.args.get("email") or "").strip().lower()
         requester = session.get("email")
         requester_role = session.get("role", "")
@@ -168,6 +213,7 @@ def register_task_routes(app, deps):
             compliance_items = fetch_all("SELECT * FROM compliance_review_item")
 
         def user_progress(e):
+            #helper interno de rutas
             required_doc_types = effective_required_document_types_for_email(e)
             return user_progress_snapshot(
                 e,

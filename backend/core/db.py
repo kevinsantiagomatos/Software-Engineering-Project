@@ -6,10 +6,11 @@ from .settings import DB_CONFIG
 
 
 def get_db_connection():
+    #conexion base principal
     try:
         return pymysql.connect(**DB_CONFIG)
     except pymysql.err.OperationalError as exc:
-        # Local-dev fallback: some environments use root/password by default.
+        #reintento local para root sin password
         err_code = exc.args[0] if exc.args else None
         if (
             err_code == 1045
@@ -18,12 +19,15 @@ def get_db_connection():
             and not os.getenv("DB_PASSWORD")
         ):
             fallback_config = dict(DB_CONFIG)
+
+            #
             fallback_config["password"] = "password"
             return pymysql.connect(**fallback_config)
         raise
 
 
 def fetch_all(query: str, params=None):
+    #consulta lista
     params = params or ()
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
@@ -32,14 +36,16 @@ def fetch_all(query: str, params=None):
 
 
 def fetch_one(query: str, params=None):
+    #consulta unica
     params = params or ()
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(query, params)
-            return cursor.fetchone()
+            return cursor.fetchone() #uno solo
 
 
 def execute(query: str, params=None):
+    #ejecucion con commit
     params = params or ()
     with get_db_connection() as connection:
         with connection.cursor() as cursor:

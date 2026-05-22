@@ -16,6 +16,7 @@ def register_admin_routes(app, deps):
     fetch_all = deps["fetch_all"]
     execute = deps["execute"]
     append_audit = deps["append_audit"]
+    #load_org_structure = deps[""]
     load_org_structure = deps["load_org_structure"]
     session_department_name = deps["session_department_name"]
     list_users = deps["list_users"]
@@ -23,7 +24,9 @@ def register_admin_routes(app, deps):
     effective_required_document_types_for_email = deps["effective_required_document_types_for_email"]
 
     def parse_optional_date(value: str, field_name: str):
+        #normaliza fecha opcional en formato y-m-d
         raw = (value or "").strip()
+
         if not raw:
             return None
         try:
@@ -35,10 +38,13 @@ def register_admin_routes(app, deps):
         return (value or "").strip().lower()
 
     def parse_metrics_filters():
+        #parsea filtros de metricas desde query params
         created_from = parse_optional_date(request.args.get("created_from"), "created_from")
         created_to = parse_optional_date(request.args.get("created_to"), "created_to")
+
         if created_from and created_to and created_from > created_to:
             raise ValueError("created_from cannot be after created_to.")
+        
         return {
             "stage": normalize_text_filter(request.args.get("stage")),
             "status": normalize_text_filter(request.args.get("status")),
@@ -49,6 +55,7 @@ def register_admin_routes(app, deps):
         }
 
     def datetime_to_date(value):
+        #convierte datetime heterogeneo a objeto date
         if not value:
             return None
         if hasattr(value, "date"):
@@ -56,7 +63,10 @@ def register_admin_routes(app, deps):
         if isinstance(value, date):
             return value
         text = str(value)
+
         for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+
+
             try:
                 return datetime.strptime(text, fmt).date()
             except ValueError:
@@ -67,12 +77,15 @@ def register_admin_routes(app, deps):
             return None
 
     def hire_matches_filters(row, filters):
+        #aplica filtros de etapa, estado y rango de fechas
+
         if filters["stage"] and (row.get("stage") or "").lower() != filters["stage"]:
             return False
         if filters["status"] and (row.get("hire_status") or "").lower() != filters["status"]:
             return False
         if filters["employment_type"] and (row.get("employment_type") or "").lower() != filters["employment_type"]:
             return False
+        
         if filters["department"]:
             department = (row.get("department") or "").lower()
             if filters["department"] not in department:
@@ -88,12 +101,14 @@ def register_admin_routes(app, deps):
         return True
 
     def collect_hire_metric_rows(filters):
+        #construye filas analiticas por hire para reportes
         hires = fetch_all(
             """
             SELECT id, email, first_name, last_name, department, manager, status, employment_type, created_at, start_date
             FROM new_hire
             """
         )
+
         docs = fetch_all("SELECT uploader_email, status, uploaded_at FROM document")
         tasks = fetch_all("SELECT owner_email, status, category, due_date FROM task")
         policies = fetch_all("SELECT email FROM policy_ack")
@@ -105,23 +120,29 @@ def register_admin_routes(app, deps):
         docs_by_email = {}
         for doc in docs:
             email = (doc.get("uploader_email") or "").strip().lower()
+
             if email:
                 docs_by_email.setdefault(email, []).append(doc)
 
         tasks_by_email = {}
+
+
         for task in tasks:
             email = (task.get("owner_email") or "").strip().lower()
+
             if email:
                 tasks_by_email.setdefault(email, []).append(task)
 
         rows = []
-        now_utc = datetime.utcnow()
+        now_utc = datetime.utcnow() #hay que fix
+
         for hire in hires:
             email = (hire.get("email") or "").strip().lower()
             if not email:
                 continue
 
             employment_type = (hire.get("employment_type") or "employee").strip().lower()
+
             progress = user_progress_snapshot(
                 email,
                 docs=docs,
@@ -136,6 +157,7 @@ def register_admin_routes(app, deps):
 
             created_date = datetime_to_date(hire.get("created_at"))
             start_date = datetime_to_date(hire.get("start_date"))
+
             docs_for_user = docs_by_email.get(email, [])
             tasks_for_user = tasks_by_email.get(email, [])
 
@@ -144,11 +166,15 @@ def register_admin_routes(app, deps):
             docs_pending = sum(1 for d in docs_for_user if (d.get("status") or "").strip().lower() == "pending_review")
             docs_rejected = sum(1 for d in docs_for_user if (d.get("status") or "").strip().lower() == "rejected")
             tasks_completed = sum(1 for t in tasks_for_user if (t.get("status") or "").strip().lower() == "completed")
+
+
             tasks_blocked = sum(1 for t in tasks_for_user if (t.get("status") or "").strip().lower() == "blocked")
 
             full_name = f"{(hire.get('first_name') or '').strip()} {(hire.get('last_name') or '').strip()}".strip() or email
             age_days = None
+
             if created_date:
+
                 try:
                     created_dt = datetime.combine(created_date, datetime.min.time())
                     age_days = round((now_utc - created_dt).total_seconds() / 86400, 2)
@@ -156,6 +182,7 @@ def register_admin_routes(app, deps):
                     age_days = None
 
             compliance = progress.get("compliance") or {}
+
             row = {
                 "hire_id": hire.get("id") or "",
                 "full_name": full_name,
@@ -166,6 +193,7 @@ def register_admin_routes(app, deps):
                 "hire_status": (hire.get("status") or "").strip().lower(),
                 "stage": progress.get("stage") or "Unknown",
                 "progress_percent": float(progress.get("progress_percent") or 0),
+
                 "documents_required": int((progress.get("documents") or {}).get("total") or 0),
                 "documents_required_approved": int((progress.get("documents") or {}).get("approved") or 0),
                 "tasks_required": int((progress.get("tasks") or {}).get("total") or 0),
@@ -173,6 +201,7 @@ def register_admin_routes(app, deps):
                 "compliance_status": (compliance.get("overall_status") or "pending_review").strip().lower(),
                 "compliance_approved_count": int(compliance.get("approved_count") or 0),
                 "compliance_pending_count": int(compliance.get("pending_count") or 0),
+
                 "compliance_flagged_count": int(compliance.get("flagged_count") or 0),
                 "it_confirmed_count": int((progress.get("it_access") or {}).get("confirmed_count") or 0),
                 "it_total_items": int((progress.get("it_access") or {}).get("total_items") or 0),
@@ -182,6 +211,8 @@ def register_admin_routes(app, deps):
                 "documents_uploaded_approved": docs_approved,
                 "documents_uploaded_pending_review": docs_pending,
                 "documents_uploaded_rejected": docs_rejected,
+
+
                 "tasks_assigned": len(tasks_for_user),
                 "tasks_assigned_completed": tasks_completed,
                 "tasks_assigned_blocked": tasks_blocked,
@@ -197,9 +228,11 @@ def register_admin_routes(app, deps):
         return rows
 
     def summarize_metric_rows(rows):
+        #resume agregados para tarjetas y exportaciones
         stage_counts = {}
         status_counts = {}
         employment_counts = {}
+        
         compliance_counts = {"approved": 0, "pending_review": 0, "flagged": 0}
         progress_values = []
         age_days = []

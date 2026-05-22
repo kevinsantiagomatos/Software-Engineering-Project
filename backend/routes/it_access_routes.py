@@ -4,6 +4,7 @@ from flask import Response, jsonify, request, session
 
 
 def register_it_access_routes(app, deps):
+    #configura rutas de este modulo
     login_required = deps["login_required"]
     require_role = deps["require_role"]
     ADMIN_ROLES = deps["ADMIN_ROLES"]
@@ -24,6 +25,7 @@ def register_it_access_routes(app, deps):
     IT_ACCESS_STATE_ERROR = deps["IT_ACCESS_STATE_ERROR"]
 
     def email_exists(email: str) -> bool:
+        #valida que el email exista en user o new hire
         if not email:
             return False
         in_user = fetch_one("SELECT email FROM `user` WHERE LOWER(email)=LOWER(%s) LIMIT 1", (email,))
@@ -33,6 +35,7 @@ def register_it_access_routes(app, deps):
         return bool(in_hire)
 
     def refresh_payload(email: str):
+        #reconstruye items y resumen para refrescar la ui
         items = load_it_access_items_for_email(email)
         summary = it_access_summary_for_rows(items)
         return {"email": email, "items": items, "summary": summary}
@@ -40,11 +43,13 @@ def register_it_access_routes(app, deps):
     @app.get("/api/it-access/template")
     @login_required
     def it_access_template():
+        #expone plantilla base de accesos it
         return jsonify({"items": it_access_template_items()})
 
     @app.get("/api/it-access")
     @login_required
     def list_it_access():
+        #lista estado de accesos segun permisos del actor
         requester_email = (session.get("email") or "").strip().lower()
         requester_role = (session.get("role") or "").strip().lower()
         email = (request.args.get("email") or "").strip().lower() or requester_email
@@ -76,6 +81,7 @@ def register_it_access_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def configure_it_access_item(access_key):
+        #it/admin configura estado tecnico de un acceso
         if not can_manage_it_access_admin():
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -172,6 +178,7 @@ def register_it_access_routes(app, deps):
     @app.post("/api/it-access/<access_key>/respond")
     @login_required
     def respond_it_access_item(access_key):
+        #new hire confirma o rechaza un acceso ya configurado
         requester_email = (session.get("email") or "").strip().lower()
         key = (access_key or "").strip().lower()
         email = (request.form.get("email") or "").strip().lower() or requester_email

@@ -82,6 +82,31 @@
   }
   .process-card { min-height: 200px; padding-bottom: 28px; }
   .documents-card { display:flex; flex-direction:column; min-height:352px; overflow:hidden; }
+  .attachment-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .attachment-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #cdd9ef;
+    background: linear-gradient(180deg, #f8fbff, #eef4ff);
+    color: #0f2f93;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  }
+  .attachment-link:hover {
+    transform: translateY(-1px);
+    border-color: #9fb6ea;
+    box-shadow: 0 6px 14px rgba(15, 47, 147, 0.12);
+  }
   #docList {
     max-height:270px;
     width:100%;

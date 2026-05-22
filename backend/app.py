@@ -5,71 +5,42 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, request, Response, jsonify, redirect, session
+from flask import Flask, request, send_from_directory, Response, jsonify, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from urllib.parse import quote_plus
 import pymysql
-from core.db import execute, fetch_all, fetch_one, get_db_connection
-from core.security import (
-    csrf_protect_request,
-    ensure_csrf_token,
-    login_required,
-    require_role,
-    should_redirect_to_login_page,
-)
-from core.settings import (
-    BACKEND_DIR,
-    DATA_DIR,
-    DB_AUTO_INIT,
-    DB_CONFIG,
-    FRONT_END_DIR,
-    HIRES_DIR,
-    HOST,
-    PLACEHOLDER_DIR,
-    PORT,
-    PROFILE_DIR,
-    SCHEMA_PATH,
-    STYLE_DIR,
-    UPLOAD_DIR,
-)
-from routes.admin_routes import register_admin_routes
-from routes.auth_routes import register_auth_routes
-from routes.document_routes import register_document_routes
-from routes.hire_routes import register_hire_routes
-from routes.it_access_routes import register_it_access_routes
-from routes.page_routes import register_page_routes
-from routes.task_routes import register_task_routes
-REQUIRED_TABLES = (
-    "department",
-    "job_title",
-    "user",
-    "audit_log",
-    "document",
-    "task",
-    "policy_ack",
-    "training_module",
-    "training_completion",
-    "it_provision",
-    "new_hire",
-    "new_hire_attachment",
-)
-DEFAULT_DEPARTMENTS = [
-    "Operations",
-    "HR",
-    "IT",
-    "Compliance",
-    "Management",
-]
-DEFAULT_JOB_TITLES = {
-    "Operations": ["Operations Coordinator", "Project Coordinator", "Business Analyst"],
-    "HR": ["HR Generalist", "Recruiter", "HR Coordinator"],
-    "IT": ["Software Engineer", "Developer", "QA Engineer", "IT Support Specialist"],
-    "Compliance": ["Compliance Analyst", "Compliance Officer", "Risk Analyst"],
-    "Management": ["Project Manager", "Operations Manager", "Team Lead"],
+
+
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "5000"))
+DEV_AUTOLOGIN_EMAIL = (os.getenv("DEV_AUTOLOGIN_EMAIL") or "").strip().lower()
+DEV_AUTOLOGIN_ROLE = (os.getenv("DEV_AUTOLOGIN_ROLE") or "hr").strip().lower()
+
+
+DB_CONFIG = {
+    # Default back to local MySQL used earlier; override via env vars in prod
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": int(os.getenv("DB_PORT", "3306")),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "palogroup"),
+    "cursorclass": pymysql.cursors.DictCursor,
+    "charset": "utf8mb4",
+    "autocommit": True,
 }
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+FRONT_END_DIR = BASE_DIR / "front_end"
+STYLE_DIR = BASE_DIR / "style"
+DATA_DIR = BASE_DIR / "data_store"
+UPLOAD_DIR = BASE_DIR / "uploads"
+PROFILE_DIR = UPLOAD_DIR / "profile"
+HIRES_DIR = UPLOAD_DIR / "hires"
+PLACEHOLDER_DIR = UPLOAD_DIR / "placeholders"
 PLACEHOLDER_FILES = [
     ("policies/company_policies.pdf", "Placeholder for Company Policies. Replace with signed version."),
     ("policies/medical_plan_policy.pdf", "Placeholder for Medical Plan Policy. Replace with signed version."),
@@ -81,11 +52,7 @@ PLACEHOLDER_FILES = [
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "docx"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 TASK_STATUSES = {"pending", "in_progress", "completed", "blocked"}
-DEPARTMENT_ADMIN_ROLES = {"hr", "it", "compliance"}
-SUPERADMIN_ROLE = "superadmin"
-ROLE_CATEGORIES = {"employee", "contractor", "manager", "admin", "superadmin"}
-TASK_CATEGORIES = {"employee", "contractor", "manager", "admin", "hr", "it", "compliance"}
-ADMIN_ROLES = {"admin", "manager", SUPERADMIN_ROLE}
+ROLE_CATEGORIES = {"employee", "contractor", "hr", "it", "compliance", "manager"}
 REQUIRED_DOCUMENT_TYPES = [
     {"id": "government_id", "label": "Official Identification (license/passport)", "optional": False},
     {"id": "w9", "label": "W-9 / Withholding tax form (Hacienda)", "optional": False},
@@ -155,56 +122,6 @@ ONBOARDING_BLUEPRINT = {
         {"id": "compliance", "name": "Elliot (Compliance)", "responsibilities": "Contracts, approvals"},
     ],
 }
-IT_ACCESS_STATE_NOT_CONFIGURED = "not_configured"
-IT_ACCESS_STATE_PENDING = "configured_pending_confirmation"
-IT_ACCESS_STATE_CONFIRMED = "configured_confirmed"
-IT_ACCESS_STATE_DECLINED = "configured_declined"
-IT_ACCESS_STATE_ERROR = "configured_error"
-IT_ACCESS_STATES = {
-    IT_ACCESS_STATE_NOT_CONFIGURED,
-    IT_ACCESS_STATE_PENDING,
-    IT_ACCESS_STATE_CONFIRMED,
-    IT_ACCESS_STATE_DECLINED,
-    IT_ACCESS_STATE_ERROR,
-}
-COMPLIANCE_STATE_PENDING = "pending_review"
-COMPLIANCE_STATE_APPROVED = "approved"
-COMPLIANCE_STATE_FLAGGED = "flagged"
-COMPLIANCE_STATES = {COMPLIANCE_STATE_PENDING, COMPLIANCE_STATE_APPROVED, COMPLIANCE_STATE_FLAGGED}
-POLICY_REVIEW_STATES = {"signed", "approved", "rejected", "pending_review"}
-POLICY_ID_GROUPS = {
-    "company_policies": {"company_policies", "code_of_conduct", "handbook"},
-    "medical_plan": {"medical_plan", "medical_plan_policy"},
-    # Billing manual acknowledgement is tracked through training/orientation, not policy signing.
-}
-POLICY_ID_ALIASES = {}
-for _canonical_policy_id, _aliases in POLICY_ID_GROUPS.items():
-    for _alias in _aliases:
-        POLICY_ID_ALIASES[_alias] = _canonical_policy_id
-DEFAULT_POLICY_DEFINITIONS = [
-    {
-        "id": "company_policies",
-        "label": "Company Policies",
-        "file_path": "policies/company_policies.pdf",
-    },
-    {
-        "id": "medical_plan",
-        "label": "Medical Plan Policy",
-        "file_path": "policies/medical_plan_policy.pdf",
-    },
-]
-COMPLIANCE_CHECKLIST_TEMPLATE = [
-    {"id": "documents_review", "label": "Required documents reviewed and validated"},
-    {"id": "policy_review", "label": "Policy acknowledgments verified"},
-    {"id": "contracts_review", "label": "Contract and certifications reviewed"},
-    {"id": "final_signoff", "label": "Final compliance sign-off"},
-]
-COMPLIANCE_CHECK_KEY_ORDER = [item["id"] for item in COMPLIANCE_CHECKLIST_TEMPLATE]
-IT_ACCESS_TEMPLATE_KEY_ORDER = [
-    item.get("id")
-    for item in (ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or [])
-    if (item.get("id") or "").strip()
-]
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET") or secrets.token_hex(32)
@@ -217,391 +134,41 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
 )
 
+
+def get_db_connection():
+    return pymysql.connect(**DB_CONFIG)
+
+
+def fetch_all(query: str, params=None):
+    params = params or ()
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return cursor.fetchall()
+
+
+def fetch_one(query: str, params=None):
+    params = params or ()
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return cursor.fetchone()
+
+
+def execute(query: str, params=None):
+    params = params or ()
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+        connection.commit()
+
+
 def ensure_directories():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     HIRES_DIR.mkdir(parents=True, exist_ok=True)
     PLACEHOLDER_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _split_sql_statements(script: str):
-    statements = []
-    current = []
-    in_single = False
-    in_double = False
-    prev = ""
-    for ch in script:
-        if ch == "'" and not in_double and prev != "\\":
-            in_single = not in_single
-        elif ch == '"' and not in_single and prev != "\\":
-            in_double = not in_double
-        if ch == ";" and not in_single and not in_double:
-            stmt = "".join(current).strip()
-            if stmt:
-                statements.append(stmt)
-            current = []
-        else:
-            current.append(ch)
-        prev = ch
-    tail = "".join(current).strip()
-    if tail:
-        statements.append(tail)
-    return statements
-
-
-def _run_sql_script(path: Path):
-    raw_lines = path.read_text(encoding="utf-8").splitlines()
-    filtered_lines = []
-    for line in raw_lines:
-        stripped = line.strip()
-        if not stripped:
-            filtered_lines.append(line)
-            continue
-        if stripped.startswith("--"):
-            continue
-        filtered_lines.append(line)
-    script = "\n".join(filtered_lines)
-    statements = _split_sql_statements(script)
-    if not statements:
-        return
-    with get_db_connection() as connection:
-        with connection.cursor() as cursor:
-            for statement in statements:
-                cursor.execute(statement)
-        connection.commit()
-
-
-def ensure_database_schema():
-    if not DB_AUTO_INIT:
-        return
-    if not SCHEMA_PATH.exists():
-        app.logger.warning("DB schema file not found at %s", SCHEMA_PATH)
-        return
-    existing = fetch_all("SHOW TABLES")
-    table_names = set()
-    for row in existing:
-        if row:
-            table_names.update(row.values())
-    if all(t in table_names for t in REQUIRED_TABLES):
-        return
-    app.logger.info("Applying DB schema from %s", SCHEMA_PATH)
-    _run_sql_script(SCHEMA_PATH)
-    app.logger.info("DB schema initialization complete.")
-
-
-def _table_exists(table_name: str) -> bool:
-    row = fetch_one(
-        """
-        SELECT COUNT(*) AS c
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-        """,
-        (DB_CONFIG["database"], table_name),
-    )
-    return bool((row or {}).get("c"))
-
-
-def _column_exists(table_name: str, column_name: str) -> bool:
-    row = fetch_one(
-        """
-        SELECT COUNT(*) AS c
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s
-        """,
-        (DB_CONFIG["database"], table_name, column_name),
-    )
-    return bool((row or {}).get("c"))
-
-
-def ensure_additive_schema():
-    # Safe additive changes for already-initialized databases.
-    if not _table_exists("role"):
-        execute(
-            """
-            CREATE TABLE role (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                name VARCHAR(64) NOT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_role_name (name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _table_exists("department"):
-        execute(
-            """
-            CREATE TABLE department (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                name VARCHAR(128) NOT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_department_name (name),
-                KEY idx_department_active (is_active)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _table_exists("job_title"):
-        execute(
-            """
-            CREATE TABLE job_title (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                department_id BIGINT NOT NULL,
-                name VARCHAR(128) NOT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_job_title_department_name (department_id, name),
-                KEY idx_job_title_department (department_id),
-                KEY idx_job_title_active (is_active),
-                CONSTRAINT fk_job_title_department
-                    FOREIGN KEY (department_id) REFERENCES department (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _column_exists("user", "job_title"):
-        execute("ALTER TABLE `user` ADD COLUMN job_title VARCHAR(128) DEFAULT NULL AFTER department")
-        execute("ALTER TABLE `user` ADD KEY idx_user_job_title (job_title)")
-    if not _column_exists("new_hire", "job_title"):
-        execute("ALTER TABLE new_hire ADD COLUMN job_title VARCHAR(128) DEFAULT NULL AFTER department")
-        execute("ALTER TABLE new_hire ADD KEY idx_new_hire_job_title (job_title)")
-    if not _column_exists("user", "role_id"):
-        execute("ALTER TABLE `user` ADD COLUMN role_id BIGINT NULL AFTER role")
-        execute("ALTER TABLE `user` ADD KEY idx_user_role_id (role_id)")
-    if not _column_exists("user", "department_id"):
-        execute("ALTER TABLE `user` ADD COLUMN department_id BIGINT NULL AFTER department")
-        execute("ALTER TABLE `user` ADD KEY idx_user_department_id (department_id)")
-    if not _table_exists("hire_document_slot"):
-        execute(
-            """
-            CREATE TABLE hire_document_slot (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                hire_id VARCHAR(64) NOT NULL,
-                doc_type VARCHAR(64) NOT NULL,
-                label VARCHAR(255) NOT NULL,
-                optional TINYINT(1) NOT NULL DEFAULT 0,
-                created_by VARCHAR(255) DEFAULT NULL,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_hire_doc_slot_type (hire_id, doc_type),
-                KEY idx_hire_doc_slot_hire_active (hire_id, is_active),
-                CONSTRAINT fk_hire_doc_slot_hire
-                    FOREIGN KEY (hire_id) REFERENCES new_hire (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _table_exists("it_access_item"):
-        execute(
-            """
-            CREATE TABLE it_access_item (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                email VARCHAR(255) NOT NULL,
-                access_key VARCHAR(64) NOT NULL,
-                access_title VARCHAR(255) NOT NULL,
-                state VARCHAR(48) NOT NULL DEFAULT 'not_configured',
-                details TEXT DEFAULT NULL,
-                portal_url VARCHAR(512) DEFAULT NULL,
-                username_hint VARCHAR(255) DEFAULT NULL,
-                notes TEXT DEFAULT NULL,
-                configured_by VARCHAR(255) DEFAULT NULL,
-                configured_at DATETIME(6) DEFAULT NULL,
-                hire_response_note TEXT DEFAULT NULL,
-                hire_response_at DATETIME(6) DEFAULT NULL,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-                updated_by VARCHAR(255) DEFAULT NULL,
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_it_access_email_key (email, access_key),
-                KEY idx_it_access_email_state (email, state),
-                KEY idx_it_access_email_updated (email, updated_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _table_exists("compliance_review_item"):
-        execute(
-            """
-            CREATE TABLE compliance_review_item (
-                id BIGINT NOT NULL AUTO_INCREMENT,
-                email VARCHAR(255) NOT NULL,
-                check_key VARCHAR(64) NOT NULL,
-                check_label VARCHAR(255) NOT NULL,
-                state VARCHAR(32) NOT NULL DEFAULT 'pending_review',
-                reviewer_note TEXT DEFAULT NULL,
-                reviewed_by VARCHAR(255) DEFAULT NULL,
-                reviewed_at DATETIME(6) DEFAULT NULL,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-                updated_by VARCHAR(255) DEFAULT NULL,
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_compliance_email_key (email, check_key),
-                KEY idx_compliance_email_state (email, state),
-                KEY idx_compliance_email_updated (email, updated_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if not _table_exists("policy_definition"):
-        execute(
-            """
-            CREATE TABLE policy_definition (
-                policy_id VARCHAR(64) NOT NULL,
-                label VARCHAR(255) NOT NULL,
-                file_path VARCHAR(512) NOT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-                updated_by VARCHAR(255) DEFAULT NULL,
-                PRIMARY KEY (policy_id),
-                KEY idx_policy_definition_active (is_active)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-
-    if _table_exists("policy_definition") and not _column_exists("policy_definition", "is_active"):
-        execute("ALTER TABLE policy_definition ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER file_path")
-        execute("ALTER TABLE policy_definition ADD KEY idx_policy_definition_active (is_active)")
-
-    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewed_by"):
-        execute("ALTER TABLE policy_ack ADD COLUMN reviewed_by VARCHAR(255) NULL AFTER status")
-    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewed_at"):
-        execute("ALTER TABLE policy_ack ADD COLUMN reviewed_at DATETIME(6) NULL AFTER reviewed_by")
-    if _table_exists("policy_ack") and not _column_exists("policy_ack", "reviewer_note"):
-        execute("ALTER TABLE policy_ack ADD COLUMN reviewer_note TEXT NULL AFTER reviewed_at")
-
-    for policy in DEFAULT_POLICY_DEFINITIONS:
-        execute(
-            """
-            INSERT INTO policy_definition (policy_id, label, file_path, is_active, updated_by)
-            VALUES (%s, %s, %s, 1, %s)
-            ON DUPLICATE KEY UPDATE
-                label = VALUES(label),
-                file_path = VALUES(file_path)
-            """,
-            (policy["id"], policy["label"], policy["file_path"], "system_bootstrap"),
-        )
-
-    for dep_name in DEFAULT_DEPARTMENTS:
-        execute(
-            """
-            INSERT INTO department (name, is_active, created_at)
-            VALUES (%s, 1, NOW())
-            ON DUPLICATE KEY UPDATE is_active = VALUES(is_active)
-            """,
-            (dep_name,),
-        )
-    for dep_name, titles in DEFAULT_JOB_TITLES.items():
-        dep = fetch_one("SELECT id FROM department WHERE LOWER(name)=LOWER(%s) LIMIT 1", (dep_name,))
-        if not dep:
-            continue
-        dep_id = dep.get("id")
-        for title in titles:
-            execute(
-                """
-                INSERT INTO job_title (department_id, name, is_active, created_at)
-                VALUES (%s, %s, 1, NOW())
-                ON DUPLICATE KEY UPDATE is_active = VALUES(is_active)
-                """,
-                (dep_id, title),
-            )
-
-    for role_name in ("employee", "contractor", "manager", "admin", "superadmin"):
-        execute(
-            """
-            INSERT INTO role (name, is_active, created_at)
-            VALUES (%s, 1, NOW())
-            ON DUPLICATE KEY UPDATE is_active = VALUES(is_active)
-            """,
-            (role_name,),
-        )
-
-    # Normalize legacy role values into canonical model.
-    execute(
-        """
-        UPDATE `user`
-        SET role = CASE
-            WHEN LOWER(role) IN ('hr','it','compliance') THEN 'admin'
-            WHEN LOWER(role) IN ('employee','contractor','manager','admin','superadmin') THEN LOWER(role)
-            ELSE 'employee'
-        END
-        """
-    )
-
-    # Set department for legacy departmental admins when not set.
-    execute("UPDATE `user` SET department = 'HR' WHERE LOWER(role)='admin' AND (department IS NULL OR department='') AND LOWER(email) LIKE %s", ("%hr%",))
-    execute("UPDATE `user` SET department = 'IT' WHERE LOWER(role)='admin' AND (department IS NULL OR department='') AND LOWER(email) LIKE %s", ("%it%",))
-    execute("UPDATE `user` SET department = 'Compliance' WHERE LOWER(role)='admin' AND (department IS NULL OR department='') AND LOWER(email) LIKE %s", ("%compliance%",))
-
-    execute(
-        """
-        UPDATE `user` u
-        LEFT JOIN role r ON LOWER(r.name) = LOWER(u.role)
-        SET u.role_id = r.id
-        WHERE u.role_id IS NULL OR u.role_id = 0
-        """
-    )
-    execute(
-        """
-        UPDATE `user` u
-        LEFT JOIN department d ON LOWER(d.name) = LOWER(u.department)
-        SET u.department_id = d.id
-        WHERE u.department_id IS NULL OR u.department_id = 0
-        """
-    )
-    execute(
-        """
-        UPDATE `user`
-        SET department_id = NULL, department = NULL
-        WHERE LOWER(role) = 'superadmin'
-        """
-    )
-
-    # Backfill granular IT access checklist from legacy coarse it_provision records.
-    if _table_exists("it_provision"):
-        legacy_it_rows = fetch_all(
-            """
-            SELECT DISTINCT LOWER(email) AS email
-            FROM it_provision
-            WHERE email IS NOT NULL AND email <> ''
-            """
-        )
-        template_items = ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or []
-        template_map = {
-            (item.get("id") or "").strip().lower(): (item.get("title") or "IT Access").strip()
-            for item in template_items
-            if (item.get("id") or "").strip()
-        }
-        for row in legacy_it_rows:
-            legacy_email = (row.get("email") or "").strip().lower()
-            if not legacy_email:
-                continue
-            for access_key, access_title in template_map.items():
-                execute(
-                    """
-                    INSERT INTO it_access_item (
-                        email, access_key, access_title, state, configured_by, configured_at, hire_response_at, created_at, updated_at, updated_by
-                    )
-                    VALUES (%s, %s, %s, %s, %s, NOW(6), NOW(6), NOW(6), NOW(6), %s)
-                    ON DUPLICATE KEY UPDATE access_title = VALUES(access_title)
-                    """,
-                    (
-                        legacy_email,
-                        access_key,
-                        access_title,
-                        IT_ACCESS_STATE_CONFIRMED,
-                        "legacy_migration",
-                        "legacy_migration",
-                    ),
-                )
 
 
 def ensure_placeholder_assets():
@@ -670,7 +237,6 @@ def verify_user(identifier: str, plain_password: str) -> bool:
         # fall through to legacy check
         pass
 
-    # Legacy unsalted SHA-256 fallback (plain hex digest)
     legacy = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
     return legacy == stored
 
@@ -678,27 +244,86 @@ def verify_user(identifier: str, plain_password: str) -> bool:
 def get_user_record(email: str):
     if not email:
         return None
-    return fetch_one(
-        """
-        SELECT
-            u.email,
-            u.full_name,
-            COALESCE(r.name, u.role) AS role,
-            COALESCE(d.name, u.department) AS department,
-            u.job_title,
-            u.created_at,
-            u.avatar_url
-        FROM `user` u
-        LEFT JOIN role r ON r.id = u.role_id
-        LEFT JOIN department d ON d.id = u.department_id
-        WHERE u.email = %s
-        """,
-        (email,),
-    )
+    return fetch_one("SELECT email, full_name, role, department, created_at, avatar_url FROM `user` WHERE email = %s", (email,))
+
+
+def require_role(allowed_roles):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not session.get("email"):
+                if DEV_AUTOLOGIN_EMAIL:
+                    session["email"] = DEV_AUTOLOGIN_EMAIL
+                    session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
+                    ensure_csrf_token()
+                else:
+                    if should_redirect_to_login_page():
+                        return redirect("/log_in.html")
+                    return Response("Authentication required", status=401, mimetype="text/plain")
+            role = session.get("role", "")
+            if role not in allowed_roles:
+                if should_redirect_to_login_page():
+                    return redirect("/log_in.html")
+                return Response("Forbidden", status=403, mimetype="text/plain")
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def should_redirect_to_login_page() -> bool:
+    """
+    Only redirect for real page navigation requests.
+    API/data routes should return 401/403 instead of HTML redirects.
+    """
+    path = request.path or ""
+    if path.startswith("/api/") or path.startswith("/documents"):
+        return False
+    return request.method == "GET" and "text/html" in request.accept_mimetypes
+
+
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not session.get("email"):
+            # Dev autologin fallback
+            if DEV_AUTOLOGIN_EMAIL:
+                session["email"] = DEV_AUTOLOGIN_EMAIL
+                session["role"] = DEV_AUTOLOGIN_ROLE or "employee"
+                ensure_csrf_token()
+            else:
+                if should_redirect_to_login_page():
+                    return redirect("/log_in.html")
+                return Response("Authentication required", status=401, mimetype="text/plain")
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def ensure_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(16)
+
+
+CSRF_EXEMPT_PATHS = {"/login", "/logout", "/register", "/reset-password"}
+
 
 @app.before_request
 def csrf_protect():
-    return csrf_protect_request()
+    # Enforce a lightweight CSRF check for state-changing requests when logged in
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if request.path in CSRF_EXEMPT_PATHS:
+            return None
+        if session.get("email"):
+            ensure_csrf_token()
+            sent = request.headers.get("X-CSRF-Token")
+            if not sent or sent != session.get("csrf_token"):
+                return Response("CSRF token missing or invalid", status=400, mimetype="text/plain")
+
+
+@app.get("/api/csrf")
+@login_required
+def csrf_token():
+    ensure_csrf_token()
+    return jsonify({"csrf_token": session["csrf_token"]})
 
 
 def update_user_avatar_file(email: str, avatar_url: str) -> bool:
@@ -738,23 +363,17 @@ def change_password(email: str, new_password: str) -> bool:
             connection.commit()
             return cursor.rowcount == 1
 ensure_directories()
-ensure_database_schema()
-ensure_additive_schema()
 ensure_placeholder_assets()
 
 
-def create_user_record(email: str, hashed: str, full_name: str, role: str, department: str, job_title: str = ""):
-    canonical_role, canonical_department = canonicalize_role_and_department(role, department)
+def create_user_record(email: str, hashed: str, full_name: str, role: str, department: str):
     return {
         "id": secrets.token_hex(8),
         "email": email,
         "password_hash": hashed,
         "full_name": full_name,
-        "role": canonical_role,
-        "department": canonical_department,
-        "role_id": get_role_id(canonical_role),
-        "department_id": get_department_id(canonical_department),
-        "job_title": (job_title or "").strip(),
+        "role": role or "employee",
+        "department": department,
         "status": "pending_hr_review",
         "created_at": datetime.utcnow(),
     }
@@ -762,8 +381,8 @@ def create_user_record(email: str, hashed: str, full_name: str, role: str, depar
 
 def register_user_db(record: dict) -> bool:
     query = """
-        INSERT INTO `user` (email, id, password_hash, full_name, role, role_id, department, department_id, job_title, status, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO `user` (email, id, password_hash, full_name, role, department, status, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
@@ -775,10 +394,7 @@ def register_user_db(record: dict) -> bool:
                     record["password_hash"],
                     record["full_name"],
                     record["role"],
-                    record.get("role_id"),
                     record["department"],
-                    record.get("department_id"),
-                    record.get("job_title", ""),
                     record["status"],
                     record["created_at"],
                 ),
@@ -794,9 +410,7 @@ def register():
     password = request.form.get("password") or ""
     confirm = request.form.get("confirm_password") or ""
     department = (request.form.get("department") or "").strip()
-    job_title = (request.form.get("job_title") or "").strip()
     role = (request.form.get("role") or "").strip() or "employee"
-    role, department = canonicalize_role_and_department(role, department)
 
     if not full_name or not email or not password or not confirm:
         return Response("Missing required fields.", status=400, mimetype="text/plain")
@@ -809,11 +423,9 @@ def register():
 
     if len(password) < 8:
         return Response("Password must be at least 8 characters.", status=400, mimetype="text/plain")
-    if role != SUPERADMIN_ROLE and not department_and_title_are_valid(department, job_title):
-        return Response("Invalid department/job title combination.", status=400, mimetype="text/plain")
 
     hashed = generate_password_hash(password)
-    record = create_user_record(email, hashed, full_name, role, department, job_title)
+    record = create_user_record(email, hashed, full_name, role, department)
 
     try:
         register_user_db(record)
@@ -867,21 +479,7 @@ def allowed_file(filename: str) -> bool:
 
 
 def list_users():
-    rows = fetch_all(
-        """
-        SELECT
-            u.email,
-            u.full_name,
-            COALESCE(r.name, u.role) AS role,
-            COALESCE(d.name, u.department) AS department,
-            u.job_title,
-            u.status,
-            u.created_at
-        FROM `user` u
-        LEFT JOIN role r ON r.id = u.role_id
-        LEFT JOIN department d ON d.id = u.department_id
-        """
-    )
+    rows = fetch_all("SELECT email, full_name, role, department, status, created_at FROM `user`")
     cleaned = []
     for u in rows:
         cleaned.append(
@@ -890,177 +488,11 @@ def list_users():
                 "full_name": u.get("full_name") or "",
                 "role": u.get("role") or "",
                 "department": u.get("department") or "",
-                "job_title": u.get("job_title") or "",
                 "status": u.get("status") or "",
                 "created_at": u.get("created_at") or "",
             }
         )
     return cleaned
-
-
-def canonicalize_role_and_department(role: str, department: str):
-    role_normalized = (role or "").strip().lower() or "employee"
-    department_name = (department or "").strip()
-    legacy_admin_map = {"hr": "HR", "it": "IT", "compliance": "Compliance"}
-    if role_normalized in legacy_admin_map:
-        return "admin", (department_name or legacy_admin_map[role_normalized]).strip()
-    if role_normalized not in ROLE_CATEGORIES:
-        role_normalized = "employee"
-    if role_normalized == SUPERADMIN_ROLE:
-        return SUPERADMIN_ROLE, ""
-    if role_normalized == "admin" and not department_name:
-        department_name = "HR"
-    return role_normalized, department_name
-
-
-def get_role_id(role_name: str):
-    row = fetch_one("SELECT id FROM role WHERE LOWER(name)=LOWER(%s) LIMIT 1", ((role_name or "").strip().lower(),))
-    return (row or {}).get("id")
-
-
-def get_department_id(department_name: str):
-    if not department_name:
-        return None
-    row = fetch_one("SELECT id FROM department WHERE LOWER(name)=LOWER(%s) LIMIT 1", ((department_name or "").strip(),))
-    return (row or {}).get("id")
-
-
-def session_department_name() -> str:
-    return (session.get("department") or "").strip().lower()
-
-
-def can_view_documents_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department == "hr")
-
-
-def can_manage_documents_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or (role == "admin" and department == "hr")
-
-
-def can_manage_hiring_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department == "hr")
-
-
-def can_view_it_access_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "it"})
-
-
-def can_manage_it_access_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or (role == "admin" and department == "it")
-
-
-def can_view_compliance_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or role == "manager" or (role == "admin" and department in {"hr", "compliance"})
-
-
-def can_manage_compliance_admin() -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    return role == SUPERADMIN_ROLE or (role == "admin" and department == "compliance")
-
-
-def task_category_allowed_for_current_admin(category: str) -> bool:
-    role = (session.get("role") or "").strip().lower()
-    department = session_department_name()
-    normalized = (category or "").strip().lower()
-
-    if role == SUPERADMIN_ROLE or role == "manager":
-        return True
-    if role != "admin":
-        return False
-    if department == "it":
-        return normalized == "it"
-    if department == "hr":
-        return normalized in TASK_CATEGORIES and normalized != "it"
-    if department == "compliance":
-        return normalized == "compliance"
-    return False
-
-
-def load_org_structure(active_only: bool = True):
-    dep_where = "WHERE d.is_active = 1" if active_only else ""
-    title_where = "AND jt.is_active = 1" if active_only else ""
-    rows = fetch_all(
-        f"""
-        SELECT d.id AS department_id, d.name AS department_name,
-               jt.id AS title_id, jt.name AS title_name
-        FROM department d
-        LEFT JOIN job_title jt ON jt.department_id = d.id {title_where}
-        {dep_where}
-        ORDER BY d.name ASC, jt.name ASC
-        """
-    )
-    buckets = {}
-    for row in rows:
-        dep_id = row.get("department_id")
-        if dep_id not in buckets:
-            buckets[dep_id] = {
-                "id": dep_id,
-                "name": row.get("department_name") or "",
-                "job_titles": [],
-            }
-        if row.get("title_id"):
-            buckets[dep_id]["job_titles"].append(
-                {"id": row.get("title_id"), "name": row.get("title_name") or ""}
-            )
-    return [buckets[k] for k in sorted(buckets, key=lambda x: (buckets[x]["name"] or "").lower())]
-
-
-def department_and_title_are_valid(department_name: str, title_name: str) -> bool:
-    if not title_name:
-        return True
-    if not department_name:
-        return False
-    row = fetch_one(
-        """
-        SELECT jt.id
-        FROM department d
-        JOIN job_title jt ON jt.department_id = d.id
-        WHERE LOWER(d.name)=LOWER(%s) AND LOWER(jt.name)=LOWER(%s)
-          AND d.is_active = 1 AND jt.is_active = 1
-        LIMIT 1
-        """,
-        (department_name, title_name),
-    )
-    return bool(row)
-
-
-def normalize_optional_date(value):
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = datetime.strptime(raw, "%Y-%m-%d")
-    except ValueError as exc:
-        raise ValueError("Invalid date format. Use YYYY-MM-DD.") from exc
-    return parsed.strftime("%Y-%m-%d")
-
-
-def serialize_task_rows(rows):
-    normalized = []
-    for row in rows or []:
-        item = dict(row or {})
-        due = item.get("due_date")
-        if due is None:
-            item["due_date"] = None
-        elif hasattr(due, "strftime"):
-            item["due_date"] = due.strftime("%Y-%m-%d")
-        else:
-            item["due_date"] = str(due)
-        normalized.append(item)
-    return normalized
 
 
 def get_user_role(email: str) -> str:
@@ -1082,467 +514,18 @@ def required_document_types_for_role(role: str):
     return filtered
 
 
-def slugify_doc_key(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower())
-    slug = slug.strip("_")
-    if not slug:
-        slug = "extra_document"
-    return slug[:48]
-
-
-def get_hire_by_email(email: str):
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return None
-    return fetch_one(
-        "SELECT id, email, employment_type FROM new_hire WHERE LOWER(email) = LOWER(%s) LIMIT 1",
-        (normalized,),
-    )
-
-
-def load_custom_document_slots_for_hire(hire_id: str):
-    if not hire_id:
-        return []
-    rows = fetch_all(
-        """
-        SELECT hire_id, doc_type, label, optional, created_by, created_at, is_active
-        FROM hire_document_slot
-        WHERE hire_id = %s AND is_active = 1
-        ORDER BY created_at ASC
-        """,
-        (hire_id,),
-    )
-    return [
-        {
-            "id": (r.get("doc_type") or "").strip().lower(),
-            "label": (r.get("label") or "Additional document").strip(),
-            "optional": bool(r.get("optional")),
-            "custom": True,
-        }
-        for r in rows
-        if (r.get("doc_type") or "").strip()
-    ]
-
-
-def effective_required_document_types_for_email(email: str, role_hint: str = ""):
-    role = (role_hint or get_user_role(email) or "").strip().lower()
-    base = required_document_types_for_role(role)
-    hire = get_hire_by_email(email)
-    if not hire:
-        return base
-    custom_slots = load_custom_document_slots_for_hire(hire.get("id"))
-    if not custom_slots:
-        return base
-    existing = {d.get("id") for d in base}
-    merged = list(base)
-    for slot in custom_slots:
-        if slot.get("id") and slot.get("id") not in existing:
-            merged.append(slot)
-            existing.add(slot.get("id"))
-    return merged
-
-
-def it_access_template_items():
-    checklist = ONBOARDING_BLUEPRINT.get("integration", {}).get("operations_it", {}).get("checklist", []) or []
-    items = []
-    for item in checklist:
-        key = (item.get("id") or "").strip().lower()
-        if not key:
-            continue
-        items.append(
-            {
-                "id": key,
-                "title": (item.get("title") or key.replace("_", " ").title()).strip(),
-                "target": (item.get("target") or "it").strip().lower(),
-            }
-        )
-    return items
-
-
-def normalize_it_access_state(value: str) -> str:
-    normalized = (value or "").strip().lower()
-    if normalized not in IT_ACCESS_STATES:
-        return IT_ACCESS_STATE_NOT_CONFIGURED
-    return normalized
-
-
-def it_access_state_label(state: str) -> str:
-    normalized = normalize_it_access_state(state)
-    labels = {
-        IT_ACCESS_STATE_NOT_CONFIGURED: "Not configured",
-        IT_ACCESS_STATE_PENDING: "Configured, awaiting confirmation",
-        IT_ACCESS_STATE_CONFIRMED: "Configured and confirmed",
-        IT_ACCESS_STATE_DECLINED: "Configured, access declined",
-        IT_ACCESS_STATE_ERROR: "Configured, access error",
-    }
-    return labels.get(normalized, "Not configured")
-
-
-def it_access_state_color(state: str) -> str:
-    normalized = normalize_it_access_state(state)
-    palette = {
-        IT_ACCESS_STATE_NOT_CONFIGURED: "white",
-        IT_ACCESS_STATE_PENDING: "yellow",
-        IT_ACCESS_STATE_CONFIRMED: "green",
-        IT_ACCESS_STATE_DECLINED: "red",
-        IT_ACCESS_STATE_ERROR: "red",
-    }
-    return palette.get(normalized, "white")
-
-
-def ensure_it_access_rows_for_email(email: str):
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return
-    for item in it_access_template_items():
-        execute(
-            """
-            INSERT INTO it_access_item (email, access_key, access_title, state, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, NOW(6), NOW(6))
-            ON DUPLICATE KEY UPDATE access_title = VALUES(access_title)
-            """,
-            (normalized, item["id"], item["title"], IT_ACCESS_STATE_NOT_CONFIGURED),
-        )
-
-
-def serialize_it_access_rows(rows):
-    normalized = []
-    for row in rows or []:
-        item = dict(row or {})
-        state = normalize_it_access_state(item.get("state"))
-        item["email"] = (item.get("email") or "").strip().lower()
-        item["access_key"] = (item.get("access_key") or "").strip().lower()
-        item["access_title"] = (item.get("access_title") or item.get("access_key") or "IT Access").strip()
-        item["state"] = state
-        item["state_label"] = it_access_state_label(state)
-        item["state_color"] = it_access_state_color(state)
-        item["configured"] = state != IT_ACCESS_STATE_NOT_CONFIGURED
-        item["confirmed"] = state == IT_ACCESS_STATE_CONFIRMED
-        for date_field in ("configured_at", "hire_response_at", "created_at", "updated_at"):
-            value = item.get(date_field)
-            if value is None:
-                item[date_field] = None
-            elif hasattr(value, "isoformat"):
-                item[date_field] = value.isoformat()
-            else:
-                item[date_field] = str(value)
-        normalized.append(item)
-    return normalized
-
-
-def load_it_access_items_for_email(email: str):
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return []
-    rows = fetch_all(
-        """
-        SELECT
-            id,
-            email,
-            access_key,
-            access_title,
-            state,
-            details,
-            portal_url,
-            username_hint,
-            notes,
-            configured_by,
-            configured_at,
-            hire_response_note,
-            hire_response_at,
-            created_at,
-            updated_at,
-            updated_by
-        FROM it_access_item
-        WHERE LOWER(email) = LOWER(%s)
-        """,
-        (normalized,),
-    )
-    order = {key: idx for idx, key in enumerate(IT_ACCESS_TEMPLATE_KEY_ORDER)}
-    serialized = serialize_it_access_rows(rows)
-    serialized.sort(
-        key=lambda row: (
-            order.get((row.get("access_key") or "").strip().lower(), 999),
-            (row.get("access_title") or "").strip().lower(),
-        )
-    )
-    return serialized
-
-
-def it_access_summary_for_rows(rows):
-    states_by_key = {
-        item["id"]: IT_ACCESS_STATE_NOT_CONFIGURED for item in it_access_template_items()
-    }
-    for row in rows or []:
-        key = (row.get("access_key") or "").strip().lower()
-        if key in states_by_key:
-            states_by_key[key] = normalize_it_access_state(row.get("state"))
-
-    total = len(states_by_key)
-    confirmed = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_CONFIRMED)
-    pending = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_PENDING)
-    issues = sum(1 for state in states_by_key.values() if state in {IT_ACCESS_STATE_DECLINED, IT_ACCESS_STATE_ERROR})
-    configured = sum(1 for state in states_by_key.values() if state != IT_ACCESS_STATE_NOT_CONFIGURED)
-    not_configured = sum(1 for state in states_by_key.values() if state == IT_ACCESS_STATE_NOT_CONFIGURED)
-    return {
-        "total_items": total,
-        "configured_count": configured,
-        "confirmed_count": confirmed,
-        "pending_count": pending,
-        "issues_count": issues,
-        "not_configured_count": not_configured,
-        "all_confirmed": total > 0 and confirmed == total,
-    }
-
-
-def compliance_checklist_items():
-    return [dict(item) for item in COMPLIANCE_CHECKLIST_TEMPLATE]
-
-
-def normalize_compliance_state(value: str) -> str:
-    normalized = (value or "").strip().lower()
-    if normalized not in COMPLIANCE_STATES:
-        return COMPLIANCE_STATE_PENDING
-    return normalized
-
-
-def compliance_state_label(state: str) -> str:
-    normalized = normalize_compliance_state(state)
-    labels = {
-        COMPLIANCE_STATE_PENDING: "Pending review",
-        COMPLIANCE_STATE_APPROVED: "Approved",
-        COMPLIANCE_STATE_FLAGGED: "Flagged",
-    }
-    return labels.get(normalized, "Pending review")
-
-
-def ensure_compliance_rows_for_email(email: str):
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return
-    for item in compliance_checklist_items():
-        execute(
-            """
-            INSERT INTO compliance_review_item (
-                email, check_key, check_label, state, created_at, updated_at
-            )
-            VALUES (%s, %s, %s, %s, NOW(6), NOW(6))
-            ON DUPLICATE KEY UPDATE check_label = VALUES(check_label)
-            """,
-            (normalized, item["id"], item["label"], COMPLIANCE_STATE_PENDING),
-        )
-
-
-def serialize_compliance_rows(rows):
-    normalized = []
-    for row in rows or []:
-        item = dict(row or {})
-        state = normalize_compliance_state(item.get("state"))
-        item["email"] = (item.get("email") or "").strip().lower()
-        item["check_key"] = (item.get("check_key") or "").strip().lower()
-        item["check_label"] = (item.get("check_label") or item.get("check_key") or "Compliance check").strip()
-        item["state"] = state
-        item["state_label"] = compliance_state_label(state)
-        for date_field in ("reviewed_at", "created_at", "updated_at"):
-            value = item.get(date_field)
-            if value is None:
-                item[date_field] = None
-            elif hasattr(value, "isoformat"):
-                item[date_field] = value.isoformat()
-            else:
-                item[date_field] = str(value)
-        normalized.append(item)
-    return normalized
-
-
-def load_compliance_rows_for_email(email: str):
-    normalized = (email or "").strip().lower()
-    if not normalized:
-        return []
-    rows = fetch_all(
-        """
-        SELECT
-            id,
-            email,
-            check_key,
-            check_label,
-            state,
-            reviewer_note,
-            reviewed_by,
-            reviewed_at,
-            created_at,
-            updated_at,
-            updated_by
-        FROM compliance_review_item
-        WHERE LOWER(email) = LOWER(%s)
-        """,
-        (normalized,),
-    )
-    serialized = serialize_compliance_rows(rows)
-    order = {key: idx for idx, key in enumerate(COMPLIANCE_CHECK_KEY_ORDER)}
-    serialized.sort(
-        key=lambda row: (
-            order.get((row.get("check_key") or "").strip().lower(), 999),
-            (row.get("check_label") or "").strip().lower(),
-        )
-    )
-    return serialized
-
-
-def compliance_summary_for_rows(rows):
-    states_by_key = {
-        item["id"]: COMPLIANCE_STATE_PENDING for item in compliance_checklist_items()
-    }
-    for row in rows or []:
-        key = (row.get("check_key") or "").strip().lower()
-        if key in states_by_key:
-            states_by_key[key] = normalize_compliance_state(row.get("state"))
-
-    total = len(states_by_key)
-    approved = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_APPROVED)
-    flagged = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_FLAGGED)
-    pending = sum(1 for state in states_by_key.values() if state == COMPLIANCE_STATE_PENDING)
-    overall = COMPLIANCE_STATE_APPROVED if total > 0 and approved == total else (
-        COMPLIANCE_STATE_FLAGGED if flagged > 0 else COMPLIANCE_STATE_PENDING
-    )
-    return {
-        "total_items": total,
-        "approved_count": approved,
-        "flagged_count": flagged,
-        "pending_count": pending,
-        "all_approved": total > 0 and approved == total,
-        "has_flagged": flagged > 0,
-        "overall_status": overall,
-        "overall_label": compliance_state_label(overall),
-    }
-
-
-def normalize_policy_id(policy_id: str) -> str:
-    raw = (policy_id or "").strip().lower()
-    return POLICY_ID_ALIASES.get(raw, raw)
-
-
-def list_policy_catalog(include_inactive: bool = False):
-    policies_by_id = {}
-
-    for policy in DEFAULT_POLICY_DEFINITIONS:
-        canonical_id = normalize_policy_id(policy.get("id"))
-        file_path = (policy.get("file_path") or "").strip().lstrip("/")
-        policies_by_id[canonical_id] = {
-            "id": canonical_id,
-            "label": (policy.get("label") or canonical_id).strip(),
-            "file_path": file_path,
-            "url": f"/uploads/{file_path}" if file_path else "",
-            "is_active": True,
-            "updated_at": "",
-            "updated_by": "",
-        }
-
-    if _table_exists("policy_definition"):
-        has_active_column = _column_exists("policy_definition", "is_active")
-        rows = fetch_all(
-            """
-            SELECT policy_id, label, file_path, is_active, updated_at, updated_by
-            FROM policy_definition
-            """
-            if has_active_column
-            else """
-            SELECT policy_id, label, file_path, updated_at, updated_by
-            FROM policy_definition
-            """
-        )
-        for row in rows:
-            canonical_id = normalize_policy_id(row.get("policy_id"))
-            if not canonical_id:
-                continue
-            if has_active_column:
-                is_active = bool(int(row.get("is_active") or 0))
-            else:
-                is_active = True
-            label = (row.get("label") or policies_by_id.get(canonical_id, {}).get("label") or canonical_id).strip()
-            file_path = (row.get("file_path") or policies_by_id.get(canonical_id, {}).get("file_path") or "").strip().lstrip("/")
-            policies_by_id[canonical_id] = {
-                "id": canonical_id,
-                "label": label,
-                "file_path": file_path,
-                "url": f"/uploads/{file_path}" if file_path else "",
-                "is_active": is_active,
-                "updated_at": row.get("updated_at") or "",
-                "updated_by": row.get("updated_by") or "",
-            }
-
-    default_order = [normalize_policy_id(policy.get("id")) for policy in DEFAULT_POLICY_DEFINITIONS]
-    ordered = []
-    for canonical_id in default_order:
-        row = policies_by_id.get(canonical_id)
-        if not row:
-            continue
-        if not include_inactive and not row.get("is_active", True):
-            continue
-        ordered.append(row)
-
-    remaining_ids = sorted(
-        [pid for pid in policies_by_id.keys() if pid not in set(default_order)],
-        key=lambda pid: (policies_by_id[pid].get("label") or pid).lower(),
-    )
-    for canonical_id in remaining_ids:
-        row = policies_by_id.get(canonical_id)
-        if not row:
-            continue
-        if not include_inactive and not row.get("is_active", True):
-            continue
-        ordered.append(row)
-
-    return ordered
-
-
-def normalize_optional_date_field(value, field_name: str):
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = datetime.strptime(raw, "%Y-%m-%d")
-    except ValueError as exc:
-        raise ValueError(f"Invalid {field_name}. Use YYYY-MM-DD.") from exc
-    return parsed.strftime("%Y-%m-%d")
-
-
-def user_progress_snapshot(
-    email: str,
-    docs=None,
-    tasks=None,
-    policies=None,
-    trainings=None,
-    it_provisions=None,
-    required_doc_types=None,
-    it_access_items=None,
-    compliance_items=None,
-):
+def user_progress_snapshot(email: str, docs=None, tasks=None, policies=None, trainings=None, it_provisions=None, required_doc_types=None):
     docs = docs or []
     tasks = tasks or []
     policies = policies or []
     trainings = trainings or []
     it_provisions = it_provisions or []
-    it_access_items = it_access_items or []
-    compliance_items = compliance_items or []
 
     ud = [d for d in docs if d.get("uploader_email") == email]
     ut = [t for t in tasks if t.get("owner_email") == email]
     upol = [p for p in policies if p.get("email") == email]
-    required_policy_ids = {policy["id"] for policy in list_policy_catalog()}
-    signed_policy_ids = set()
-    for policy_row in upol:
-        canonical_policy_id = normalize_policy_id(policy_row.get("policy_id") or "")
-        if canonical_policy_id in required_policy_ids:
-            signed_policy_ids.add(canonical_policy_id)
     utr = [t for t in trainings if t.get("email") == email]
     uit = [p for p in it_provisions if p.get("email") == email]
-    uita = [item for item in it_access_items if (item.get("email") or "").strip().lower() == email]
-    ucomp = [item for item in compliance_items if (item.get("email") or "").strip().lower() == email]
-    it_summary = it_access_summary_for_rows(uita)
-    it_done = bool(it_summary.get("all_confirmed")) or bool(uit)
-    compliance_summary = compliance_summary_for_rows(ucomp)
-    compliance_approved = bool(compliance_summary.get("all_approved"))
 
     required_doc_types = required_doc_types or REQUIRED_DOCUMENT_TYPES
     required_doc_ids = [d["id"] for d in required_doc_types if not d.get("optional")]
@@ -1561,10 +544,9 @@ def user_progress_snapshot(
     doc_done = sum(1 for status in doc_status_by_type.values() if status == "approved")
 
     expected_checks = [
-        {"key": "policy_ack", "label": "Policies acknowledged", "done": required_policy_ids.issubset(signed_policy_ids)},
+        {"key": "policy_ack", "label": "Policies acknowledged", "done": bool(upol)},
         {"key": "training", "label": "Training completed", "done": bool(utr)},
-        {"key": "it_access", "label": "IT provisioning completed", "done": it_done},
-        {"key": "compliance_review", "label": "Compliance approved", "done": compliance_approved},
+        {"key": "it_access", "label": "IT provisioning completed", "done": bool(uit)},
     ]
     extra_total = len(expected_checks)
     extra_done = sum(1 for item in expected_checks if item["done"])
@@ -1576,95 +558,25 @@ def user_progress_snapshot(
     completed = doc_done + task_done
     percentage = (completed / total_items * 100) if total_items else 0
 
-    docs_complete = doc_total == 0 or doc_done == doc_total
-    has_document_activity = bool(ud)
-    policies_done = required_policy_ids.issubset(signed_policy_ids)
-    training_done = bool(utr)
-    manager_tasks = [t for t in ut if (t.get("category") or "").strip().lower() == "manager"]
-    manager_tasks_open = [t for t in manager_tasks if (t.get("status") or "").strip().lower() != "completed"]
-
-    if docs_complete and task_done == task_total and task_total > 0 and compliance_approved:
+    if doc_done == doc_total and task_done == task_total and task_total > 0:
         stage = "Completed"
-    elif not docs_complete:
-        stage = "Documents" if has_document_activity else "Account Setup"
-    elif not it_done:
-        stage = "IT Access"
-    elif not training_done or not policies_done:
-        stage = "Training/Orientation"
-    elif not compliance_approved:
-        stage = "Compliance Review"
-    elif manager_tasks_open:
-        stage = "Project Assignment"
-    elif any((t.get("status") or "").strip().lower() != "completed" for t in ut):
-        stage = "Project Assignment"
+    elif doc_done == doc_total:
+        stage = "IT/Project/Training"
+    elif doc_done:
+        stage = "Documents"
     else:
-        stage = "Completed"
+        stage = "Account Created"
 
     return {
         "email": email,
         "documents": {"total": doc_total, "approved": doc_done},
         "tasks": {"total": task_total, "completed": task_done},
-        "policies_signed": len(signed_policy_ids),
+        "policies_signed": len(upol),
         "training_completed": len(utr),
-        "it_provisioned": int(it_summary.get("confirmed_count") or len(uit)),
-        "it_access": {
-            **it_summary,
-            "legacy_records": len(uit),
-        },
-        "compliance": compliance_summary,
+        "it_provisioned": len(uit),
         "progress_percent": round(percentage, 2),
         "stage": stage,
     }
-
-
-def hydrate_hires_with_context(
-    hires,
-    attachments,
-    docs,
-    tasks,
-    policies,
-    trainings,
-    it_provisions,
-    it_access_items=None,
-    compliance_items=None,
-    users_by_email=None,
-):
-    users_by_email = users_by_email or {}
-    it_access_items = it_access_items or []
-    compliance_items = compliance_items or []
-    att_by_hire = {}
-    for att in attachments:
-        att_by_hire.setdefault(att["hire_id"], []).append(att)
-
-    hydrated = []
-    for hire in hires:
-        item = dict(hire or {})
-        email = (item.get("email") or "").lower()
-        linked_user = users_by_email.get(email, {})
-        item["attachments"] = att_by_hire.get(item.get("id"), [])
-        item["avatar_url"] = linked_user.get("avatar_url") or ""
-        if linked_user.get("full_name"):
-            item["full_name"] = linked_user.get("full_name")
-        if email:
-            employment_type = (item.get("employment_type") or "").lower()
-            compliance_for_email = [row for row in compliance_items if (row.get("email") or "").strip().lower() == email]
-            item["progress"] = user_progress_snapshot(
-                email,
-                docs=docs,
-                tasks=tasks,
-                policies=policies,
-                trainings=trainings,
-                it_provisions=it_provisions,
-                it_access_items=it_access_items,
-                compliance_items=compliance_items,
-                required_doc_types=effective_required_document_types_for_email(email, employment_type),
-            )
-            item["compliance"] = {
-                "items": serialize_compliance_rows(compliance_for_email),
-                "summary": compliance_summary_for_rows(compliance_for_email),
-            }
-        hydrated.append(item)
-    return hydrated
 
 
 def load_tasks():
@@ -1672,7 +584,6 @@ def load_tasks():
 
 
 def create_task_record(payload: dict) -> dict:
-    due_date = payload.get("due_date")
     return {
         "id": secrets.token_hex(8),
         "title": payload.get("title", "").strip(),
@@ -1681,196 +592,743 @@ def create_task_record(payload: dict) -> dict:
         "assigned_by": payload.get("assigned_by", "").strip().lower(),
         "category": payload.get("category", "employee"),
         "status": payload.get("status", "pending"),
-        "due_date": due_date if due_date else None,
+        "due_date": payload.get("due_date", "").strip(),
         # store as MySQL-friendly strings (avoid ISO/Z format errors)
         "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
-register_admin_routes(
-    app,
-    {
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "SUPERADMIN_ROLE": SUPERADMIN_ROLE,
-        "can_manage_hiring_admin": can_manage_hiring_admin,
-        "fetch_one": fetch_one,
-        "fetch_all": fetch_all,
-        "execute": execute,
-        "append_audit": append_audit,
-        "load_org_structure": load_org_structure,
-        "session_department_name": session_department_name,
-        "list_users": list_users,
-        "user_progress_snapshot": user_progress_snapshot,
-        "effective_required_document_types_for_email": effective_required_document_types_for_email,
-    },
-)
-register_hire_routes(
-    app,
-    {
-        "login_required": login_required,
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "SUPERADMIN_ROLE": SUPERADMIN_ROLE,
-        "execute": execute,
-        "fetch_one": fetch_one,
-        "fetch_all": fetch_all,
-        "append_audit": append_audit,
-        "session_department_name": session_department_name,
-        "get_db_connection": get_db_connection,
-        "ONBOARDING_BLUEPRINT": ONBOARDING_BLUEPRINT,
-        "PLACEHOLDER_FILES": PLACEHOLDER_FILES,
-        "UPLOAD_DIR": UPLOAD_DIR,
-        "hydrate_hires_with_context": hydrate_hires_with_context,
-        "can_view_documents_admin": can_view_documents_admin,
-        "can_manage_hiring_admin": can_manage_hiring_admin,
-        "can_view_compliance_admin": can_view_compliance_admin,
-        "can_manage_compliance_admin": can_manage_compliance_admin,
-        "department_and_title_are_valid": department_and_title_are_valid,
-        "normalize_optional_date_field": normalize_optional_date_field,
-        "get_role_id": get_role_id,
-        "get_department_id": get_department_id,
-        "update_user_avatar_file": update_user_avatar_file,
-        "email_is_valid": email_is_valid,
-        "allowed_file": allowed_file,
-        "PROFILE_DIR": PROFILE_DIR,
-        "HIRES_DIR": HIRES_DIR,
-        "HR_ATTACHMENT_TYPES": HR_ATTACHMENT_TYPES,
-        "create_user_record": create_user_record,
-        "register_user_db": register_user_db,
-        "enrich_document_record": enrich_document_record,
-        "serialize_task_rows": serialize_task_rows,
-        "ensure_compliance_rows_for_email": ensure_compliance_rows_for_email,
-        "load_compliance_rows_for_email": load_compliance_rows_for_email,
-        "compliance_summary_for_rows": compliance_summary_for_rows,
-        "compliance_checklist_items": compliance_checklist_items,
-        "normalize_compliance_state": normalize_compliance_state,
-        "COMPLIANCE_STATE_PENDING": COMPLIANCE_STATE_PENDING,
-        "COMPLIANCE_STATE_APPROVED": COMPLIANCE_STATE_APPROVED,
-        "COMPLIANCE_STATE_FLAGGED": COMPLIANCE_STATE_FLAGGED,
-        "POLICY_ID_GROUPS": POLICY_ID_GROUPS,
-        "normalize_policy_id": normalize_policy_id,
-        "list_policy_catalog": list_policy_catalog,
-    },
-)
-register_it_access_routes(
-    app,
-    {
-        "login_required": login_required,
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "fetch_one": fetch_one,
-        "execute": execute,
-        "append_audit": append_audit,
-        "can_view_it_access_admin": can_view_it_access_admin,
-        "can_manage_it_access_admin": can_manage_it_access_admin,
-        "ensure_it_access_rows_for_email": ensure_it_access_rows_for_email,
-        "load_it_access_items_for_email": load_it_access_items_for_email,
-        "it_access_template_items": it_access_template_items,
-        "normalize_it_access_state": normalize_it_access_state,
-        "it_access_summary_for_rows": it_access_summary_for_rows,
-        "IT_ACCESS_STATE_NOT_CONFIGURED": IT_ACCESS_STATE_NOT_CONFIGURED,
-        "IT_ACCESS_STATE_PENDING": IT_ACCESS_STATE_PENDING,
-        "IT_ACCESS_STATE_CONFIRMED": IT_ACCESS_STATE_CONFIRMED,
-        "IT_ACCESS_STATE_DECLINED": IT_ACCESS_STATE_DECLINED,
-        "IT_ACCESS_STATE_ERROR": IT_ACCESS_STATE_ERROR,
-    },
-)
-register_document_routes(
-    app,
-    {
-        "login_required": login_required,
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "execute": execute,
-        "fetch_all": fetch_all,
-        "fetch_one": fetch_one,
-        "get_db_connection": get_db_connection,
-        "append_audit": append_audit,
-        "can_manage_documents_admin": can_manage_documents_admin,
-        "can_view_documents_admin": can_view_documents_admin,
-        "can_manage_hiring_admin": can_manage_hiring_admin,
-        "effective_required_document_types_for_email": effective_required_document_types_for_email,
-        "get_user_role": get_user_role,
-        "email_is_valid": email_is_valid,
-        "allowed_file": allowed_file,
-        "MAX_UPLOAD_BYTES": MAX_UPLOAD_BYTES,
-        "UPLOAD_DIR": UPLOAD_DIR,
-        "enrich_document_record": enrich_document_record,
-        "REQUIRED_DOCUMENT_TYPES": REQUIRED_DOCUMENT_TYPES,
-        "slugify_doc_key": slugify_doc_key,
-    },
-)
-register_task_routes(
-    app,
-    {
-        "login_required": login_required,
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "TASK_CATEGORIES": TASK_CATEGORIES,
-        "TASK_STATUSES": TASK_STATUSES,
-        "fetch_one": fetch_one,
-        "fetch_all": fetch_all,
-        "execute": execute,
-        "get_db_connection": get_db_connection,
-        "session_department_name": session_department_name,
-        "task_category_allowed_for_current_admin": task_category_allowed_for_current_admin,
-        "normalize_optional_date": normalize_optional_date,
-        "create_task_record": create_task_record,
-        "serialize_task_rows": serialize_task_rows,
-        "user_progress_snapshot": user_progress_snapshot,
-        "effective_required_document_types_for_email": effective_required_document_types_for_email,
-        "ensure_compliance_rows_for_email": ensure_compliance_rows_for_email,
-    },
-)
-register_auth_routes(
-    app,
-    {
-        "verify_user": verify_user,
-        "get_user_record": get_user_record,
-        "canonicalize_role_and_department": canonicalize_role_and_department,
-        "ensure_csrf_token": ensure_csrf_token,
-        "login_required": login_required,
-        "require_role": require_role,
-        "ADMIN_ROLES": ADMIN_ROLES,
-        "SUPERADMIN_ROLE": SUPERADMIN_ROLE,
-        "quote_plus": quote_plus,
-        "list_users": list_users,
-        "email_is_valid": email_is_valid,
-        "ROLE_CATEGORIES": ROLE_CATEGORIES,
-        "fetch_one": fetch_one,
-        "fetch_all": fetch_all,
-        "execute": execute,
-        "get_role_id": get_role_id,
-        "get_department_id": get_department_id,
-        "append_audit": append_audit,
-        "load_org_structure": load_org_structure,
-        "can_manage_hiring_admin": can_manage_hiring_admin,
-    },
-)
-serve_frontend = register_page_routes(
-    app,
-    {
-        "FRONT_END_DIR": FRONT_END_DIR,
-        "STYLE_DIR": STYLE_DIR,
-        "UPLOAD_DIR": UPLOAD_DIR,
-        "quote_plus": quote_plus,
-        "login_required": login_required,
-        "require_role": require_role,
-        "SUPERADMIN_ROLE": SUPERADMIN_ROLE,
-    },
-)
+@app.post("/documents/upload")
+@login_required
+def upload_documents():
+    full_name = (request.form.get("full_name") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    doc_type = (request.form.get("doc_type") or "").strip().lower()
+    files = request.files.getlist("documents")
+
+    if not full_name or not email:
+        return Response("Full name and email are required.", status=400, mimetype="text/plain")
+
+    if not email_is_valid(email):
+        return Response("Invalid email format.", status=400, mimetype="text/plain")
+
+    valid_doc_ids = {d["id"] for d in REQUIRED_DOCUMENT_TYPES}
+    if not doc_type or doc_type not in valid_doc_ids:
+        return Response("Invalid or missing document type.", status=400, mimetype="text/plain")
+
+    requester = session.get("email", "")
+    requester_role = session.get("role", "")
+    if requester != email and requester_role not in {"hr", "manager", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
+    if not files:
+        return Response("No documents provided.", status=400, mimetype="text/plain")
+
+    stored_entries = []
+    for file in files:
+        if not file or not file.filename:
+            continue
+
+        if not allowed_file(file.filename):
+            return Response("Unsupported file type.", status=400, mimetype="text/plain")
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > MAX_UPLOAD_BYTES:
+            return Response("File too large. Max 10MB per file.", status=400, mimetype="text/plain")
+
+        safe_name = secure_filename(file.filename)
+        doc_id = secrets.token_hex(12)
+        stored_name = f"{doc_id}_{safe_name}"
+        destination = UPLOAD_DIR / stored_name
+        file.save(destination)
+        checksum = hashlib.sha256(destination.read_bytes()).hexdigest()
+
+        execute(
+            """
+            INSERT INTO document (id, original_name, stored_name, uploader_email, uploader_name, status, size_bytes, checksum_sha256, uploaded_at, doc_type)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s)
+            """,
+            (
+                doc_id,
+                file.filename,
+                stored_name,
+                email,
+                full_name,
+                "pending_review",
+                size,
+                checksum,
+                doc_type,
+            ),
+        )
+
+        stored_entries.append(
+            {
+                "id": doc_id,
+                "original_name": file.filename,
+                "stored_name": stored_name,
+                "uploader_email": email,
+                "uploader_name": full_name,
+                "status": "pending_review",
+                "size_bytes": size,
+                "checksum_sha256": checksum,
+                "doc_type": doc_type,
+            }
+        )
+
+    if not stored_entries:
+        return Response("No valid documents received.", status=400, mimetype="text/plain")
+
+    return jsonify({"status": "ok", "documents": [enrich_document_record(doc) for doc in stored_entries]})
+
+
+@app.get("/documents")
+@login_required
+def list_documents():
+    email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if email:
+        docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
+    else:
+        docs = fetch_all("SELECT * FROM document")
+    return jsonify({"documents": [enrich_document_record(doc) for doc in docs]})
+
+
+@app.post("/documents/<doc_id>/status")
+def update_document_status(doc_id):
+    role = session.get("role", "")
+    if role not in {"hr", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in {"approved", "rejected", "pending_review"}:
+        return Response("Invalid status.", status=400, mimetype="text/plain")
+
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE document SET status = %s WHERE id = %s", (status, doc_id))
+        connection.commit()
+        if cursor.rowcount == 0:
+            return Response("Document not found.", status=404, mimetype="text/plain")
+    append_audit("doc_status", session.get("email", ""), {"doc_id": doc_id, "status": status})
+
+    return jsonify({"status": "ok", "document_id": doc_id, "new_status": status})
+
+
+@app.post("/api/tasks")
+@login_required
+@require_role({"hr", "manager", "it", "compliance"})
+def create_task():
+    payload = {
+        "title": request.form.get("title") or "",
+        "description": request.form.get("description") or "",
+        "owner_email": (request.form.get("owner_email") or "").lower(),
+        "assigned_by": (request.form.get("assigned_by") or "").lower(),
+        "category": (request.form.get("category") or "").lower(),
+        "status": (request.form.get("status") or "pending").lower(),
+        "due_date": request.form.get("due_date") or "",
+    }
+
+    if not payload["title"] or not payload["owner_email"]:
+        return Response("Title and owner_email are required.", status=400, mimetype="text/plain")
+
+    if payload["category"] and payload["category"] not in ROLE_CATEGORIES:
+        return Response("Invalid category.", status=400, mimetype="text/plain")
+
+    if payload["status"] not in TASK_STATUSES:
+        return Response("Invalid status.", status=400, mimetype="text/plain")
+
+    record = create_task_record(payload)
+    execute(
+        """
+        INSERT INTO task (id, title, description, owner_email, assigned_by, category, status, due_date, created_at, updated_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            record["id"],
+            record["title"],
+            record["description"],
+            record["owner_email"],
+            record["assigned_by"],
+            record["category"],
+            record["status"],
+            record["due_date"],
+            record["created_at"],
+            record["updated_at"],
+        ),
+    )
+    return jsonify({"status": "ok", "task": record})
+
+
+@app.get("/api/tasks")
+@login_required
+def list_tasks_api():
+    email = (request.args.get("email") or "").strip().lower()
+    category = (request.args.get("category") or "").strip().lower()
+    query = "SELECT * FROM task WHERE 1=1"
+    params = []
+    if email:
+        query += " AND owner_email = %s"
+        params.append(email)
+    if category:
+        query += " AND category = %s"
+        params.append(category)
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
+        query += " AND owner_email = %s"
+        params.append(email)
+    if email and email != requester and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
+    tasks = fetch_all(query, params)
+    return jsonify({"tasks": tasks})
+
+
+@app.post("/api/tasks/<task_id>/status")
+@login_required
+def update_task_status(task_id):
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in TASK_STATUSES:
+        return Response("Invalid status.", status=400, mimetype="text/plain")
+
+    task = fetch_one("SELECT owner_email FROM task WHERE id = %s", (task_id,))
+    if not task:
+        return Response("Task not found.", status=404, mimetype="text/plain")
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if requester != task.get("owner_email") and requester_role not in {"hr", "manager", "it", "compliance"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE task SET status = %s, updated_at = %s WHERE id = %s",
+                (status, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), task_id),
+            )
+        connection.commit()
+    return jsonify({"status": "ok", "task_id": task_id, "new_status": status})
+
+
+@app.get("/api/progress")
+@login_required
+def onboarding_progress():
+    email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
+    if email:
+        docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
+        tasks = fetch_all("SELECT * FROM task WHERE owner_email = %s", (email,))
+        it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,))
+    else:
+        docs = fetch_all("SELECT * FROM document")
+        tasks = fetch_all("SELECT * FROM task")
+        it_provisions = fetch_all("SELECT * FROM it_provision")
+
+    def user_progress(e):
+        role = get_user_role(e)
+        required_doc_types = required_document_types_for_role(role)
+        return user_progress_snapshot(
+            e,
+            docs=docs,
+            tasks=tasks,
+            policies=fetch_all("SELECT * FROM policy_ack"),
+            trainings=fetch_all("SELECT * FROM training_completion"),
+            it_provisions=it_provisions,
+            required_doc_types=required_doc_types,
+        )
+
+    if email:
+        if email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        return jsonify(user_progress(email))
+
+    if requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
+    emails = {d.get("uploader_email") for d in docs if d.get("uploader_email")} | {t.get("owner_email") for t in tasks if t.get("owner_email")}
+    progress_list = [user_progress(e) for e in emails]
+    return jsonify({"all": progress_list})
+
+
+@app.get("/documents/requirements")
+@login_required
+def document_requirements():
+    email = (request.args.get("email") or "").strip().lower()
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if not email and requester_role == "employee":
+        email = requester or ""
+    if email and email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not email and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if email:
+        docs = fetch_all("SELECT * FROM document WHERE uploader_email = %s", (email,))
+    else:
+        docs = fetch_all("SELECT * FROM document")
+    target_role = get_user_role(email) if email else ""
+    effective_doc_types = required_document_types_for_role(target_role) if email else REQUIRED_DOCUMENT_TYPES
+    by_type = {}
+    for doc_type in effective_doc_types:
+        by_type[doc_type["id"]] = {
+            "id": doc_type["id"],
+            "label": doc_type["label"],
+            "optional": bool(doc_type.get("optional")),
+            "status": "missing",
+            "documents": [],
+            "last_updated": None,
+        }
+
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+
+    for doc in docs:
+        if email and doc.get("uploader_email") != email and requester_role not in {"hr", "manager", "compliance"}:
+            continue
+        dt = doc.get("doc_type")
+        if dt and dt in by_type:
+            bucket = by_type[dt]
+            bucket["documents"].append(enrich_document_record(doc))
+            uploaded_at = doc.get("uploaded_at")
+            if uploaded_at:
+                bucket["last_updated"] = max(bucket["last_updated"], uploaded_at) if bucket["last_updated"] else uploaded_at
+            if doc.get("status") == "approved":
+                bucket["status"] = "approved"
+            elif bucket["status"] != "approved":
+                bucket["status"] = doc.get("status", "pending_review")
+
+    return jsonify({"requirements": list(by_type.values())})
+
+
+@app.post("/login")
+def login():
+    username = (request.form.get("username") or "").strip().lower()
+    password = request.form.get("password") or ""
+
+    try:
+        is_valid = verify_user(username, password)
+    except Exception as exc:
+        app.logger.error("Login error: %s", exc, exc_info=True)
+        return Response("Internal Server Error", status=500, mimetype="text/plain")
+
+    if is_valid:
+        user = get_user_record(username) or {}
+        session["email"] = username
+        session["role"] = (user.get("role") or "employee").lower()
+        ensure_csrf_token()
+        # Send the user to their dashboard with email prefilled for status checks.
+        target = f"/dashboard.html?email={quote_plus(username)}"
+        return redirect(target, code=302)
+
+    return redirect("/log_in.html?error=invalid_credentials", code=302)
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect("/log_in.html")
+
+
+@app.get("/api/user")
+@login_required
+def get_user():
+    email = (request.args.get("email") or "").strip().lower()
+    if not email:
+        return Response("Email is required.", status=400, mimetype="text/plain")
+
+    requester = session.get("email")
+    requester_role = session.get("role", "")
+    if email != requester and requester_role not in {"hr", "manager", "compliance", "it"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+
+    record = get_user_record(email)
+    if not record:
+        return Response("User not found.", status=404, mimetype="text/plain")
+
+    # normalize keys
+    payload = {
+        "email": record.get("email"),
+        "full_name": record.get("full_name") or record.get("name") or "",
+        "role": record.get("role") or "",
+        "department": record.get("department") or "",
+        "created_at": record.get("created_at") or record.get("createdAt") or "",
+        "avatar_url": record.get("avatar_url") or "",
+    }
+    return jsonify(payload)
+
+
+@app.get("/api/users")
+@login_required
+@require_role({"hr", "manager", "compliance", "it"})
+def get_users():
+    role_filter = (request.args.get("role") or "").strip().lower()
+    users = list_users()
+    if role_filter:
+        users = [u for u in users if (u.get("role") or "").lower() == role_filter]
+    return jsonify({"users": users})
+
+
+@app.post("/api/policy/ack")
+@login_required
+def policy_ack():
+    session_email = (session.get("email") or "").strip().lower()
+    email = (request.form.get("email") or "").strip().lower()
+    policy_id = (request.form.get("policy_id") or "").strip()
+    signature = (request.form.get("signature") or "").strip()
+    if not session_email:
+        return Response("Authentication required", status=401, mimetype="text/plain")
+    if not policy_id or not signature:
+        return Response("policy_id and signature are required.", status=400, mimetype="text/plain")
+    if email and email != session_email:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    execute(
+        "INSERT INTO policy_ack (id, email, policy_id, signature, status, signed_at) VALUES (%s,%s,%s,%s,%s,NOW())",
+        (secrets.token_hex(8), session_email, policy_id, signature, "signed"),
+    )
+    append_audit("policy_ack", session_email, {"policy_id": policy_id})
+    return jsonify({"status": "ok", "email": session_email})
+
+
+@app.get("/api/policy/status")
+@login_required
+def policy_status():
+    email = (request.args.get("email") or "").strip().lower()
+    session_email = (session.get("email") or "").strip().lower()
+
+
+    requester_role = session.get("role", "")
+    if email:
+        if email != session_email and requester_role not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,))
+    else:
+        if requester_role in {"hr", "manager", "compliance"}:
+            policies = fetch_all("SELECT * FROM policy_ack")
+        else:
+            policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (session_email,))
+    return jsonify({"policies": policies})
+
+
+@app.get("/api/onboarding/blueprint")
+@login_required
+def onboarding_blueprint():
+    """
+    Lightweight API that returns the onboarding flow captured in the UPRA questionnaire.
+    Includes required documents and placeholder file URLs so the front end can link without 404s.
+    """
+    placeholders = []
+    for rel_path, _ in PLACEHOLDER_FILES:
+        placeholders.append({"path": f"/uploads/{rel_path}", "exists": (UPLOAD_DIR / rel_path).exists()})
+    #para no mutar constante
+    blueprint = json.loads(json.dumps(ONBOARDING_BLUEPRINT))
+    blueprint["placeholders"] = placeholders
+    return jsonify(blueprint)
+
+
+@app.get("/api/training/list")
+@login_required
+def training_list():
+    modules = fetch_all("SELECT * FROM training_module")
+    if not modules:
+        defaults = [
+            ("security101", "Security 101", "Basic security practices"),
+            ("handbook", "Employee Handbook", "Review company policies"),
+            ("tools", "Tools Orientation", "Intro to internal tools"),
+        ]
+        with get_db_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO training_module (id, title, description) VALUES (%s,%s,%s)",
+                    defaults,
+                )
+            connection.commit()
+        modules = fetch_all("SELECT * FROM training_module")
+    return jsonify({"modules": modules})
+
+
+@app.post("/api/training/complete")
+@login_required
+def training_complete():
+    email = (request.form.get("email") or "").strip().lower()
+    module_id = (request.form.get("module_id") or "").strip()
+    if not email or not module_id:
+        return Response("Email and module_id are required.", status=400, mimetype="text/plain")
+    if email != session.get("email"):
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    execute("DELETE FROM training_completion WHERE email = %s AND module_id = %s", (email, module_id))
+    execute(
+        "INSERT INTO training_completion (email, module_id, completed_at) VALUES (%s,%s,NOW())",
+        (email, module_id),
+    )
+    append_audit("training_complete", email, {"module_id": module_id})
+    return jsonify({"status": "ok"})
+
+
+@app.get("/api/training/status")
+@login_required
+def training_status():
+    email = (request.args.get("email") or "").strip().lower()
+    if email:
+        if email != session.get("email") and session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        completions = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,))
+    else:
+        if session.get("role") not in {"hr", "manager", "compliance"}:
+            return Response("Forbidden", status=403, mimetype="text/plain")
+        completions = fetch_all("SELECT * FROM training_completion")
+    return jsonify({"completions": completions})
+
+
+@app.post("/api/it/provision")
+@require_role({"it", "manager"})
+def it_provision():
+    email = (request.form.get("email") or "").strip().lower()
+    items = request.form.get("items") or "[]"
+    try:
+        parsed = json.loads(items)
+    except json.JSONDecodeError:
+        return Response("Invalid items payload.", status=400, mimetype="text/plain")
+    execute(
+        "INSERT INTO it_provision (id, email, items_json, completed_at) VALUES (%s,%s,%s,NOW())",
+        (secrets.token_hex(8), email, json.dumps(parsed)),
+    )
+    append_audit("it_provision", session.get("email", ""), {"email": email, "items": parsed})
+    return jsonify({"status": "ok"})
+
+
+@app.get("/api/report/summary")
+@require_role({"hr", "manager", "compliance", "it"})
+def report_summary():
+    users = list_users()
+    docs = fetch_all("SELECT status FROM document")
+    tasks = fetch_all("SELECT status FROM task")
+    policies = fetch_all("SELECT id FROM policy_ack")
+    trainings = fetch_all("SELECT id FROM training_completion")
+    summary = {
+        "users": len(users),
+        "documents_uploaded": len(docs),
+        "documents_approved": sum(1 for d in docs if d.get("status") == "approved"),
+        "tasks_total": len(tasks),
+        "tasks_completed": sum(1 for t in tasks if t.get("status") == "completed"),
+        "policy_signed": len(policies),
+        "training_completed": len(trainings),
+    }
+    return jsonify({"summary": summary})
+
+
+@app.get("/api/new-hires")
+@require_role({"hr", "manager", "compliance", "it"})
+def list_new_hires():
+    hires = fetch_all("SELECT * FROM new_hire")
+    attachments = fetch_all("SELECT * FROM new_hire_attachment")
+    docs = fetch_all("SELECT * FROM document")
+    tasks = fetch_all("SELECT * FROM task")
+    policies = fetch_all("SELECT * FROM policy_ack")
+    trainings = fetch_all("SELECT * FROM training_completion")
+    it_provisions = fetch_all("SELECT * FROM it_provision")
+
+    att_by_hire = {}
+    for att in attachments:
+        att_by_hire.setdefault(att["hire_id"], []).append(att)
+
+    for hire in hires:
+        hire["attachments"] = att_by_hire.get(hire["id"], [])
+        email = (hire.get("email") or "").lower()
+        if email:
+            role = (hire.get("role") or "").lower()
+            hire["progress"] = user_progress_snapshot(
+                email,
+                docs=docs,
+                tasks=tasks,
+                policies=policies,
+                trainings=trainings,
+                it_provisions=it_provisions,
+                required_doc_types=required_document_types_for_role(role),
+            )
+    return jsonify({"hires": hires})
+
+
+@app.post("/api/profile/photo")
+@login_required
+def upload_profile_photo():
+    email = (request.form.get("email") or "").strip().lower()
+    file = request.files.get("photo")
+
+    if not email or not email_is_valid(email):
+        return Response("Valid email is required.", status=400, mimetype="text/plain")
+    if email != session.get("email") and session.get("role") not in {"hr", "manager"}:
+        return Response("Forbidden", status=403, mimetype="text/plain")
+    if not file or not file.filename:
+        return Response("No photo provided.", status=400, mimetype="text/plain")
+    if not allowed_file(file.filename):
+        return Response("Unsupported file type.", status=400, mimetype="text/plain")
+
+    safe_name = secure_filename(file.filename)
+    stored_name = f"{secrets.token_hex(8)}_{safe_name}"
+    destination = PROFILE_DIR / stored_name
+    file.save(destination)
+
+    url_path = f"/uploads/profile/{stored_name}"
+    saved = update_user_avatar_file(email, url_path)
+    if not saved:
+        return Response("User not found.", status=404, mimetype="text/plain")
+
+    return jsonify({"status": "ok", "avatar_url": url_path})
+
+
+@app.post("/api/hr/register-hire")
+@app.post("/api/hr/register-hire/")
+@require_role({"hr", "manager"})
+def register_hire():
+    data = request.form
+    files = request.files
+    required_fields = ["first_name", "last_name", "email", "role", "temp_password"]
+    for field in required_fields:
+        if not data.get(field):
+            return Response(f"{field} is required.", status=400, mimetype="text/plain")
+
+    email = data.get("email").strip().lower()
+    if not email_is_valid(email):
+        return Response("Invalid email.", status=400, mimetype="text/plain")
+    temp_password = data.get("temp_password") or ""
+    if len(temp_password) < 8:
+        return Response("Temporary password must be at least 8 characters.", status=400, mimetype="text/plain")
+    if fetch_one("SELECT email FROM `user` WHERE email = %s", (email,)):
+        return Response("A user with this email already exists.", status=409, mimetype="text/plain")
+
+    hire_id = secrets.token_hex(8)
+    first = data.get("first_name", "").strip()
+    middle = data.get("middle_name", "").strip()
+    last = data.get("last_name", "").strip()
+    full_name = " ".join(part for part in [first, middle, last] if part).strip()
+    role = (data.get("role", "").strip() or "employee").lower()
+    department = data.get("department", "").strip()
+
+    execute(
+        """
+        INSERT INTO new_hire (
+            id, first_name, middle_name, last_name, email, phone, dob, gov_id,
+            street, city, state, postal_code, country, role, department, manager,
+            start_date, status, created_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        """,
+        (
+            hire_id,
+            first,
+            middle,
+            last,
+            email,
+            data.get("phone", "").strip(),
+            data.get("dob", None) or None,
+            data.get("gov_id", "").strip(),
+            data.get("street", "").strip(),
+            data.get("city", "").strip(),
+            data.get("state", "").strip(),
+            data.get("postal_code", "").strip(),
+            data.get("country", "").strip(),
+            role,
+            department,
+            data.get("manager", "").strip(),
+            data.get("start_date", None) or None,
+            "pending_document_submission",
+        ),
+    )
+    try:
+        register_user_db(
+            create_user_record(
+                email=email,
+                hashed=generate_password_hash(temp_password),
+                full_name=full_name or email,
+                role=role,
+                department=department,
+            )
+        )
+    except pymysql.err.IntegrityError:
+        return Response("A user with this email already exists.", status=409, mimetype="text/plain")
+
+    for att in HR_ATTACHMENT_TYPES:
+        f = files.get(att["id"])
+        if f and f.filename:
+            if not allowed_file(f.filename):
+                return Response(f"Unsupported file type for {att['id']}.", status=400, mimetype="text/plain")
+            safe = secure_filename(f.filename)
+            stored = f"{hire_id}_{att['id']}_{safe}"
+            path = HIRES_DIR / stored
+            f.save(path)
+            execute(
+                "INSERT INTO new_hire_attachment (hire_id, att_type, original_name, stored_name, url) VALUES (%s,%s,%s,%s,%s)",
+                (hire_id, att["id"], f.filename, stored, f"/uploads/hires/{stored}"),
+            )
+
+    append_audit("hire_register", session.get("email", ""), {"hire_id": hire_id, "email": email, "role": role})
+    return jsonify({"status": "ok", "hire_id": hire_id, "account_created": True})
+
+
+def serve_frontend(asset_path: str):
+    if not FRONT_END_DIR.exists():
+        return Response("Front-end directory missing", status=500, mimetype="text/plain")
+    
+    return send_from_directory(FRONT_END_DIR, asset_path)
+
+
+@app.get("/")
+def root():
+    return serve_frontend("log_in.html")
+
+
+@app.get("/log_in.html")
+def login_page():
+    #mantener login accesible
+    return serve_frontend("log_in.html")
+
+
+@app.get("/style/<path:asset_path>")
+def style_assets(asset_path):
+    if not STYLE_DIR.exists():
+        return Response("Style directory missing", status=500, mimetype="text/plain")
+    
+    return send_from_directory(STYLE_DIR, asset_path)
+
+
+@app.get("/uploads/<path:asset_path>")
+@login_required
+def uploaded_assets(asset_path):
+    if not UPLOAD_DIR.exists():
+        return Response("Uploads directory missing", status=404, mimetype="text/plain")
+    download_requested = (request.args.get("download") or "").strip().lower() in {"1", "true", "yes"}
+    filename = (request.args.get("filename") or "").strip() or Path(asset_path).name
+    if download_requested:
+        return send_from_directory(UPLOAD_DIR, asset_path, as_attachment=True, download_name=filename)
+    return send_from_directory(UPLOAD_DIR, asset_path)
+
+
+@app.get("/<path:asset_path>")
+def static_assets(asset_path):
+    return serve_frontend(asset_path)
+
+
+if __name__ == "__main__":
+    app.run(host=HOST, port=PORT)
 
 
 @app.errorhandler(401)
 @app.errorhandler(403)
 def handle_auth_errors(err):
-    # For browser requests, serve the public login page directly.
+    #automatica al login
     if should_redirect_to_login_page():
         return serve_frontend("log_in.html")
     return Response(err.description if hasattr(err, "description") else "Forbidden", status=err.code, mimetype="text/plain")
-
-
-if __name__ == "__main__":
-    app.run(host=HOST, port=PORT)

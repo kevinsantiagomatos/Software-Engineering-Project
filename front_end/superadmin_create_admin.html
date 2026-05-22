@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Admin Account | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <link rel="stylesheet" href="/style/pages/superadmin_create_admin.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">S</div>
+      <div>
+        <div id="titleLine" style="font-size:1.08rem; font-weight:700;">Create Admin Account</div>
+        <div id="roleLine" style="font-size:.9rem; color:#d7e4ff;">--</div>
+      </div>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel">
+          <a class="menu-link" href="/superadmin_dashboard.html">Superadmin Console</a>
+          <a class="menu-link" href="/superadmin_create_admin.html">Create Admin Account</a>
+          <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
+          <a class="menu-link" href="/admin_metrics.html">Metrics</a>
+          <a class="menu-link" id="profileLink" href="/profile.html">My Profile</a>
+          <a class="menu-link" href="/log_in.html">Log Out</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="alert" class="alert"></div>
+
+      <section class="card">
+        <h2 class="title">Create Department Admin</h2>
+        <p class="subtitle">Create an active admin account for HR, IT, or Compliance directly from superadmin.</p>
+
+        <form id="createAdminForm" class="form-grid" novalidate>
+          <label>
+            <span>Full Name</span>
+            <input class="text-input" id="fullName" name="full_name" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input class="text-input" id="email" name="email" type="email" required />
+          </label>
+          <label>
+            <span>Department</span>
+            <select class="text-input" id="department" name="department" required>
+              <option value="">Select department</option>
+            </select>
+          </label>
+          <label>
+            <span>Job Title (optional)</span>
+            <select class="text-input" id="jobTitle" name="job_title">
+              <option value="">No job title</option>
+            </select>
+          </label>
+          <label class="full">
+            <span>Password</span>
+            <div class="password-row">
+              <input class="text-input" id="password" name="password" type="text" minlength="8" required />
+              <button id="genPasswordBtn" type="button" class="btn">Generate</button>
+            </div>
+          </label>
+          <div class="full actions">
+            <button class="submit-button" id="createBtn" type="submit">Create Admin</button>
+            <a class="btn-link" href="/superadmin_dashboard.html">Back to Superadmin Console</a>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      let csrfToken = null;
+      let departments = [];
+
+      const alertEl = document.getElementById("alert");
+      const avatarEl = document.getElementById("avatar");
+      const roleLineEl = document.getElementById("roleLine");
+      const profileLink = document.getElementById("profileLink");
+      const formEl = document.getElementById("createAdminForm");
+      const fullNameEl = document.getElementById("fullName");
+      const emailEl = document.getElementById("email");
+      const departmentEl = document.getElementById("department");
+      const jobTitleEl = document.getElementById("jobTitle");
+      const passwordEl = document.getElementById("password");
+      const createBtn = document.getElementById("createBtn");
+      const genPasswordBtn = document.getElementById("genPasswordBtn");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+
+      function showAlert(message, isError = false) {
+        alertEl.textContent = message;
+        alertEl.className = `alert ${isError ? "err" : "ok"}`;
+      }
+
+      async function fetchJson(url, opts = {}) {
+        const res = await fetch(url, opts);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error((await res.text()) || "Request failed");
+        const ct = res.headers.get("content-type") || "";
+        return ct.includes("application/json") ? res.json() : {};
+      }
+
+      async function getCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function generatePassword() {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        let out = "";
+        for (let i = 0; i < 14; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
+        return out;
+      }
+
+      function setJobTitlesForDepartment() {
+        const selected = (departmentEl.value || "").toLowerCase();
+        const dep = departments.find((d) => (d.name || "").toLowerCase() === selected);
+        const titles = dep?.job_titles || [];
+        jobTitleEl.innerHTML =
+          '<option value="">No job title</option>' +
+          titles.map((t) => `<option value="${t.name}">${t.name}</option>`).join("");
+      }
+
+      async function loadOrg() {
+        const data = await fetchJson("/api/org/structure");
+        departments = data.departments || [];
+        departmentEl.innerHTML =
+          '<option value="">Select department</option>' +
+          departments.map((d) => `<option value="${d.name}">${d.name}</option>`).join("");
+        setJobTitlesForDepartment();
+      }
+
+      async function bootstrap() {
+        const session = await fetchJson("/api/session");
+        const role = (session.role || "").toLowerCase();
+        if (role !== "superadmin") {
+          if (["admin", "manager"].includes(role)) {
+            window.location.replace("/admin_panel.html");
+          } else {
+            window.location.replace(`/dashboard.html?email=${encodeURIComponent(session.email || "")}`);
+          }
+          return;
+        }
+        roleLineEl.textContent = `Role: ${role} · ${session.email || ""}`;
+        avatarEl.textContent = (session.full_name || session.email || "S").slice(0, 1).toUpperCase();
+        profileLink.href = `/profile.html?email=${encodeURIComponent((session.email || "").toLowerCase())}`;
+        await loadOrg();
+        passwordEl.value = generatePassword();
+      }
+
+      departmentEl.addEventListener("change", setJobTitlesForDepartment);
+      genPasswordBtn.addEventListener("click", () => {
+        passwordEl.value = generatePassword();
+      });
+
+      formEl.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!formEl.reportValidity()) return;
+        createBtn.disabled = true;
+        createBtn.textContent = "Creating...";
+        try {
+          const token = await getCsrf();
+          const payload = new URLSearchParams();
+          payload.set("full_name", fullNameEl.value.trim());
+          payload.set("email", emailEl.value.trim().toLowerCase());
+          payload.set("department", departmentEl.value.trim());
+          payload.set("job_title", jobTitleEl.value.trim());
+          payload.set("password", passwordEl.value);
+
+          const data = await fetchJson("/api/admin/users/create-admin", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+              "X-CSRF-Token": token,
+              Accept: "application/json",
+            },
+            body: payload.toString(),
+          });
+
+          showAlert(`Admin created: ${data.user?.email || payload.get("email")}`);
+          formEl.reset();
+          setJobTitlesForDepartment();
+          passwordEl.value = generatePassword();
+        } catch (err) {
+          showAlert(err.message || "Unable to create admin user.", true);
+        } finally {
+          createBtn.disabled = false;
+          createBtn.textContent = "Create Admin";
+        }
+      });
+
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) menuPanel.classList.remove("open");
+      });
+
+      bootstrap().catch((err) => showAlert(err.message || "Unable to initialize page.", true));
+    </script>
+  </body>
+</html>

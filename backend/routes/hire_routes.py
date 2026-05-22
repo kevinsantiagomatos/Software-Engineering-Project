@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 
 
 def register_hire_routes(app, deps):
+    #configura rutas de este modulo
     login_required = deps["login_required"]
     require_role = deps["require_role"]
     ADMIN_ROLES = deps["ADMIN_ROLES"]
@@ -37,6 +38,7 @@ def register_hire_routes(app, deps):
     PROFILE_DIR = deps["PROFILE_DIR"]
     HIRES_DIR = deps["HIRES_DIR"]
     HR_ATTACHMENT_TYPES = deps["HR_ATTACHMENT_TYPES"]
+    HR_ATTACHMENT_FOLLOWUP_SLOTS = deps["HR_ATTACHMENT_FOLLOWUP_SLOTS"]
     create_user_record = deps["create_user_record"]
     register_user_db = deps["register_user_db"]
     enrich_document_record = deps["enrich_document_record"]
@@ -53,19 +55,359 @@ def register_hire_routes(app, deps):
     normalize_policy_id = deps["normalize_policy_id"]
     list_policy_catalog = deps["list_policy_catalog"]
 
+    def validate_creation_password(password: str) -> str:
+        #reglas minimas para password al crear hire
+        raw = password or ""
+        if len(raw) < 8:
+            return "Password must be at least 8 characters."
+        if not any(ch.isalpha() for ch in raw):
+            return "Password must include at least one letter."
+        if not any(ch.isdigit() for ch in raw):
+            return "Password must include at least one number."
+        if not any(not ch.isalnum() for ch in raw):
+            return "Password must include at least one symbol (for example: !)."
+        return ""
+
+    def ensure_followup_slot_for_attachment(hire_id: str, attachment_type: str):
+        #abre slot de seguimiento cuando hr adjunta documentos clave
+        mapping = HR_ATTACHMENT_FOLLOWUP_SLOTS.get((attachment_type or "").strip().lower())
+        if not mapping:
+            return None
+        doc_type = (mapping.get("doc_type") or "").strip().lower()
+        label = (mapping.get("label") or doc_type or "Additional document").strip()
+        optional = 1 if bool(mapping.get("optional")) else 0
+        if not doc_type:
+            return None
+        execute(
+            """
+            INSERT INTO hire_document_slot (hire_id, doc_type, label, optional, created_by, created_at, is_active)
+            VALUES (%s, %s, %s, %s, %s, NOW(), 1)
+            ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                optional = VALUES(optional),
+                is_active = 1
+            """,
+            (
+                hire_id,
+                doc_type,
+                label,
+                optional,
+                (session.get("email") or "").strip().lower(),
+            ),
+        )
+        return doc_type
+
     def requester_can_view_compliance() -> bool:
+        #facilita reutilizar validacion de alcance compliance
         return can_view_compliance_admin()
 
     def requester_can_manage_compliance() -> bool:
+        #helper interno de rutas
         return can_manage_compliance_admin()
 
     def requester_can_manage_training_for_others() -> bool:
+        #solo hr admin/superadmin puede gestionar training ajeno
         requester_role = (session.get("role") or "").strip().lower()
-        return requester_role == SUPERADMIN_ROLE or requester_role == "manager" or (
+        return requester_role == SUPERADMIN_ROLE or (
             requester_role == "admin" and session_department_name() == "hr"
         )
 
+    def list_manager_accounts():
+        #catalogo de managers activos para asignaciones
+        rows = fetch_all(
+            """
+            SELECT LOWER(email) AS email, full_name
+            FROM `user`
+            WHERE LOWER(COALESCE(role, '')) = 'manager'
+              AND LOWER(COALESCE(status, '')) NOT IN ('inactive', 'disabled')
+            ORDER BY COALESCE(full_name, email), email
+            """
+        )
+        managers = []
+        seen = set()
+        for row in rows or []:
+            email = (row.get("email") or "").strip().lower()
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            managers.append(
+                {
+                    "email": email,
+                    "full_name": (row.get("full_name") or "").strip() or email,
+                }
+            )
+        return managers
+
+    def list_project_catalog_rows(include_inactive: bool = False):
+        #lista proyectos y su manager desde catalogo central
+        where_clause = "" if include_inactive else "WHERE pc.is_active = 1"
+        rows = fetch_all(
+            f"""
+            SELECT
+                pc.id,
+                pc.name,
+                LOWER(pc.manager_email) AS manager_email,
+                pc.is_active,
+                pc.updated_at,
+                pc.updated_by,
+                u.full_name AS manager_name
+            FROM project_catalog pc
+            LEFT JOIN `user` u ON LOWER(u.email) = LOWER(pc.manager_email)
+            {where_clause}
+            ORDER BY pc.name ASC
+            """
+        )
+        projects = []
+        for row in rows or []:
+            manager_email = (row.get("manager_email") or "").strip().lower()
+            projects.append(
+                {
+                    "id": row.get("id"),
+                    "name": (row.get("name") or "").strip(),
+                    "manager_email": manager_email,
+                    "manager_name": (row.get("manager_name") or "").strip() or manager_email,
+                    "is_active": bool(int(row.get("is_active") or 0)),
+                    "updated_at": row.get("updated_at") or "",
+                    "updated_by": row.get("updated_by") or "",
+                }
+            )
+        return projects
+
+    def validate_project_assignment(project_name_raw, project_manager_email_raw):
+        #helper interno de rutas
+        project_name = (project_name_raw or "").strip()
+        project_manager_email = (project_manager_email_raw or "").strip().lower()
+        if not project_name and not project_manager_email:
+            return project_name, project_manager_email, None
+
+        if project_manager_email and not project_name:
+            return (
+                project_name,
+                project_manager_email,
+                Response(
+                    "Select a project from the project catalog.",
+                    status=400,
+                    mimetype="text/plain",
+                ),
+            )
+
+        project_row = fetch_one(
+            """
+            SELECT name, LOWER(manager_email) AS manager_email, is_active
+            FROM project_catalog
+            WHERE LOWER(name) = LOWER(%s)
+            LIMIT 1
+            """,
+            (project_name,),
+        )
+        if not project_row:
+            return (
+                project_name,
+                project_manager_email,
+                Response(
+                    "Project not found in catalog. Create/update it first.",
+                    status=400,
+                    mimetype="text/plain",
+                ),
+            )
+
+        if not bool(int(project_row.get("is_active") or 0)):
+            return (
+                project_name,
+                project_manager_email,
+                Response(
+                    "Selected project is inactive. Reactivate it or choose another project.",
+                    status=400,
+                    mimetype="text/plain",
+                ),
+            )
+
+        canonical_project_name = (project_row.get("name") or "").strip()
+        catalog_manager_email = (project_row.get("manager_email") or "").strip().lower()
+        if not catalog_manager_email:
+            return (
+                canonical_project_name,
+                project_manager_email,
+                Response(
+                    "Selected project has no assigned project manager.",
+                    status=400,
+                    mimetype="text/plain",
+                ),
+            )
+
+        if project_manager_email and project_manager_email != catalog_manager_email:
+            return (
+                canonical_project_name,
+                project_manager_email,
+                Response(
+                    "Selected project manager does not match the catalog assignment for this project.",
+                    status=400,
+                    mimetype="text/plain",
+                ),
+            )
+
+        project_manager_email = catalog_manager_email
+        if not email_is_valid(project_manager_email):
+            return canonical_project_name, project_manager_email, Response("Invalid project manager email.", status=400, mimetype="text/plain")
+        manager_user = fetch_one(
+            """
+            SELECT email, role, status
+            FROM `user`
+            WHERE LOWER(email) = LOWER(%s)
+            LIMIT 1
+            """,
+            (project_manager_email,),
+        )
+        if not manager_user:
+            return (
+                project_name,
+                project_manager_email,
+                Response("Project manager account not found.", status=400, mimetype="text/plain"),
+            )
+        manager_role = (manager_user.get("role") or "").strip().lower()
+        manager_status = (manager_user.get("status") or "").strip().lower()
+        if manager_role != "manager":
+            return (
+                project_name,
+                project_manager_email,
+                Response("Assigned project manager must have manager role.", status=400, mimetype="text/plain"),
+            )
+        if manager_status in {"inactive", "disabled"}:
+            return (
+                canonical_project_name,
+                project_manager_email,
+                Response("Assigned project manager account is not active.", status=400, mimetype="text/plain"),
+            )
+        return canonical_project_name, project_manager_email, None
+
+    @app.get("/api/projects/catalog")
+    @require_role(ADMIN_ROLES)
+    def project_catalog():
+        #endpoint principal de esta ruta
+        can_manage = can_manage_hiring_admin()
+        return jsonify(
+            {
+                "projects": list_project_catalog_rows(include_inactive=can_manage),
+                "managers": list_manager_accounts(),
+                "can_manage": can_manage,
+            }
+        )
+
+    @app.post("/api/projects/catalog/upsert")
+    @require_role(ADMIN_ROLES)
+    def project_catalog_upsert():
+        #endpoint principal de esta ruta
+        if not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        actor = (session.get("email") or "").strip().lower()
+        name = (request.form.get("name") or "").strip()
+        manager_email = (request.form.get("manager_email") or "").strip().lower()
+        active_raw = (request.form.get("is_active") or "1").strip().lower()
+        if not name:
+            return Response("Project name is required.", status=400, mimetype="text/plain")
+        if not manager_email:
+            return Response("Project manager is required.", status=400, mimetype="text/plain")
+        if len(name) > 255:
+            return Response("Project name is too long.", status=400, mimetype="text/plain")
+        if not email_is_valid(manager_email):
+            return Response("Invalid project manager email.", status=400, mimetype="text/plain")
+        is_active = 0 if active_raw in {"0", "false", "inactive", "disabled"} else 1
+
+        manager_user = fetch_one(
+            """
+            SELECT email, role, status
+            FROM `user`
+            WHERE LOWER(email) = LOWER(%s)
+            LIMIT 1
+            """,
+            (manager_email,),
+        )
+        if not manager_user:
+            return Response("Project manager account not found.", status=400, mimetype="text/plain")
+        if (manager_user.get("role") or "").strip().lower() != "manager":
+            return Response("Assigned project manager must have manager role.", status=400, mimetype="text/plain")
+        if (manager_user.get("status") or "").strip().lower() in {"inactive", "disabled"}:
+            return Response("Assigned project manager account is not active.", status=400, mimetype="text/plain")
+
+        execute(
+            """
+            INSERT INTO project_catalog (name, manager_email, is_active, updated_by)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                manager_email = VALUES(manager_email),
+                is_active = VALUES(is_active),
+                updated_by = VALUES(updated_by),
+                updated_at = NOW(6)
+            """,
+            (name, manager_email, is_active, actor),
+        )
+        append_audit(
+            "project_catalog_upsert",
+            actor,
+            {
+                "name": name,
+                "manager_email": manager_email,
+                "is_active": bool(is_active),
+            },
+        )
+        return jsonify(
+            {
+                "status": "ok",
+                "projects": list_project_catalog_rows(include_inactive=True),
+                "managers": list_manager_accounts(),
+            }
+        )
+
+    def create_project_kickoff_tasks(owner_email: str, project_name: str, project_manager_email: str, start_date):
+        #helper interno de rutas
+        if not owner_email or not project_name or not project_manager_email:
+            return []
+        assignments = [
+            (
+                f"Project kickoff: {project_name}",
+                "Meet your project manager and review project scope, milestones, and communication expectations.",
+            ),
+            (
+                "Complete first-week project onboarding objectives",
+                f"Finish the initial project orientation tasks assigned for {project_name}.",
+            ),
+        ]
+        created_ids = []
+        for idx, (title, description) in enumerate(assignments):
+            task_id = secrets.token_hex(8)
+            due_date = start_date if idx == 0 and start_date else None
+            execute(
+                """
+                INSERT INTO task (id, title, description, owner_email, assigned_by, category, status, due_date, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                """,
+                (
+                    task_id,
+                    title,
+                    description,
+                    owner_email,
+                    project_manager_email,
+                    "manager",
+                    "pending",
+                    due_date,
+                ),
+            )
+            created_ids.append(task_id)
+        append_audit(
+            "project_assignment_seed_tasks",
+            session.get("email", ""),
+            {
+                "email": owner_email,
+                "project_name": project_name,
+                "project_manager_email": project_manager_email,
+                "task_ids": created_ids,
+            },
+        )
+        return created_ids
+
     def serialize_policy_catalog_row(row):
+        #helper interno de rutas
         policy_id = normalize_policy_id(row.get("id") or row.get("policy_id") or "")
         label = (row.get("label") or policy_id).strip()
         file_path = (row.get("file_path") or "").strip().lstrip("/")
@@ -86,6 +428,7 @@ def register_hire_routes(app, deps):
         }
 
     def policy_aliases_for_id(policy_id: str):
+        #helper interno de rutas
         canonical = normalize_policy_id(policy_id)
         aliases = POLICY_ID_GROUPS.get(canonical, {canonical})
         normalized = {(alias or "").strip().lower() for alias in aliases if (alias or "").strip()}
@@ -94,6 +437,7 @@ def register_hire_routes(app, deps):
         return sorted(normalized)
 
     def normalize_policy_review_state(value: str) -> str:
+        #helper interno de rutas
         normalized = (value or "").strip().lower()
         if normalized in {"approved", "rejected", "pending_review", "signed"}:
             return normalized
@@ -104,12 +448,14 @@ def register_hire_routes(app, deps):
     @app.get("/api/policy/catalog")
     @login_required
     def policy_catalog():
+        #endpoint principal de esta ruta
         return jsonify({"policies": [serialize_policy_catalog_row(row) for row in list_policy_catalog()]})
 
     @app.get("/api/policy/admin/catalog")
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_catalog():
+        #endpoint principal de esta ruta
         if not requester_can_view_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
         return jsonify(
@@ -123,6 +469,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_update():
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
         actor = (session.get("email") or "").strip().lower()
@@ -194,6 +541,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_create():
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -261,6 +609,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_state():
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
         actor = (session.get("email") or "").strip().lower()
@@ -328,6 +677,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_delete():
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
         actor = (session.get("email") or "").strip().lower()
@@ -386,6 +736,7 @@ def register_hire_routes(app, deps):
     @app.post("/api/policy/ack")
     @login_required
     def policy_ack():
+        #endpoint principal de esta ruta
         session_email = (session.get("email") or "").strip().lower()
         requester_role = (session.get("role") or "").strip().lower()
         email = (request.form.get("email") or "").strip().lower()
@@ -437,10 +788,11 @@ def register_hire_routes(app, deps):
     @app.get("/api/policy/status")
     @login_required
     def policy_status():
+        #endpoint principal de esta ruta
         email = (request.args.get("email") or "").strip().lower()
         session_email = (session.get("email") or "").strip().lower()
         requester_role = (session.get("role") or "").strip().lower()
-        can_admin_policy = requester_role == SUPERADMIN_ROLE or requester_role == "manager" or (
+        can_admin_policy = requester_role == SUPERADMIN_ROLE or (
             requester_role == "admin" and session_department_name() in {"hr", "compliance"}
         )
         if email:
@@ -458,6 +810,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_review():
+        #endpoint principal de esta ruta
         if not requester_can_view_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -580,6 +933,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def policy_admin_review_status():
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -651,6 +1005,7 @@ def register_hire_routes(app, deps):
     @app.get("/api/compliance/checklist")
     @login_required
     def compliance_checklist():
+        #endpoint principal de esta ruta
         requester_email = (session.get("email") or "").strip().lower()
         email = (request.args.get("email") or "").strip().lower() or requester_email
         if not email:
@@ -673,6 +1028,7 @@ def register_hire_routes(app, deps):
     @login_required
     @require_role(ADMIN_ROLES)
     def compliance_checklist_update(check_key):
+        #endpoint principal de esta ruta
         if not requester_can_manage_compliance():
             return Response("Forbidden", status=403, mimetype="text/plain")
 
@@ -760,6 +1116,7 @@ def register_hire_routes(app, deps):
     @app.get("/api/onboarding/blueprint")
     @login_required
     def onboarding_blueprint():
+        #endpoint principal de esta ruta
         placeholders = []
         for rel_path, _ in PLACEHOLDER_FILES:
             placeholders.append({"path": f"/uploads/{rel_path}", "exists": (UPLOAD_DIR / rel_path).exists()})
@@ -770,6 +1127,7 @@ def register_hire_routes(app, deps):
     @app.get("/api/training/list")
     @login_required
     def training_list():
+        #endpoint principal de esta ruta
         modules = fetch_all("SELECT * FROM training_module")
         if not modules:
             defaults = [
@@ -790,6 +1148,7 @@ def register_hire_routes(app, deps):
     @app.post("/api/training/complete")
     @login_required
     def training_complete():
+        #endpoint principal de esta ruta
         session_email = (session.get("email") or "").strip().lower()
         email = (request.form.get("email") or "").strip().lower()
         module_id = (request.form.get("module_id") or "").strip()
@@ -813,6 +1172,7 @@ def register_hire_routes(app, deps):
     @app.get("/api/training/status")
     @login_required
     def training_status():
+        #endpoint principal de esta ruta
         email = (request.args.get("email") or "").strip().lower()
         can_admin_training = requester_can_manage_training_for_others()
         if email:
@@ -825,10 +1185,85 @@ def register_hire_routes(app, deps):
             completions = fetch_all("SELECT * FROM training_completion")
         return jsonify({"completions": completions})
 
+    @app.get("/api/hire/attachments")
+    @login_required
+    def get_hire_attachments_for_user():
+        #endpoint para obtener datos
+        requested_email = (request.args.get("email") or "").strip().lower()
+        session_email = (session.get("email") or "").strip().lower()
+        if not session_email:
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        target_email = requested_email or session_email
+        if target_email != session_email and not can_manage_hiring_admin():
+            return Response("Forbidden", status=403, mimetype="text/plain")
+
+        hire = fetch_one(
+            """
+            SELECT id, email
+            FROM new_hire
+            WHERE LOWER(email) = LOWER(%s)
+            LIMIT 1
+            """,
+            (target_email,),
+        )
+        if not hire:
+            return jsonify({"email": target_email, "hire_id": None, "attachments": []})
+
+        rows = fetch_all(
+            """
+            SELECT id, hire_id, att_type, original_name, stored_name, url
+            FROM new_hire_attachment
+            WHERE hire_id = %s
+            ORDER BY att_type ASC, id ASC
+            """,
+            (hire.get("id"),),
+        )
+        labels_by_type = {item["id"]: item["label"] for item in HR_ATTACHMENT_TYPES}
+        attachments = []
+        for row in rows or []:
+            att_type = (row.get("att_type") or "").strip().lower()
+            view_url = (row.get("url") or "").strip()
+            if not view_url and row.get("stored_name"):
+                view_url = f"/uploads/hires/{row.get('stored_name')}"
+            attachments.append(
+                {
+                    "id": row.get("id"),
+                    "hire_id": row.get("hire_id"),
+                    "att_type": att_type,
+                    "label": labels_by_type.get(att_type, att_type.replace("_", " ").title() or "Attachment"),
+                    "original_name": row.get("original_name") or "",
+                    "stored_name": row.get("stored_name") or "",
+                    "view_url": view_url,
+                }
+            )
+
+        return jsonify(
+            {
+                "email": (hire.get("email") or target_email).strip().lower(),
+                "hire_id": hire.get("id"),
+                "attachments": attachments,
+            }
+        )
+
     @app.get("/api/new-hires")
     @require_role(ADMIN_ROLES)
     def list_new_hires():
-        hires = fetch_all("SELECT * FROM new_hire")
+        #endpoint para listar datos
+        requester_role = (session.get("role") or "").strip().lower()
+        requester_email = (session.get("email") or "").strip().lower()
+        if requester_role == "manager":
+            hires = fetch_all(
+                """
+                SELECT *
+                FROM new_hire
+                WHERE LOWER(COALESCE(project_manager_email, '')) = LOWER(%s)
+                   OR LOWER(COALESCE(manager, '')) = LOWER(%s)
+                """,
+                (requester_email, requester_email),
+            )
+        else:
+            hires = fetch_all("SELECT * FROM new_hire")
         attachments = fetch_all("SELECT * FROM new_hire_attachment")
         docs = fetch_all("SELECT * FROM document")
         tasks = fetch_all("SELECT * FROM task")
@@ -856,9 +1291,17 @@ def register_hire_routes(app, deps):
     @app.get("/api/new-hires/<hire_id>")
     @require_role(ADMIN_ROLES)
     def get_new_hire_detail(hire_id):
-        hire = fetch_one("SELECT * FROM new_hire WHERE id = %s", (hire_id,))
+        #endpoint para obtener datos
+        hire_identifier = (hire_id or "").strip()
+        hire = fetch_one("SELECT * FROM new_hire WHERE id = %s", (hire_identifier,))
+        if not hire and hire_identifier:
+            #compatibilidad: ui antigua podia enviar email en vez de hire id
+            hire = fetch_one("SELECT * FROM new_hire WHERE LOWER(email) = LOWER(%s) LIMIT 1", (hire_identifier,))
         if not hire:
             return Response("New hire not found.", status=404, mimetype="text/plain")
+        requester_role = (session.get("role") or "").strip().lower()
+        if requester_role == "manager":
+            return Response("Forbidden", status=403, mimetype="text/plain")
 
         attachments = fetch_all("SELECT * FROM new_hire_attachment WHERE hire_id = %s", (hire_id,))
         email = (hire.get("email") or "").lower()
@@ -866,15 +1309,22 @@ def register_hire_routes(app, deps):
         if not can_view_documents_admin():
             docs = []
         tasks = fetch_all("SELECT * FROM task WHERE owner_email = %s", (email,)) if email else []
-        requester_role = (session.get("role") or "").strip().lower()
         requester_department = session_department_name()
+        manager_only_view = requester_role == "manager"
         compliance_only_view = requester_role == "admin" and requester_department == "compliance"
+        if manager_only_view:
+            tasks = [row for row in tasks if (row.get("category") or "").strip().lower() == "manager"]
         if compliance_only_view:
             tasks = [row for row in tasks if (row.get("category") or "").strip().lower() == "compliance"]
         policies = fetch_all("SELECT * FROM policy_ack WHERE email = %s", (email,)) if email else []
         trainings = fetch_all("SELECT * FROM training_completion WHERE email = %s", (email,)) if email else []
         it_provisions = fetch_all("SELECT * FROM it_provision WHERE email = %s", (email,)) if email else []
         it_access_items = fetch_all("SELECT * FROM it_access_item WHERE email = %s", (email,)) if email else []
+        if manager_only_view:
+            policies = []
+            trainings = []
+            it_provisions = []
+            it_access_items = []
         if compliance_only_view:
             trainings = []
             it_provisions = []
@@ -912,6 +1362,7 @@ def register_hire_routes(app, deps):
     @app.post("/api/new-hires/<hire_id>")
     @require_role(ADMIN_ROLES)
     def update_new_hire(hire_id):
+        #endpoint para actualizar recurso
         if not can_manage_hiring_admin():
             return Response("Forbidden", status=403, mimetype="text/plain")
         existing = fetch_one("SELECT id, email FROM new_hire WHERE id = %s", (hire_id,))
@@ -932,11 +1383,21 @@ def register_hire_routes(app, deps):
             "department": (request.form.get("department") or "").strip(),
             "job_title": (request.form.get("job_title") or "").strip(),
             "manager": (request.form.get("manager") or "").strip(),
+            "project_name": (request.form.get("project_name") or "").strip(),
+            "project_manager_email": (request.form.get("project_manager_email") or "").strip().lower(),
             "status": (request.form.get("status") or "").strip(),
             "employment_type": (request.form.get("employment_type") or "").strip().lower(),
         }
         if payload["employment_type"] not in {"employee", "contractor"}:
             return Response("Invalid employment_type. Must be employee or contractor.", status=400, mimetype="text/plain")
+        project_name, project_manager_email, project_err = validate_project_assignment(
+            payload.get("project_name"),
+            payload.get("project_manager_email"),
+        )
+        if project_err:
+            return project_err
+        payload["project_name"] = project_name
+        payload["project_manager_email"] = project_manager_email
         if not department_and_title_are_valid(payload["department"], payload["job_title"]):
             return Response("Invalid department/job title combination.", status=400, mimetype="text/plain")
 
@@ -964,6 +1425,8 @@ def register_hire_routes(app, deps):
                 department = %s,
                 job_title = %s,
                 manager = %s,
+                project_name = %s,
+                project_manager_email = %s,
                 start_date = %s,
                 status = %s
             WHERE id = %s
@@ -984,6 +1447,8 @@ def register_hire_routes(app, deps):
                 payload["department"],
                 payload["job_title"],
                 payload["manager"],
+                payload["project_name"] or None,
+                payload["project_manager_email"] or None,
                 start_date,
                 payload["status"] or "pending_document_submission",
                 hire_id,
@@ -1014,6 +1479,7 @@ def register_hire_routes(app, deps):
     @app.post("/api/profile/photo")
     @login_required
     def upload_profile_photo():
+        #endpoint principal de esta ruta
         email = (request.form.get("email") or "").strip().lower()
         file = request.files.get("photo")
 
@@ -1047,11 +1513,12 @@ def register_hire_routes(app, deps):
     @app.post("/api/hr/register-hire/")
     @require_role(ADMIN_ROLES)
     def register_hire():
+        #configura rutas de este modulo
         if not can_manage_hiring_admin():
             return Response("Forbidden", status=403, mimetype="text/plain")
         data = request.form
         files = request.files
-        required_fields = ["first_name", "last_name", "email", "employment_type", "department", "job_title", "temp_password"]
+        required_fields = ["first_name", "last_name", "email", "employment_type", "department", "job_title"]
         for field in required_fields:
             if not data.get(field):
                 return Response(f"{field} is required.", status=400, mimetype="text/plain")
@@ -1059,11 +1526,16 @@ def register_hire_routes(app, deps):
         email = data.get("email").strip().lower()
         if not email_is_valid(email):
             return Response("Invalid email.", status=400, mimetype="text/plain")
-        temp_password = data.get("temp_password") or ""
-        if len(temp_password) < 8:
-            return Response("Temporary password must be at least 8 characters.", status=400, mimetype="text/plain")
+        temp_password = (data.get("temp_password") or data.get("password") or "").strip()
+        if not temp_password:
+            return Response("password is required.", status=400, mimetype="text/plain")
+        password_error = validate_creation_password(temp_password)
+        if password_error:
+            return Response(password_error, status=400, mimetype="text/plain")
         if fetch_one("SELECT email FROM `user` WHERE email = %s", (email,)):
             return Response("A user with this email already exists.", status=409, mimetype="text/plain")
+        if fetch_one("SELECT id FROM new_hire WHERE email = %s", (email,)):
+            return Response("A new hire with this email already exists.", status=409, mimetype="text/plain")
 
         hire_id = secrets.token_hex(8)
         first = data.get("first_name", "").strip()
@@ -1075,39 +1547,21 @@ def register_hire_routes(app, deps):
             return Response("Invalid employment_type. Must be employee or contractor.", status=400, mimetype="text/plain")
         department = data.get("department", "").strip()
         job_title = data.get("job_title", "").strip()
+        project_name, project_manager_email, project_err = validate_project_assignment(
+            data.get("project_name"),
+            data.get("project_manager_email"),
+        )
+        if project_err:
+            return project_err
         if not department_and_title_are_valid(department, job_title):
             return Response("Invalid department/job title combination.", status=400, mimetype="text/plain")
 
-        execute(
-            """
-            INSERT INTO new_hire (
-                id, first_name, middle_name, last_name, email, phone, dob, gov_id,
-                street, city, state, postal_code, country, employment_type, department, job_title, manager,
-                start_date, status, created_at
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
-            """,
-            (
-                hire_id,
-                first,
-                middle,
-                last,
-                email,
-                data.get("phone", "").strip(),
-                data.get("dob", None) or None,
-                data.get("gov_id", "").strip(),
-                data.get("street", "").strip(),
-                data.get("city", "").strip(),
-                data.get("state", "").strip(),
-                data.get("postal_code", "").strip(),
-                data.get("country", "").strip(),
-                employment_type,
-                department,
-                job_title,
-                data.get("manager", "").strip(),
-                data.get("start_date", None) or None,
-                "pending_document_submission",
-            ),
-        )
+        try:
+            dob = normalize_optional_date_field(data.get("dob"), "dob")
+            start_date = normalize_optional_date_field(data.get("start_date"), "start_date")
+        except ValueError as exc:
+            return Response(str(exc), status=400, mimetype="text/plain")
+
         try:
             role_id = get_role_id(employment_type)
             dep_id = get_department_id(department)
@@ -1128,6 +1582,50 @@ def register_hire_routes(app, deps):
         except pymysql.err.IntegrityError:
             return Response("A user with this email already exists.", status=409, mimetype="text/plain")
 
+        try:
+            execute(
+                """
+                INSERT INTO new_hire (
+                    id, first_name, middle_name, last_name, email, phone, dob, gov_id,
+                    street, city, state, postal_code, country, employment_type, department, job_title, manager,
+                    project_name, project_manager_email,
+                    start_date, status, created_at
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                """,
+                (
+                    hire_id,
+                    first,
+                    middle,
+                    last,
+                    email,
+                    data.get("phone", "").strip(),
+                    dob,
+                    data.get("gov_id", "").strip(),
+                    data.get("street", "").strip(),
+                    data.get("city", "").strip(),
+                    data.get("state", "").strip(),
+                    data.get("postal_code", "").strip(),
+                    data.get("country", "").strip(),
+                    employment_type,
+                    department,
+                    job_title,
+                    data.get("manager", "").strip(),
+                    project_name or None,
+                    project_manager_email or None,
+                    start_date,
+                    "pending_document_submission",
+                ),
+            )
+        except pymysql.err.IntegrityError as exc:
+            #rollback del user enlazado si falla insercion de new hire
+            execute("DELETE FROM `user` WHERE email = %s", (email,))
+            app.logger.error("register_hire new_hire insert failed for %s: %s", email, exc, exc_info=True)
+            message = str(exc).lower()
+            if "new_hire" in message and "email" in message and "duplicate" in message:
+                return Response("A new hire with this email already exists.", status=409, mimetype="text/plain")
+            return Response(f"Unable to create new hire record. {exc}", status=400, mimetype="text/plain")
+
+        opened_followup_slots = []
         for att in HR_ATTACHMENT_TYPES:
             f = files.get(att["id"])
             if f and f.filename:
@@ -1148,10 +1646,36 @@ def register_hire_routes(app, deps):
                     """,
                     (hire_id, att["id"], f.filename, stored, f"/uploads/hires/{stored}"),
                 )
+                opened_slot = ensure_followup_slot_for_attachment(hire_id, att["id"])
+                if opened_slot:
+                    opened_followup_slots.append(opened_slot)
 
+        seeded_task_ids = create_project_kickoff_tasks(
+            owner_email=email,
+            project_name=project_name,
+            project_manager_email=project_manager_email,
+            start_date=start_date,
+        )
         append_audit(
             "hire_register",
             session.get("email", ""),
-            {"hire_id": hire_id, "email": email, "employment_type": employment_type},
+            {
+                "hire_id": hire_id,
+                "email": email,
+                "employment_type": employment_type,
+                "project_name": project_name or "",
+                "project_manager_email": project_manager_email or "",
+                "seeded_manager_task_count": len(seeded_task_ids),
+                "opened_followup_slots": opened_followup_slots,
+            },
         )
-        return jsonify({"status": "ok", "hire_id": hire_id, "account_created": True})
+        return jsonify(
+            {
+                "status": "ok",
+                "hire_id": hire_id,
+                "account_created": True,
+                "project_assigned": bool(project_name and project_manager_email),
+                "seeded_manager_task_count": len(seeded_task_ids),
+                "opened_followup_slots": opened_followup_slots,
+            }
+        )

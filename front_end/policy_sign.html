@@ -261,7 +261,6 @@
         canSignPolicies = !ADMIN_ROLES.has(sessionRole);
         canReviewPolicies =
           sessionRole === "superadmin" ||
-          sessionRole === "manager" ||
           (sessionRole === "admin" && ["hr", "compliance"].includes(sessionDepartment));
 
         emailBadge.textContent = sessionEmail ? `Signed in as: ${sessionEmail}` : "Signed in as: current session";
@@ -572,8 +571,8 @@
           const signed = Boolean(row.signed);
           const signatureText = String(row.signature || "").trim();
           const signatureHtml = signed
-            ? `<div><strong>Signature:</strong> <code>${escapeHtml(signatureText || "(empty text)")}</code></div>`
-            : "<div><strong>Signature:</strong> -- not signed --</div>";
+            ? `<div class="signature-block"><strong>Signature</strong><div class="signature-text">${escapeHtml(signatureText || "(empty text)")}</div></div>`
+            : '<div class="signature-block signature-empty"><strong>Signature</strong><div class="signature-text">Not signed yet.</div></div>';
           const reviewerMeta = row.reviewed_by
             ? `<div><small>Reviewed by ${escapeHtml(row.reviewed_by)} on ${escapeHtml(asDateString(row.reviewed_at || ""))}</small></div>`
             : "";
@@ -590,19 +589,19 @@
           }
 
           return `
-            <li>
-              <span>
+            <li class="review-row">
+              <div class="review-main">
                 <strong>${escapeHtml(row.full_name || row.email)}</strong> &lt;${escapeHtml(row.email)}&gt;<br>
                 <small>${escapeHtml(row.policy_label || row.policy_id)} <code>${escapeHtml(row.policy_id)}</code>${policyInactive}</small><br>
                 <small>Signed at: ${escapeHtml(asDateString(row.signed_at || ""))}</small>
                 ${signatureHtml}
                 ${reviewerMeta}
                 ${noteMeta}
-              </span>
-              <span class="actions">
+              </div>
+              <div class="actions review-actions">
                 ${reviewStatusChip(status)}
                 ${actionHtml}
-              </span>
+              </div>
             </li>
           `;
         }).join("");
@@ -947,6 +946,10 @@
       async function bootstrap() {
         try {
           await loadSessionInfo();
+          if (sessionRole === "manager") {
+            window.location.replace("/manager_workspace.html");
+            return;
+          }
           applySessionMode();
           await loadPolicyCatalog();
           if (policySelect.value) {

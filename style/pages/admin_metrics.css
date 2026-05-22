@@ -1,30 +1,59 @@
   body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-  .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
+  .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:10px; }
   .avatar { width:52px; height:52px; border-radius:12px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-weight:700; }
-  .container { max-width: 1180px; margin: 16px auto 0 auto; padding: 0 16px 32px; }
-  .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-  .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:18px; }
-  .kpi-label { color:#64748b; font-size:.88rem; margin-bottom:6px; }
-  .kpi-value { font-size:1.55rem; font-weight:800; color:#0f172a; }
-  .section-title { margin:0 0 10px; font-size:1.05rem; }
+  .container { max-width: 1320px; margin: 12px auto 0 auto; padding: 0 14px 22px; }
+  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card { background:#fff; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:14px; }
+  .kpi-label { color:#64748b; font-size:.82rem; margin-bottom:4px; }
+  .kpi-value { font-size:1.35rem; font-weight:800; color:#0f172a; line-height:1.15; }
+  .section-title { margin:0 0 8px; font-size:0.98rem; }
+  .filter-card { margin-bottom:10px; }
   .filter-grid {
     display:grid;
-    gap:10px;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    margin-top:8px;
+    gap:8px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    margin-top:6px;
   }
   .actions-row {
     display:flex;
     flex-wrap:wrap;
-    gap:10px;
+    gap:8px;
     align-items:center;
-    margin-top:10px;
+    margin-top:8px;
   }
-  .bar-list { display:grid; gap:8px; }
-  .bar-row { display:grid; grid-template-columns: 150px 1fr 52px; gap:8px; align-items:center; }
-  .bar-track { height:10px; background:#e2e8f0; border-radius:999px; overflow:hidden; }
+  .action-btn {
+    padding:8px 12px;
+    font-size:0.9rem;
+    line-height:1.2;
+  }
+  .action-btn-clear { background:#334155; }
+  .action-btn-csv { background:#0f172a; }
+  .action-btn-pdf { background:#1d4ed8; }
+  .meta-chip {
+    margin-left:auto;
+    font-weight:700;
+    font-size:0.85rem;
+    color:#0f172a;
+    background:#e2e8f0;
+    border-radius:999px;
+    padding:6px 10px;
+    white-space:nowrap;
+  }
+  .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .kpi-card { padding:12px 14px; min-height:76px; }
+  .dist-grid { margin-top:10px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); align-items:start; }
+  .dist-card { padding:12px 13px; }
+  .bar-list {
+    display:grid;
+    gap:6px;
+    max-height:230px;
+    overflow:auto;
+    padding-right:4px;
+  }
+  .bar-row { display:grid; grid-template-columns: minmax(110px, 44%) 1fr 42px; gap:6px; align-items:center; }
+  .bar-track { height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden; }
   .bar-fill { height:100%; background:linear-gradient(90deg, #123093, #3b82f6); }
-  .muted { color:#64748b; font-size:0.9rem; }
+  .muted { color:#64748b; font-size:0.84rem; }
   .menu-wrap { margin-left:auto; position:relative; }
   .menu-btn { padding:10px 12px; background:#0f2f93; border:1px solid rgba(255,255,255,0.25); }
   .menu-panel {
@@ -40,3 +69,11 @@
   #alert { display:none; margin-bottom:10px; border-radius:10px; padding:10px 12px; }
   #alert.ok { background:#e8f8ef; border:1px solid #bae6cb; color:#146f3d; }
   #alert.err { background:#fee2e2; border:1px solid #fecaca; color:#991b1b; }
+  @media (min-width: 1150px) {
+    .dist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .container { padding: 0 10px 18px; }
+    .meta-chip { margin-left:0; }
+    .bar-list { max-height:none; overflow:visible; }
+  }

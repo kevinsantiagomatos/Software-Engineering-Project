@@ -60,6 +60,42 @@
   .list li code { background:#eef2ff; border-radius:6px; padding:2px 6px; font-size:12px; }
   #reviewList li { align-items:flex-start; }
   #reviewList .actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+  #reviewList .review-row {
+    display:grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+  }
+  .review-main {
+    min-width: 0;
+  }
+  .signature-block {
+    margin-top: 8px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #ffffff;
+  }
+  .signature-empty {
+    background: #f8fafc;
+  }
+  .signature-block strong {
+    display: block;
+    font-size: 0.82rem;
+    color: #334155;
+    margin-bottom: 4px;
+  }
+  .signature-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.82rem;
+    color: #0f172a;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .review-actions {
+    min-width: 220px;
+    justify-content: flex-start !important;
+  }
   .review-pagination {
     margin-top: 12px;
     display: flex;
@@ -102,5 +138,14 @@
     }
     .side-column {
       gap: 12px;
+    }
+  }
+
+  @media (max-width: 760px) {
+    #reviewList .review-row {
+      grid-template-columns: 1fr;
+    }
+    .review-actions {
+      min-width: 0;
     }
   }

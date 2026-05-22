@@ -21,7 +21,6 @@
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
           <a class="menu-link" href="/admin_metrics.html">Metrics</a>
           <a class="menu-link" id="profileLink" href="/profile.html">My Profile</a>
-          <a class="menu-link" href="/dashboard.html">Employee View</a>
           <a class="menu-link" id="menuRegisterHire" href="/hr_register.html" style="display:none;">Register New Hire</a>
           <a class="menu-link" href="/log_in.html">Log Out</a>
         </div>
@@ -30,7 +29,7 @@
 
     <div class="container">
       <div id="alert"></div>
-      <section class="card" style="margin-bottom:14px;">
+      <section class="card filter-card">
         <h3 class="section-title">Filters & Export</h3>
         <div class="filter-grid">
           <select id="filterStage" class="text-input">
@@ -59,29 +58,29 @@
           <input id="filterCreatedTo" class="text-input" type="date" />
         </div>
         <div class="actions-row">
-          <button id="applyFilters" class="submit-button" style="padding:10px 16px;">Apply</button>
-          <button id="clearFilters" class="submit-button" style="padding:10px 16px; background:#334155;">Clear</button>
-          <button id="exportCsv" class="submit-button" style="padding:10px 16px; background:#0f172a;">Export CSV</button>
-          <button id="exportPdf" class="submit-button" style="padding:10px 16px; background:#1d4ed8;">Export PDF</button>
-          <span id="rowCount" class="muted" style="margin-left:auto;">Rows: --</span>
+          <button id="applyFilters" class="submit-button action-btn">Apply</button>
+          <button id="clearFilters" class="submit-button action-btn action-btn-clear">Clear</button>
+          <button id="exportCsv" class="submit-button action-btn action-btn-csv">Export CSV</button>
+          <button id="exportPdf" class="submit-button action-btn action-btn-pdf">Export PDF</button>
+          <span id="rowCount" class="meta-chip">Rows: --</span>
         </div>
       </section>
-      <div class="grid" id="kpiGrid"></div>
+      <div class="grid kpi-grid" id="kpiGrid"></div>
 
-      <div class="grid" style="margin-top:16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
-        <section class="card">
+      <div class="grid dist-grid">
+        <section class="card dist-card">
           <h3 class="section-title">Stage Distribution</h3>
           <div id="stageDist" class="bar-list"></div>
         </section>
-        <section class="card">
+        <section class="card dist-card">
           <h3 class="section-title">Status Distribution</h3>
           <div id="statusDist" class="bar-list"></div>
         </section>
-        <section class="card">
+        <section class="card dist-card">
           <h3 class="section-title">Employment Type</h3>
           <div id="employmentDist" class="bar-list"></div>
         </section>
-        <section class="card">
+        <section class="card dist-card">
           <h3 class="section-title">Compliance Distribution</h3>
           <div id="complianceDist" class="bar-list"></div>
         </section>
@@ -168,7 +167,7 @@
           ["Avg Days In Pipeline", kpis.average_days_since_hire_created || 0],
         ];
         kpiGrid.innerHTML = tiles.map(([label, value]) => `
-          <div class="card">
+          <div class="card kpi-card">
             <div class="kpi-label">${label}</div>
             <div class="kpi-value">${value}</div>
           </div>
@@ -230,7 +229,7 @@
           avatarEl.textContent = (sessionInfo.full_name || sessionInfo.email || "M").slice(0,1).toUpperCase();
           profileLink.href = `/profile.html?email=${encodeURIComponent(email)}`;
           menuSuperDashboard.style.display = role === "superadmin" ? "block" : "none";
-          menuRegisterHire.style.display = role === "hr" || role === "manager" ? "block" : "none";
+          menuRegisterHire.style.display = role === "superadmin" || (role === "admin" && department === "hr") ? "block" : "none";
 
           await loadMetrics();
         } catch (err) {

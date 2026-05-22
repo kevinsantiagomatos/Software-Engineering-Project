@@ -19,7 +19,6 @@
         <div id="menuPanel" class="menu-panel">
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
           <a class="menu-link" href="/admin_metrics.html">Metrics</a>
-          <a class="menu-link" href="/dashboard.html">Employee View</a>
           <a class="menu-link" href="/profile.html">My Profile</a>
           <a class="menu-link" href="/log_in.html">Log Out</a>
         </div>
@@ -78,7 +77,7 @@
 
         <section class="form-step" data-step="2">
           <h4 class="section-title">Employment Setup</h4>
-          <p class="section-subtitle">Role type and organizational assignment.</p>
+          <p class="section-subtitle">Role type, organization assignment, and project mapping.</p>
           <div class="grid">
             <div>
               <label>Employment Type</label>
@@ -101,31 +100,55 @@
                 <option value="">Select job title</option>
               </select>
             </div>
-            <div><label>Supervisor</label><input class="text-input" name="manager" /></div>
             <div>
-              <label>Add Job Title To Selected Department</label>
-              <div class="wizard-actions" style="margin-top:6px;">
-                <input class="text-input" id="newJobTitleInput" placeholder="e.g. Software Engineer II" style="max-width:280px;" />
-                <button type="button" id="addJobTitleBtn" class="secondary-button">Add</button>
+              <label>Project</label>
+              <select class="text-input" id="projectSelect" name="project_name">
+                <option value="">No project assignment</option>
+              </select>
+            </div>
+            <div>
+              <label>Project Manager</label>
+              <select class="text-input" id="projectManagerSelect" name="project_manager_email" disabled>
+                <option value="">No project manager</option>
+              </select>
+            </div>
+            <div class="full employment-tools">
+              <div class="tool-card">
+                <label>Add/Update Project Catalog</label>
+                <div class="wizard-actions tool-actions">
+                  <input class="text-input tool-input" id="newProjectNameInput" placeholder="e.g. Core Platform Rollout" />
+                  <select class="text-input tool-input" id="newProjectManagerSelect">
+                    <option value="">Select project manager</option>
+                  </select>
+                  <button type="button" id="saveProjectBtn" class="secondary-button">Save Project</button>
+                </div>
+                <div id="projectCatalogState" class="muted tool-state"></div>
               </div>
-              <div id="jobTitleState" class="muted" style="margin-top:6px;"></div>
+              <div class="tool-card">
+                <label>Add Job Title To Selected Department</label>
+                <div class="wizard-actions tool-actions">
+                  <input class="text-input tool-input" id="newJobTitleInput" placeholder="e.g. Software Engineer II" />
+                  <button type="button" id="addJobTitleBtn" class="secondary-button">Add</button>
+                </div>
+                <div id="jobTitleState" class="muted tool-state"></div>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="form-step" data-step="3">
           <h4 class="section-title">Compliance Attachments</h4>
-          <p class="section-subtitle">Set temporary login password and optionally upload HR files.</p>
+          <p class="section-subtitle">Set login password and optionally upload HR files.</p>
           <div class="grid" style="margin-bottom:12px;">
             <div>
-              <label>Temporary Password</label>
+              <label>Password</label>
               <input class="text-input" name="temp_password" type="password" minlength="8" required autocomplete="new-password" />
             </div>
           </div>
           <div class="attachments">
             <div class="grid">
               <div>
-                <label>Offer Letter</label>
+                <label>Contract</label>
                 <input type="file" name="offer_letter" accept=".pdf,.docx,.jpg,.jpeg,.png" />
               </div>
               <div>
@@ -133,8 +156,8 @@
                 <input type="file" name="nda" accept=".pdf,.docx,.jpg,.jpeg,.png" />
               </div>
               <div>
-                <label>W-4</label>
-                <input type="file" name="w4" accept=".pdf,.docx,.jpg,.jpeg,.png" />
+                <label>W-9</label>
+                <input type="file" name="w9" accept=".pdf,.docx,.jpg,.jpeg,.png" />
               </div>
             </div>
           </div>
@@ -156,6 +179,12 @@
       const employmentTypeFieldEl = document.getElementById("employmentTypeField");
       const departmentSelect = document.getElementById("departmentSelect");
       const jobTitleSelect = document.getElementById("jobTitleSelect");
+      const projectSelect = document.getElementById("projectSelect");
+      const projectManagerSelect = document.getElementById("projectManagerSelect");
+      const newProjectNameInput = document.getElementById("newProjectNameInput");
+      const newProjectManagerSelect = document.getElementById("newProjectManagerSelect");
+      const saveProjectBtn = document.getElementById("saveProjectBtn");
+      const projectCatalogState = document.getElementById("projectCatalogState");
       const newJobTitleInput = document.getElementById("newJobTitleInput");
       const addJobTitleBtn = document.getElementById("addJobTitleBtn");
       const jobTitleState = document.getElementById("jobTitleState");
@@ -169,6 +198,8 @@
       let csrfToken = null;
       let currentStep = 0;
       let orgDepartments = [];
+      let projectCatalog = [];
+      let managerCatalog = [];
 
       function syncRoleFromEmploymentType() {
         employmentTypeFieldEl.value = employmentTypeEl.value || "employee";
@@ -191,6 +222,22 @@
         const data = await res.json();
         csrfToken = data.csrf_token;
         return csrfToken;
+      }
+
+      async function enforceRegisterAccess() {
+        const sessionData = await fetchJson("/api/session");
+        const role = (sessionData.role || "").toLowerCase();
+        const department = (sessionData.department || "").toLowerCase();
+        if (role === "manager") {
+          window.location.replace("/manager_workspace.html");
+          return false;
+        }
+        const allowed = role === "superadmin" || (role === "admin" && department === "hr");
+        if (!allowed) {
+          window.location.replace("/dashboard.html");
+          return false;
+        }
+        return true;
       }
 
       function setDepartmentOptions(selectedDepartment = "") {
@@ -218,6 +265,66 @@
             })
           );
         jobTitleSelect.innerHTML = options.join("");
+      }
+
+      function setManagerOptions(selectEl, selectedEmail = "", includeBlank = true) {
+        if (!selectEl) return;
+        const selectedLower = (selectedEmail || "").toLowerCase();
+        const options = [];
+        if (includeBlank) options.push('<option value="">No project manager</option>');
+        managerCatalog.forEach((manager) => {
+          const email = manager.email || "";
+          const fullName = manager.full_name || email;
+          const selected = email.toLowerCase() === selectedLower ? "selected" : "";
+          options.push(`<option value="${email}" ${selected}>${fullName} (${email})</option>`);
+        });
+        if (selectedLower && !managerCatalog.some((manager) => (manager.email || "").toLowerCase() === selectedLower)) {
+          options.push(`<option value="${selectedEmail}" selected>${selectedEmail}</option>`);
+        }
+        selectEl.innerHTML = options.join("");
+      }
+
+      function syncProjectManagerFromSelectedProject() {
+        const selectedProject = (projectSelect.value || "").trim().toLowerCase();
+        if (!selectedProject) {
+          setManagerOptions(projectManagerSelect, "", true);
+          projectManagerSelect.value = "";
+          projectManagerSelect.disabled = true;
+          return;
+        }
+        const match = projectCatalog.find((project) => (project.name || "").trim().toLowerCase() === selectedProject);
+        const managerEmail = (match?.manager_email || "").trim().toLowerCase();
+        setManagerOptions(projectManagerSelect, managerEmail, true);
+        projectManagerSelect.value = managerEmail;
+        projectManagerSelect.disabled = true;
+      }
+
+      function setProjectOptions(selectedProject = "") {
+        const selectedLower = (selectedProject || projectSelect.value || "").toLowerCase();
+        const options = ['<option value="">No project assignment</option>']
+          .concat(
+            projectCatalog
+              .filter((project) => project.is_active)
+              .map((project) => {
+                const name = project.name || "";
+                const manager = project.manager_name || project.manager_email || "";
+                const selected = name.toLowerCase() === selectedLower ? "selected" : "";
+                return `<option value="${name}" ${selected}>${name} — ${manager}</option>`;
+              })
+          );
+        if (selectedLower && !projectCatalog.some((project) => (project.name || "").toLowerCase() === selectedLower)) {
+          options.push(`<option value="${selectedProject}" selected>${selectedProject}</option>`);
+        }
+        projectSelect.innerHTML = options.join("");
+        syncProjectManagerFromSelectedProject();
+      }
+
+      async function loadProjectCatalog() {
+        const data = await fetchJson("/api/projects/catalog");
+        projectCatalog = data.projects || [];
+        managerCatalog = data.managers || [];
+        setProjectOptions(projectSelect.value || "");
+        setManagerOptions(newProjectManagerSelect, newProjectManagerSelect.value || "", true);
       }
 
       async function loadOrgStructure() {
@@ -286,26 +393,39 @@
           return;
         }
         syncRoleFromEmploymentType();
+        syncProjectManagerFromSelectedProject();
+        const pmWasDisabled = projectManagerSelect.disabled;
+        if (pmWasDisabled) projectManagerSelect.disabled = false;
         const fd = new FormData(form);
+        if (pmWasDisabled) projectManagerSelect.disabled = true;
         try {
           const token = await ensureCsrf();
-          await fetchJson("/api/hr/register-hire", {
+          const result = await fetchJson("/api/hr/register-hire", {
             method: "POST",
             body: fd,
             headers: { "X-CSRF-Token": token }
           });
-          statusEl.textContent = "New hire registered. Login account created with temporary password.";
+          const seeded = Number(result?.seeded_manager_task_count || 0);
+          if (result?.project_assigned) {
+            statusEl.textContent = seeded > 0
+              ? `New hire registered. Project assigned and ${seeded} manager kickoff tasks were created.`
+              : "New hire registered and project assignment saved.";
+          } else {
+            statusEl.textContent = "New hire registered. Login account created with password.";
+          }
           form.reset();
           setStep(0);
           syncRoleFromEmploymentType();
           setDepartmentOptions("");
           setJobTitleOptions("");
+          setProjectOptions("");
         } catch (err) {
           statusEl.textContent = err.message || "Failed to register.";
         }
       });
 
       departmentSelect.addEventListener("change", () => setJobTitleOptions(""));
+      projectSelect.addEventListener("change", () => syncProjectManagerFromSelectedProject());
       addJobTitleBtn.addEventListener("click", async () => {
         jobTitleState.textContent = "";
         const department = (departmentSelect.value || "").trim();
@@ -338,6 +458,39 @@
         }
       });
 
+      saveProjectBtn.addEventListener("click", async () => {
+        projectCatalogState.textContent = "";
+        const name = (newProjectNameInput.value || "").trim();
+        const managerEmail = (newProjectManagerSelect.value || "").trim().toLowerCase();
+        if (!name) {
+          projectCatalogState.textContent = "Enter a project name.";
+          return;
+        }
+        if (!managerEmail) {
+          projectCatalogState.textContent = "Select a project manager.";
+          return;
+        }
+        try {
+          const token = await ensureCsrf();
+          const data = await fetchJson("/api/projects/catalog/upsert", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRF-Token": token,
+            },
+            body: new URLSearchParams({ name, manager_email: managerEmail, is_active: "1" }),
+          });
+          projectCatalog = data.projects || projectCatalog;
+          managerCatalog = data.managers || managerCatalog;
+          setProjectOptions(name);
+          setManagerOptions(newProjectManagerSelect, managerEmail, true);
+          projectCatalogState.textContent = "Project catalog updated.";
+          newProjectNameInput.value = "";
+        } catch (err) {
+          projectCatalogState.textContent = err.message || "Unable to save project.";
+        }
+      });
+
       menuBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         menuPanel.classList.toggle("open");
@@ -350,10 +503,17 @@
 
       employmentTypeEl.addEventListener("change", syncRoleFromEmploymentType);
       syncRoleFromEmploymentType();
-      loadOrgStructure().catch(() => {
-        statusEl.textContent = "Unable to load departments/job titles.";
-      });
-      setStep(0);
+      (async () => {
+        try {
+          const allowed = await enforceRegisterAccess();
+          if (!allowed) return;
+          await loadOrgStructure();
+          await loadProjectCatalog();
+          setStep(0);
+        } catch (_) {
+          statusEl.textContent = "Unable to load setup catalogs.";
+        }
+      })();
     </script>
   </body>
 </html>

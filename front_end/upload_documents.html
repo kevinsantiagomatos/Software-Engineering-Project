@@ -33,11 +33,6 @@
             </div>
           </div>
 
-          <div id="identityBadge" class="identity-badge">
-            Submitting as <strong id="badgeName"></strong> (<span id="badgeEmail"></span>)
-            <button type="button" id="editIdentity" class="forgot-link">Not you?</button>
-          </div>
-
           <div class="stats">
             <div class="stat">
               <div class="value" id="statRequired">0/0</div>
@@ -96,7 +91,7 @@
         { id: "background_check", label: "Criminal Background Check", optional: false },
         { id: "tax_return", label: "Tax Return Filing Certification", optional: false },
         { id: "bank_certification", label: "Bank Account Certification for Direct Deposit", optional: false },
-        { id: "resume", label: "Resume", optional: false },
+        { id: "resume", label: "Resume", optional: true },
         { id: "certifications", label: "Evidence of Certifications", optional: true },
         { id: "signed_contract", label: "Signed Contract", optional: false },
         { id: "crim_compliance", label: "CRIM Compliance Certification", optional: false },
@@ -107,11 +102,6 @@
       const statusByType = {};
       const latestDocByType = {};
       const lockedStatuses = new Set(["pending_review", "approved"]);
-      const identityBadge = document.getElementById("identityBadge");
-      const identityFields = document.getElementById("identityFields");
-      const badgeName = document.getElementById("badgeName");
-      const badgeEmail = document.getElementById("badgeEmail");
-      const editIdentity = document.getElementById("editIdentity");
 
       function show(el, message) {
         el.textContent = message;
@@ -218,20 +208,6 @@
         });
       }
 
-      function showBadge(name, email) {
-        badgeName.textContent = name || email || "User";
-        badgeEmail.textContent = email || "";
-        identityBadge.style.display = "block";
-        identityFields.style.display = "none";
-      }
-
-      function showIdentityFields() {
-        identityBadge.style.display = "none";
-        identityFields.style.display = "grid";
-        document.getElementById("full_name").readOnly = false;
-        document.getElementById("email").readOnly = false;
-      }
-
       async function prefillFromQuery() {
         const params = new URLSearchParams(window.location.search);
         const storedEmail = localStorage.getItem("paoli_email") || "";
@@ -249,14 +225,11 @@
               applyRoleDocumentRules(user.role || "");
               nameEl.value = user.full_name || name || nameEl.value;
               if (nameEl.value) nameEl.readOnly = true;
-              showBadge(nameEl.value || email, email);
             } else {
               applyRoleDocumentRules("");
-              showBadge(name || email, email);
             }
           } catch (_) {
             applyRoleDocumentRules("");
-            showBadge(name || email, email);
           }
           renderZones();
           await loadRequirements(email);
@@ -264,7 +237,6 @@
         if (name && !nameEl.value) {
           nameEl.value = name;
           nameEl.readOnly = true;
-          if (email) showBadge(name, email);
         }
       }
 
@@ -280,20 +252,6 @@
           renderZones();
           await loadRequirements(val);
         }
-      });
-
-      editIdentity.addEventListener("click", () => {
-        document.getElementById("full_name").value = "";
-        document.getElementById("email").value = "";
-        Object.keys(statusByType).forEach((k) => {
-          delete statusByType[k];
-        });
-        Object.keys(latestDocByType).forEach((k) => {
-          delete latestDocByType[k];
-        });
-        renderZones();
-        renderRequirementList([]);
-        showIdentityFields();
       });
 
       async function loadRequirements(email) {
@@ -434,7 +392,6 @@
         nameEl.value = name;
         emailEl.readOnly = true;
         nameEl.readOnly = true;
-        showBadge(name, email);
 
         if (email) {
           await loadRequirements(email);

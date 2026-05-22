@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manager Workspace | Paoli</title>
+    <link rel="stylesheet" href="/style/log_in.css" />
+    <link rel="stylesheet" href="/style/pages/manager_workspace.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="avatar" id="avatar">M</div>
+      <div>
+        <div id="titleLine" style="font-size:1.08rem; font-weight:700;">Project Manager Workspace</div>
+        <div id="roleLine" style="font-size:.9rem; color:#d7e4ff;">--</div>
+      </div>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
+        <div id="menuPanel" class="menu-panel"></div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="alert" class="alert"></div>
+
+      <div class="layout">
+        <section class="card">
+          <h2 class="title">New Hire Queue</h2>
+          <p class="subtitle">Select a hire and manage project assignment tasks and objectives.</p>
+          <div class="controls">
+            <input id="hireSearch" class="text-input" placeholder="Search by name, email, or department..." />
+            <button id="refreshHires" class="btn">Refresh</button>
+          </div>
+          <ul id="hireList" class="list"></ul>
+        </section>
+
+        <section class="stack">
+          <section class="card">
+            <h2 class="title">Selected Hire</h2>
+            <p id="selectedHireLine" class="subtitle">No hire selected.</p>
+            <div id="kpis" class="kpi-row"></div>
+            <div class="actions">
+              <a id="openProfile" class="btn-link" href="/profile.html">Open profile</a>
+              <a id="openProjectPage" class="btn-link" href="/project_assignment.html">Open project page</a>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2 class="title">Manager Tasks & Objectives</h2>
+            <p class="subtitle">Create and update `manager` category tasks for onboarding and project orientation.</p>
+
+            <form id="taskForm" class="task-form" novalidate>
+              <input id="taskTitle" class="text-input" placeholder="Task title" required />
+              <input id="taskDueDate" class="text-input" type="date" />
+              <textarea id="taskDescription" class="text-input" rows="3" placeholder="Task objective / description"></textarea>
+              <div class="actions">
+                <button id="createTaskBtn" class="submit-button" type="submit">Create Manager Task</button>
+              </div>
+            </form>
+
+            <ul id="taskList" class="list"></ul>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const ADMIN_ROLES = new Set(["admin", "manager", "superadmin"]);
+      const TASK_STATUSES = ["pending", "in_progress", "completed", "blocked"];
+
+      let csrfToken = null;
+      let sessionEmail = "";
+      let sessionRole = "";
+      let selectedHire = null;
+      let hires = [];
+      let filteredHires = [];
+
+      const alertEl = document.getElementById("alert");
+      const avatarEl = document.getElementById("avatar");
+      const roleLineEl = document.getElementById("roleLine");
+      const hireSearchEl = document.getElementById("hireSearch");
+      const refreshHiresBtn = document.getElementById("refreshHires");
+      const hireListEl = document.getElementById("hireList");
+      const selectedHireLineEl = document.getElementById("selectedHireLine");
+      const kpisEl = document.getElementById("kpis");
+      const openProfileEl = document.getElementById("openProfile");
+      const openProjectPageEl = document.getElementById("openProjectPage");
+      const taskFormEl = document.getElementById("taskForm");
+      const taskTitleEl = document.getElementById("taskTitle");
+      const taskDueDateEl = document.getElementById("taskDueDate");
+      const taskDescriptionEl = document.getElementById("taskDescription");
+      const taskListEl = document.getElementById("taskList");
+      const createTaskBtn = document.getElementById("createTaskBtn");
+      const menuBtn = document.getElementById("menuBtn");
+      const menuPanel = document.getElementById("menuPanel");
+
+      function showAlert(message, isError = false) {
+        alertEl.textContent = message;
+        alertEl.className = `alert ${isError ? "err" : "ok"}`;
+      }
+
+      function normalizeEmail(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function statusBadge(status) {
+        const s = String(status || "pending").toLowerCase();
+        const color =
+          s === "completed" ? "ok" :
+          s === "in_progress" ? "warn" :
+          s === "blocked" ? "err" : "muted";
+        return `<span class="badge ${color}">${escapeHtml(s.replaceAll("_", " "))}</span>`;
+      }
+
+      async function fetchJson(url, opts = {}) {
+        const options = { ...opts };
+        if ((options.method || "GET").toUpperCase() !== "GET") {
+          const token = await ensureCsrf();
+          options.headers = { ...(options.headers || {}), "X-CSRF-Token": token };
+        }
+        const res = await fetch(url, options);
+        if (res.status === 401 || res.status === 403 || (res.redirected && (res.url || "").includes("/log_in.html"))) {
+          window.location.replace("/log_in.html");
+          throw new Error("Authentication required");
+        }
+        if (!res.ok) throw new Error((await res.text()) || "Request failed");
+        const ct = res.headers.get("content-type") || "";
+        return ct.includes("application/json") ? res.json() : {};
+      }
+
+      async function ensureCsrf() {
+        if (csrfToken) return csrfToken;
+        const data = await fetchJson("/api/csrf");
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      }
+
+      function buildMenu() {
+        const items = [
+          `<a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>`,
+          `<a class="menu-link" href="/manager_workspace.html">Manager Workspace</a>`,
+          `<a class="menu-link" href="/admin_metrics.html">Metrics</a>`,
+          `<a class="menu-link" href="/project_assignment.html${selectedHire?.email ? `?email=${encodeURIComponent(selectedHire.email)}` : ""}">Project Assignment</a>`,
+          `<a class="menu-link" href="/profile.html?email=${encodeURIComponent(sessionEmail)}">My Profile</a>`,
+          `<a class="menu-link" href="/log_in.html">Log Out</a>`,
+        ];
+        menuPanel.innerHTML = items.join("");
+      }
+
+      function renderHireList() {
+        const needle = (hireSearchEl.value || "").toLowerCase().trim();
+        filteredHires = hires.filter((h) => {
+          if (!needle) return true;
+          const txt = `${h.first_name || ""} ${h.last_name || ""} ${h.email || ""} ${h.department || ""} ${h.project_name || ""}`.toLowerCase();
+          return txt.includes(needle);
+        });
+
+        if (!filteredHires.length) {
+          hireListEl.innerHTML = "<li>No hires found.</li>";
+          return;
+        }
+
+        hireListEl.innerHTML = filteredHires.map((h) => {
+          const id = escapeHtml(h.id || "");
+          const active = selectedHire && selectedHire.id === h.id ? "active" : "";
+          const name = `${h.first_name || ""} ${h.last_name || ""}`.trim() || h.email || "Unnamed";
+          const stage = h.progress?.stage || "Pending";
+          const progress = Number(h.progress?.progress_percent || 0);
+          const projectName = h.project_name || "Unassigned project";
+          return `
+            <li>
+              <button class="hire-btn ${active}" data-hire-id="${id}">
+                <strong>${escapeHtml(name)}</strong><br>
+                <small>${escapeHtml(h.email || "--")} · ${escapeHtml(h.department || "No department")}</small><br>
+                <small>${escapeHtml(stage)} · ${progress}%</small><br>
+                <small>${escapeHtml(projectName)}</small>
+              </button>
+            </li>
+          `;
+        }).join("");
+      }
+
+      function renderSelectedHire() {
+        if (!selectedHire) {
+          selectedHireLineEl.textContent = "No hire selected.";
+          kpisEl.innerHTML = "";
+          openProfileEl.href = "/profile.html";
+          openProjectPageEl.href = "/project_assignment.html";
+          return;
+        }
+
+        const email = selectedHire.email || "";
+        const stage = selectedHire.progress?.stage || "Pending";
+        const progress = Number(selectedHire.progress?.progress_percent || 0);
+        const docs = selectedHire.progress?.documents || { approved: 0, total: 0 };
+        const tasks = selectedHire.progress?.tasks || { completed: 0, total: 0 };
+        const projectName = selectedHire.project_name || "Unassigned project";
+        const projectManager = selectedHire.project_manager_email || "No PM assigned";
+        selectedHireLineEl.textContent = `${selectedHire.first_name || ""} ${selectedHire.last_name || ""} · ${email} · ${selectedHire.department || "No department"} · ${projectName} · ${projectManager}`;
+        kpisEl.innerHTML = `
+          <div class="kpi"><span>Stage</span><strong>${escapeHtml(stage)}</strong></div>
+          <div class="kpi"><span>Progress</span><strong>${progress}%</strong></div>
+          <div class="kpi"><span>Documents</span><strong>${docs.approved}/${docs.total}</strong></div>
+          <div class="kpi"><span>Tasks</span><strong>${tasks.completed}/${tasks.total}</strong></div>
+        `;
+        openProfileEl.href = `/profile.html?email=${encodeURIComponent(email)}`;
+        openProjectPageEl.href = `/project_assignment.html?email=${encodeURIComponent(email)}`;
+      }
+
+      async function loadManagerTasks() {
+        if (!selectedHire?.email) {
+          taskListEl.innerHTML = "<li>Select a hire to manage tasks.</li>";
+          return;
+        }
+        const data = await fetchJson(`/api/tasks?email=${encodeURIComponent(selectedHire.email)}&category=manager`);
+        const rows = (data.tasks || []).filter((t) => String(t.category || "").toLowerCase() === "manager");
+        if (!rows.length) {
+          taskListEl.innerHTML = "<li>No manager tasks assigned yet.</li>";
+          return;
+        }
+        taskListEl.innerHTML = rows.map((t) => {
+          const due = t.due_date ? `Due ${t.due_date}` : "No due date";
+          const actions = TASK_STATUSES
+            .filter((s) => s !== String(t.status || "").toLowerCase())
+            .map((s) => `<button class="btn status-btn" data-task-id="${escapeHtml(t.id || "")}" data-status="${s}">${escapeHtml(s.replaceAll("_", " "))}</button>`)
+            .join("");
+          return `
+            <li>
+              <div>
+                <strong>${escapeHtml(t.title || "Untitled task")}</strong>
+                <div><small>${escapeHtml(t.description || "")}</small></div>
+                <div><small>${escapeHtml(due)} · Assigned by ${escapeHtml(t.assigned_by || "N/A")}</small></div>
+              </div>
+              <div class="actions">
+                ${statusBadge(t.status)}
+                ${actions}
+              </div>
+            </li>
+          `;
+        }).join("");
+      }
+
+      async function loadHires() {
+        const data = await fetchJson("/api/new-hires");
+        hires = data.hires || [];
+        if (!selectedHire && hires.length) selectedHire = hires[0];
+        if (selectedHire) {
+          const refresh = hires.find((h) => h.id === selectedHire.id);
+          selectedHire = refresh || hires[0] || null;
+        }
+        renderHireList();
+        renderSelectedHire();
+        await loadManagerTasks();
+        buildMenu();
+      }
+
+      async function createManagerTask(e) {
+        e.preventDefault();
+        if (!selectedHire?.email) {
+          showAlert("Select a hire first.", true);
+          return;
+        }
+        const title = taskTitleEl.value.trim();
+        if (!title) {
+          showAlert("Task title is required.", true);
+          return;
+        }
+        createTaskBtn.disabled = true;
+        createTaskBtn.textContent = "Creating...";
+        try {
+          const payload = new URLSearchParams();
+          payload.set("title", title);
+          payload.set("description", taskDescriptionEl.value.trim());
+          payload.set("owner_email", selectedHire.email);
+          payload.set("assigned_by", sessionEmail);
+          payload.set("category", "manager");
+          payload.set("status", "pending");
+          if (taskDueDateEl.value) payload.set("due_date", taskDueDateEl.value);
+          await fetchJson("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: payload.toString(),
+          });
+          showAlert("Manager task created.");
+          taskFormEl.reset();
+          await loadHires();
+        } catch (err) {
+          showAlert(err.message || "Unable to create task.", true);
+        } finally {
+          createTaskBtn.disabled = false;
+          createTaskBtn.textContent = "Create Manager Task";
+        }
+      }
+
+      hireListEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-hire-id]");
+        if (!btn) return;
+        const id = btn.dataset.hireId;
+        selectedHire = hires.find((h) => h.id === id) || null;
+        renderHireList();
+        renderSelectedHire();
+        await loadManagerTasks();
+        buildMenu();
+      });
+
+      taskListEl.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button.status-btn");
+        if (!btn) return;
+        const taskId = String(btn.dataset.taskId || "").trim();
+        const status = String(btn.dataset.status || "").trim().toLowerCase();
+        if (!taskId || !TASK_STATUSES.includes(status)) return;
+        try {
+          await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: new URLSearchParams({ status }).toString(),
+          });
+          await loadHires();
+        } catch (err) {
+          showAlert(err.message || "Unable to update task.", true);
+        }
+      });
+
+      hireSearchEl.addEventListener("input", renderHireList);
+      refreshHiresBtn.addEventListener("click", async () => {
+        try {
+          await loadHires();
+          showAlert("Workspace refreshed.");
+        } catch (err) {
+          showAlert(err.message || "Unable to refresh.", true);
+        }
+      });
+      taskFormEl.addEventListener("submit", createManagerTask);
+
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuPanel.classList.toggle("open");
+      });
+      document.addEventListener("click", (e) => {
+        if (!menuPanel.contains(e.target) && e.target !== menuBtn) menuPanel.classList.remove("open");
+      });
+
+      (async () => {
+        try {
+          const session = await fetchJson("/api/session");
+          sessionRole = String(session.role || "").toLowerCase();
+          sessionEmail = normalizeEmail(session.email);
+
+          if (!ADMIN_ROLES.has(sessionRole)) {
+            window.location.replace(`/dashboard.html?email=${encodeURIComponent(sessionEmail)}`);
+            return;
+          }
+          if (!["manager", "superadmin"].includes(sessionRole)) {
+            window.location.replace("/admin_panel.html");
+            return;
+          }
+
+          avatarEl.textContent = (session.full_name || sessionEmail || "M").slice(0, 1).toUpperCase();
+          roleLineEl.textContent = `Role: ${sessionRole} · ${sessionEmail}`;
+
+          await loadHires();
+          showAlert("Manager workspace ready.");
+        } catch (err) {
+          showAlert(err.message || "Unable to initialize manager workspace.", true);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 
 
 def register_document_routes(app, deps):
+    #configura rutas de este modulo
     login_required = deps["login_required"]
     require_role = deps["require_role"]
     ADMIN_ROLES = deps["ADMIN_ROLES"]
@@ -31,10 +32,14 @@ def register_document_routes(app, deps):
     @app.post("/documents/upload")
     @login_required
     def upload_documents():
+        #subida de documentos con validaciones de permiso, tamano y tipo
         full_name = (request.form.get("full_name") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         doc_type = (request.form.get("doc_type") or "").strip().lower()
         files = request.files.getlist("documents")
+        requester_role = (session.get("role") or "").strip().lower()
+        if requester_role == "manager":
+            return Response("Forbidden", status=403, mimetype="text/plain")
 
         if not full_name or not email:
             return Response("Full name and email are required.", status=400, mimetype="text/plain")
@@ -115,9 +120,12 @@ def register_document_routes(app, deps):
     @app.get("/documents")
     @login_required
     def list_documents():
+        #lista documentos segun alcance del usuario autenticado
         email = (request.args.get("email") or "").strip().lower()
         requester = session.get("email")
         requester_role = (session.get("role") or "").strip().lower()
+        if requester_role == "manager":
+            return Response("Forbidden", status=403, mimetype="text/plain")
         if not email and requester_role == "employee":
             email = requester or ""
         if email and email != requester and not can_view_documents_admin():
@@ -132,6 +140,7 @@ def register_document_routes(app, deps):
 
     @app.post("/documents/<doc_id>/status")
     def update_document_status(doc_id):
+        #actualiza estado de revision de un documento puntual
         if not can_manage_documents_admin():
             return Response("Forbidden", status=403, mimetype="text/plain")
         status = (request.form.get("status") or "").strip().lower()
@@ -151,9 +160,12 @@ def register_document_routes(app, deps):
     @app.get("/documents/requirements")
     @login_required
     def document_requirements():
+        #calcula matriz de requisitos y estado por tipo documental
         email = (request.args.get("email") or "").strip().lower()
         requester = session.get("email")
         requester_role = (session.get("role") or "").strip().lower()
+        if requester_role == "manager":
+            return Response("Forbidden", status=403, mimetype="text/plain")
         if not email and requester_role == "employee":
             email = requester or ""
         if email and email != requester and not can_view_documents_admin():
@@ -196,6 +208,7 @@ def register_document_routes(app, deps):
     @app.post("/api/new-hires/<hire_id>/document-slots")
     @require_role(ADMIN_ROLES)
     def create_hire_document_slot(hire_id):
+        #crea slot personalizado para requisitos extra por hire
         if not can_manage_hiring_admin():
             return Response("Forbidden", status=403, mimetype="text/plain")
         hire = fetch_one("SELECT id, email, employment_type FROM new_hire WHERE id = %s", (hire_id,))
@@ -211,6 +224,8 @@ def register_document_routes(app, deps):
         base_key = f"custom_{slugify_doc_key(label)}"
 
         blocked = {d.get("id") for d in REQUIRED_DOCUMENT_TYPES}
+
+        
         existing_rows = fetch_all("SELECT doc_type FROM hire_document_slot WHERE hire_id = %s", (hire_id,))
         existing = {(r.get("doc_type") or "").strip().lower() for r in existing_rows}
 

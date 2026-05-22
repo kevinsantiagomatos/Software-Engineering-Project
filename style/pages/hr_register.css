@@ -1,11 +1,21 @@
-  body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  body { background:#f4f5f7; margin:0; font-family: 'Inter', system-ui, -apple-system, sans-serif; display:block; min-height:100%; }
   .topbar { background: linear-gradient(135deg, #123093, #06133f); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; }
   .avatar { width:64px; height:64px; border-radius:16px; background:#1f2b58; display:flex; align-items:center; justify-content:center; font-size:28px; color:#fff; overflow:hidden; }
   .container { max-width: 1100px; margin: 24px auto 32px auto; padding: 0 16px; }
   .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.08); padding:20px; margin-bottom:16px; }
-  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-  label { font-weight:600; font-size:0.95rem; color:#0f172a; }
-  .text-input { width:100%; }
+  .grid { display:grid; gap:14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-step[data-step="0"] .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    row-gap: 14px;
+  }
+  .form-step[data-step="0"] .grid > div:last-child { grid-column: 1 / -1; }
+  .grid > div { min-width:0; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+  label { display:block; line-height:1.25; font-weight:600; font-size:0.95rem; color:#0f172a; margin:0; }
+  .text-input { display:block; width:100%; max-width:320px; margin:0; padding:10px 12px; min-height:42px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; }
+  .grid input, .grid select { min-width:0; }
+  input[type="file"] { display:block; width:100%; max-width:320px; margin:0; }
+  .text-input:focus { outline:none; border-color:#123093; box-shadow:0 0 0 3px rgba(18,48,147,0.12); }
   .attachments { border:1px dashed #cbd5e1; border-radius:12px; padding:12px; background:#f8fafc; }
   .stepper { display:grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap:10px; margin-bottom:18px; }
   .step-pill { border:1px solid #cbd5e1; border-radius:12px; padding:10px; background:#f8fafc; color:#475569; font-weight:600; font-size:0.9rem; text-align:left; }
@@ -16,6 +26,45 @@
   .section-title { margin:0 0 10px 0; font-size:1.1rem; color:#0f172a; }
   .section-subtitle { margin:0 0 14px 0; font-size:0.95rem; color:#64748b; }
   .wizard-actions { display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .form-step[data-step="2"] .grid {
+    grid-template-columns: repeat(2, minmax(260px, 320px));
+    justify-content: start;
+    column-gap: 14px;
+    row-gap: 12px;
+  }
+  .form-step[data-step="2"] .grid > .full {
+    grid-column: 1 / -1;
+    max-width: 654px;
+  }
+  .form-step[data-step="2"] .employment-tools {
+    grid-template-columns: 1fr;
+    max-width: 654px;
+  }
+  .employment-tools {
+    margin-top: 6px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .tool-card {
+    border: 1px solid #dbe3ef;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 12px;
+  }
+  .tool-actions {
+    margin-top: 8px;
+    align-items: stretch;
+  }
+  .tool-input {
+    min-width: 180px;
+    max-width: 280px;
+    flex: 1 1 180px;
+  }
+  .tool-state {
+    min-height: 1.2rem;
+    margin-top: 8px;
+  }
   .secondary-button { border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:12px; padding:11px 16px; cursor:pointer; font-weight:600; }
   .secondary-button:disabled { opacity:0.5; cursor:not-allowed; }
   .menu-wrap { margin-left:auto; position:relative; }
@@ -31,6 +80,13 @@
   }
   .menu-link:hover { background:#eff6ff; color:#123093; }
   #submitBtn { display:none; }
+  @media (max-width: 980px) {
+    .grid { grid-template-columns: 1fr; }
+    .form-step[data-step="0"] .grid { grid-template-columns: 1fr; }
+    .form-step[data-step="0"] .grid > div:last-child { grid-column: auto; }
+    .text-input, input[type="file"] { max-width:none; }
+  }
   @media (max-width: 760px) {
     .stepper { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    .employment-tools { grid-template-columns: 1fr; }
   }

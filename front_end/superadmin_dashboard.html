@@ -18,6 +18,7 @@
         <button id="menuBtn" class="submit-button menu-btn">Menu ▾</button>
         <div id="menuPanel" class="menu-panel">
           <a class="menu-link" href="/superadmin_dashboard.html">Superadmin Console</a>
+          <a class="menu-link" href="/superadmin_create_admin.html">Create Admin Account</a>
           <a class="menu-link" href="/admin_panel.html">Admin Dashboard</a>
           <a class="menu-link" href="/admin_metrics.html">Metrics</a>
           <a class="menu-link" id="profileLink" href="/profile.html">My Profile</a>
@@ -36,6 +37,7 @@
         <div class="quick-links">
           <a class="btn" href="/admin_panel.html">Open Operations Queue</a>
           <a class="btn" href="/admin_metrics.html">Open Metrics</a>
+          <a class="btn" href="/superadmin_create_admin.html">Create Admin Account</a>
           <a class="btn" href="/hr_register.html">Register New Hire</a>
         </div>
       </section>
@@ -63,6 +65,11 @@
               </thead>
               <tbody id="usersBody"></tbody>
             </table>
+          </div>
+          <div class="table-pager">
+            <button id="usersPrevPageBtn" class="btn" type="button">Prev</button>
+            <span id="usersPageLabel" class="muted">Page 1 of 1</span>
+            <button id="usersNextPageBtn" class="btn" type="button">Next</button>
           </div>
         </section>
 
@@ -95,12 +102,17 @@
       const roleLineEl = document.getElementById("roleLine");
       const heroStatsEl = document.getElementById("heroStats");
       const usersBody = document.getElementById("usersBody");
+      const usersPrevPageBtn = document.getElementById("usersPrevPageBtn");
+      const usersNextPageBtn = document.getElementById("usersNextPageBtn");
+      const usersPageLabel = document.getElementById("usersPageLabel");
       const searchInput = document.getElementById("searchInput");
       const refreshBtn = document.getElementById("refreshBtn");
       const auditList = document.getElementById("auditList");
       const auditLimit = document.getElementById("auditLimit");
       const loadAuditBtn = document.getElementById("loadAuditBtn");
       const profileLink = document.getElementById("profileLink");
+      const USERS_PAGE_SIZE = 10;
+      let usersPage = 1;
 
       const menuBtn = document.getElementById("menuBtn");
       const menuPanel = document.getElementById("menuPanel");
@@ -174,8 +186,12 @@
           const haystack = `${u.full_name || ""} ${u.email || ""} ${u.department || ""} ${u.role || ""}`.toLowerCase();
           return haystack.includes(q);
         });
+        const totalPages = Math.max(1, Math.ceil(filtered.length / USERS_PAGE_SIZE));
+        usersPage = Math.max(1, Math.min(usersPage, totalPages));
+        const start = (usersPage - 1) * USERS_PAGE_SIZE;
+        const pageRows = filtered.slice(start, start + USERS_PAGE_SIZE);
 
-        usersBody.innerHTML = filtered.map((u) => {
+        usersBody.innerHTML = pageRows.map((u) => {
           const email = (u.email || "").toLowerCase();
           const currentRole = (u.role || "employee").toLowerCase();
           const currentDept = u.department || "";
@@ -210,6 +226,9 @@
             </tr>
           `;
         }).join("");
+        usersPageLabel.textContent = `Page ${usersPage} of ${totalPages}`;
+        usersPrevPageBtn.disabled = usersPage <= 1;
+        usersNextPageBtn.disabled = usersPage >= totalPages;
       }
 
       async function saveRole(row) {
@@ -304,7 +323,19 @@
         }
       });
 
-      searchInput.addEventListener("input", renderUsers);
+      searchInput.addEventListener("input", () => {
+        usersPage = 1;
+        renderUsers();
+      });
+      usersPrevPageBtn.addEventListener("click", () => {
+        if (usersPage <= 1) return;
+        usersPage -= 1;
+        renderUsers();
+      });
+      usersNextPageBtn.addEventListener("click", () => {
+        usersPage += 1;
+        renderUsers();
+      });
       refreshBtn.addEventListener("click", async () => {
         try {
           await loadUsersAndOrg(true);
@@ -350,7 +381,11 @@
           profileLink.href = `/profile.html?email=${encodeURIComponent((session.email || "").toLowerCase())}`;
 
           await loadUsersAndOrg();
-          await loadAudit();
+          try {
+            await loadAudit();
+          } catch (auditErr) {
+            auditList.innerHTML = '<li class="muted">Audit temporarily unavailable. Reload to retry.</li>';
+          }
           if (!alertEl.textContent) showAlert("Superadmin console ready.");
         } catch (err) {
           showAlert(err.message || "Unable to initialize superadmin console.", true);

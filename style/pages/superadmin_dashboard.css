@@ -24,6 +24,8 @@
   .btn.primary { background:#123093; border-color:#123093; color:#fff; }
   .btn.primary:hover { background:#0f2a83; }
   .table-wrap { overflow:auto; border:1px solid #e2e8f0; border-radius:12px; }
+  .table-pager { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:10px; }
+  .table-pager .btn:disabled { opacity:0.5; cursor:not-allowed; }
   table { width:100%; border-collapse:collapse; min-width:920px; }
   th, td { padding:10px; border-bottom:1px solid #e2e8f0; text-align:left; font-size:.88rem; vertical-align:top; }
   th { background:#f8fafc; color:#475569; font-weight:700; position:sticky; top:0; }
